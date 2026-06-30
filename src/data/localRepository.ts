@@ -43,7 +43,8 @@ export class LocalRepository implements Repository {
   }
 
   async listTasks(): Promise<Task[]> {
-    return read<Task[]>(TASKS_KEY, [])
+    // Default any field added after a task was first saved (e.g. `size`).
+    return read<Task[]>(TASKS_KEY, []).map((t) => ({ ...t, size: t.size ?? 'M' }))
   }
 
   async createTask(input: TaskInput): Promise<Task> {

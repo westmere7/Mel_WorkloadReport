@@ -14,7 +14,13 @@ import {
 } from 'recharts'
 import { LineChart as LineChartIcon } from 'lucide-react'
 import type { NamedCount } from '../lib/analytics'
-import { CHART_COLORS } from '../constants'
+import { CHART_COLORS_DARK, CHART_COLORS_LIGHT } from '../constants'
+import { useTheme } from '../lib/theme'
+
+/** Theme-aware categorical palette (re-renders on theme toggle). */
+function useChartColors() {
+  return useTheme().theme === 'dark' ? CHART_COLORS_DARK : CHART_COLORS_LIGHT
+}
 
 const tooltipStyle = {
   borderRadius: 12,
@@ -58,6 +64,7 @@ export function DonutChart({
   minPoints?: number
   emptyMessage?: string
 }) {
+  const colors = useChartColors()
   const total = data.reduce((a, b) => a + b.value, 0)
   if (total === 0 || data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
 
@@ -76,7 +83,7 @@ export function DonutChart({
               stroke="none"
             >
               {data.map((_, i) => (
-                <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                <Cell key={i} fill={colors[i % colors.length]} />
               ))}
             </Pie>
             <Tooltip contentStyle={tooltipStyle} />
@@ -93,7 +100,7 @@ export function DonutChart({
             <span className="flex items-center gap-2 truncate">
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}
+                style={{ background: colors[i % colors.length] }}
               />
               <span className="truncate text-muted">{d.name}</span>
             </span>
@@ -117,6 +124,7 @@ export function HBarChart({
   minPoints?: number
   emptyMessage?: string
 }) {
+  const colors = useChartColors()
   if (data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -133,7 +141,7 @@ export function HBarChart({
         <Tooltip cursor={CURSOR} contentStyle={tooltipStyle} />
         <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={18}>
           {data.map((_, i) => (
-            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+            <Cell key={i} fill={colors[i % colors.length]} />
           ))}
         </Bar>
       </BarChart>
@@ -157,8 +165,9 @@ export function VBarChart({
   colors?: string[]
   angledLabels?: boolean
 }) {
+  const themed = useChartColors()
   if (data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
-  const palette = colors ?? CHART_COLORS
+  const palette = colors ?? themed
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>

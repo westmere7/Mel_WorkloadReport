@@ -108,8 +108,8 @@ export const SIZE_TONE: Record<Size, 'gray' | 'teal' | 'gold' | 'orange' | 'red'
   XL: 'red',
 }
 
-/** Brand-aligned chart palette (red, navy + complementary accents). */
-export const CHART_COLORS = [
+/** Brand-aligned chart palette (red, navy + complementary accents) — light mode. */
+export const CHART_COLORS_LIGHT = [
   '#E61E2A', // rmit red
   '#000054', // rmit navy
   '#F58220', // orange
@@ -120,3 +120,22 @@ export const CHART_COLORS = [
   '#4d4d8f', // navy-300
   '#f1757f', // brand-300
 ]
+
+/**
+ * Dark-mode palette: the near-black navy entries are lightened so bars/slices
+ * don't blend into the dark navy background. Other hues are already bright enough.
+ */
+export const CHART_COLORS_DARK = [
+  '#FF4D58', // brighter red
+  '#6C7BF0', // lifted navy → indigo (was #000054)
+  '#F58220', // orange
+  '#22B8E6', // teal
+  '#FFC72C', // gold
+  '#6FD05A', // green
+  '#A87BC0', // plum
+  '#9AA0E0', // lifted navy-300
+  '#F1757F', // pink
+]
+
+/** Default palette (kept for any direct importers; light variant). */
+export const CHART_COLORS = CHART_COLORS_LIGHT
