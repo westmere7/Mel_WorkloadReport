@@ -17,15 +17,15 @@ const NAV: NavItem[] = [
 
 export function Sidebar() {
   return (
-    <aside className="flex w-[68px] flex-col items-center gap-1 bg-rmit-navy py-5 dark:bg-rmit-red md:w-60 md:items-stretch md:px-4">
+    <aside className="flex w-[68px] flex-col items-center gap-1 bg-rmit-navy py-5 md:w-60 md:items-stretch md:px-4">
       {/* Brand */}
       <div className="mb-6 flex items-center gap-3 px-1 md:px-2">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rmit-red font-extrabold text-white dark:bg-white dark:text-rmit-red">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rmit-red font-extrabold text-white">
           R
         </div>
         <div className="hidden md:block">
           <p className="text-sm font-bold leading-tight text-white">RMIT</p>
-          <p className="text-[11px] leading-tight text-navy-100 dark:text-white/80">Workload Report</p>
+          <p className="text-[11px] leading-tight text-navy-100">Workload Report</p>
         </div>
       </div>
 
@@ -40,8 +40,8 @@ export function Sidebar() {
                 'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
                 'justify-center md:justify-start',
                 isActive
-                  ? 'bg-white/10 text-white shadow-inner dark:bg-black/15'
-                  : 'text-navy-100 hover:bg-white/5 hover:text-white dark:text-white/75',
+                  ? 'bg-white/10 text-white shadow-inner'
+                  : 'text-navy-100 hover:bg-white/5 hover:text-white',
               )
             }
             title={label}
@@ -49,7 +49,7 @@ export function Sidebar() {
             {({ isActive }) => (
               <>
                 <Icon
-                  className={cx('h-5 w-5 shrink-0', isActive ? 'text-rmit-red dark:text-white' : '')}
+                  className={cx('h-5 w-5 shrink-0', isActive ? 'text-rmit-red' : '')}
                   strokeWidth={2.2}
                 />
                 <span className="hidden md:inline">{label}</span>
@@ -60,7 +60,7 @@ export function Sidebar() {
       </nav>
 
       <div className="hidden px-2 pt-4 md:block">
-        <p className="text-[11px] leading-relaxed text-navy-200 dark:text-white/60">
+        <p className="text-[11px] leading-relaxed text-navy-200">
           Melbourne Design Team
         </p>
       </div>
