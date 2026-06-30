@@ -76,6 +76,44 @@ export class SupabaseRepository implements Repository {
     }
   }
 
+  async renameValue(
+    field: 'campaign' | 'types' | 'people',
+    oldValue: string,
+    newValue: string,
+  ): Promise<void> {
+    const sb = getSupabase()
+
+    if (field === 'campaign') {
+      const { error } = await sb
+        .from('tasks')
+        .update({ campaign: newValue, updated_at: new Date().toISOString() })
+        .eq('campaign', oldValue)
+      if (error) throw error
+      return
+    }
+
+    // Array columns (types/people): fetch affected rows, rewrite each array.
+    const { data, error } = await sb
+      .from('tasks')
+      .select('id, types, people')
+      .contains(field, [oldValue])
+    if (error) throw error
+
+    await Promise.all(
+      (data ?? []).map((row) => {
+        const arr = ((row as Record<string, unknown>)[field] as string[] | null) ?? []
+        const nextArr = Array.from(new Set(arr.map((v) => (v === oldValue ? newValue : v))))
+        return sb
+          .from('tasks')
+          .update({ [field]: nextArr, updated_at: new Date().toISOString() })
+          .eq('id', (row as { id: string }).id)
+          .then(({ error: e }) => {
+            if (e) throw e
+          })
+      }),
+    )
+  }
+
   async getSettings(): Promise<AppSettings> {
     const { data, error } = await getSupabase()
       .from('settings')

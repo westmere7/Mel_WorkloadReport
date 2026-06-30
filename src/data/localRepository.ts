@@ -104,6 +104,23 @@ export class LocalRepository implements Repository {
     return () => window.removeEventListener('storage', handler)
   }
 
+  async renameValue(
+    field: 'campaign' | 'types' | 'people',
+    oldValue: string,
+    newValue: string,
+  ): Promise<void> {
+    const tasks = await this.listTasks()
+    const next = tasks.map((t) => {
+      if (field === 'campaign') {
+        return t.campaign === oldValue ? { ...t, campaign: newValue } : t
+      }
+      const arr = t[field]
+      if (!arr.includes(oldValue)) return t
+      return { ...t, [field]: Array.from(new Set(arr.map((v) => (v === oldValue ? newValue : v)))) }
+    })
+    write(TASKS_KEY, next)
+  }
+
   async getSettings(): Promise<AppSettings> {
     return read<AppSettings>(SETTINGS_KEY, DEFAULT_SETTINGS)
   }

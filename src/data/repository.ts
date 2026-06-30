@@ -22,6 +22,13 @@ export interface Repository {
   saveSettings(settings: AppSettings): Promise<AppSettings>
 
   /**
+   * Rename a value across all tasks (used when a campaign/type/person is
+   * renamed in Settings) so tasks stay linked. `field` is the task field:
+   * 'campaign' (scalar) or 'types' / 'people' (arrays).
+   */
+  renameValue(field: 'campaign' | 'types' | 'people', oldValue: string, newValue: string): Promise<void>
+
+  /**
    * Subscribe to task changes from other clients/tabs. Calls `onChange`
    * whenever tasks change externally. Returns an unsubscribe function.
    */

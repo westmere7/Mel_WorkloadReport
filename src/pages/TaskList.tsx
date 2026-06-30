@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   ArrowDownUp,
   Download,
@@ -137,18 +136,13 @@ export function TaskList() {
             </button>
           )}
 
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              className="btn-outline"
-              onClick={() => exportTasksCsv(filtered)}
-              disabled={filtered.length === 0}
-            >
-              <Download className="h-4 w-4" /> Export CSV
-            </button>
-            <Link to="/new" className="btn-primary">
-              New task
-            </Link>
-          </div>
+          <button
+            className="btn-outline ml-auto"
+            onClick={() => exportTasksCsv(filtered)}
+            disabled={filtered.length === 0}
+          >
+            <Download className="h-4 w-4" /> Export CSV
+          </button>
         </div>
       </Card>
 

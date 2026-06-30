@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, FilePlus2, Table2, Settings, type LucideIcon } from 'lucide-react'
+import { LayoutDashboard, Table2, Settings, type LucideIcon } from 'lucide-react'
 import { cx } from '../lib/format'
 
 interface NavItem {
@@ -10,7 +10,6 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/new', label: 'New Task', icon: FilePlus2 },
   { to: '/tasks', label: 'Task List', icon: Table2 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]

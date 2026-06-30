@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, Database, HardDrive, Lock, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Check, Database, HardDrive, Lock, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -11,7 +11,7 @@ import type { AppSettings } from '../types'
 type ListKey = keyof Pick<AppSettings, 'campaigns' | 'types' | 'people'>
 
 export function SettingsPage() {
-  const { settings, saveSettings, backend, tasks } = useStore()
+  const { settings, saveSettings, backend, tasks, renameListItem } = useStore()
 
   const mutate = async (key: ListKey, next: string[]) => {
     await saveSettings({ ...settings, [key]: next })
@@ -70,6 +70,7 @@ export function SettingsPage() {
           items={settings.campaigns}
           onAdd={(v) => mutate('campaigns', [...settings.campaigns, v])}
           onRemove={(v) => mutate('campaigns', settings.campaigns.filter((c) => c !== v))}
+          onRename={(o, n) => renameListItem('campaigns', o, n)}
           usage={(v) => usageCount('campaigns', v)}
         />
         <ListEditor
@@ -78,6 +79,7 @@ export function SettingsPage() {
           items={settings.types}
           onAdd={(v) => mutate('types', [...settings.types, v])}
           onRemove={(v) => mutate('types', settings.types.filter((c) => c !== v))}
+          onRename={(o, n) => renameListItem('types', o, n)}
           usage={(v) => usageCount('types', v)}
         />
         <ListEditor
@@ -86,6 +88,7 @@ export function SettingsPage() {
           items={settings.people}
           onAdd={(v) => mutate('people', [...settings.people, v])}
           onRemove={(v) => mutate('people', settings.people.filter((c) => c !== v))}
+          onRename={(o, n) => renameListItem('people', o, n)}
           usage={(v) => usageCount('people', v)}
         />
       </div>
@@ -297,6 +300,7 @@ function ListEditor({
   items,
   onAdd,
   onRemove,
+  onRename,
   usage,
 }: {
   title: string
@@ -304,9 +308,12 @@ function ListEditor({
   items: string[]
   onAdd: (value: string) => void
   onRemove: (value: string) => void
+  onRename: (oldValue: string, newValue: string) => void | Promise<void>
   usage: (value: string) => number
 }) {
   const [draft, setDraft] = useState('')
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
 
   const add = () => {
     const v = draft.trim()
@@ -317,6 +324,20 @@ function ListEditor({
     }
     onAdd(v)
     setDraft('')
+  }
+
+  const startEdit = (item: string) => {
+    setEditing(item)
+    setEditValue(item)
+  }
+  const cancelEdit = () => {
+    setEditing(null)
+    setEditValue('')
+  }
+  const saveEdit = (item: string) => {
+    const v = editValue.trim()
+    if (v && v !== item) void onRename(item, v)
+    cancelEdit()
   }
 
   return (
@@ -337,25 +358,82 @@ function ListEditor({
       <ul className="space-y-1.5">
         {items.map((item) => {
           const count = usage(item)
+          const isEditing = editing === item
           return (
             <li
               key={item}
               className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2"
             >
-              <span className="flex items-center gap-2 text-sm">
-                <span className="h-2 w-2 rounded-full" style={{ background: 'currentColor' }} />
-                <span className="text-ink">{item}</span>
-              </span>
-              <span className="flex items-center gap-2">
-                {count > 0 && <span className="text-[11px] text-muted">{count} task{count === 1 ? '' : 's'}</span>}
-                <button
-                  className="rounded-md p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
-                  onClick={() => onRemove(item)}
-                  title="Remove"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </span>
+              {isEditing ? (
+                <>
+                  <input
+                    className="input h-8 flex-1 px-2 py-1 text-sm"
+                    value={editValue}
+                    autoFocus
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        saveEdit(item)
+                      } else if (e.key === 'Escape') {
+                        cancelEdit()
+                      }
+                    }}
+                    onBlur={() => saveEdit(item)}
+                  />
+                  <span className="flex items-center gap-1">
+                    <button
+                      className="rounded-md p-1 text-accent-green hover:bg-green-50 dark:hover:bg-green-500/15"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => saveEdit(item)}
+                      title="Save"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button
+                      className="rounded-md p-1 text-faint hover:bg-subtle"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={cancelEdit}
+                      title="Cancel"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
+                    onClick={() => startEdit(item)}
+                    title="Click to rename"
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-rmit-red" />
+                    <span className="truncate text-ink">{item}</span>
+                  </button>
+                  <span className="flex shrink-0 items-center gap-1">
+                    {count > 0 && (
+                      <span className="text-[11px] text-muted">
+                        {count} task{count === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    <button
+                      className="rounded-md p-1 text-faint hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white"
+                      onClick={() => startEdit(item)}
+                      title="Rename"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      className="rounded-md p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
+                      onClick={() => onRemove(item)}
+                      title="Remove"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </span>
+                </>
+              )}
             </li>
           )
         })}

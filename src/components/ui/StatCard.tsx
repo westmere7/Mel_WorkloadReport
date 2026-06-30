@@ -19,9 +19,9 @@ const ACCENTS: Record<NonNullable<StatCardProps['accent']>, string> = {
 
 export function StatCard({ label, value, icon: Icon, hint, accent = 'navy' }: StatCardProps) {
   return (
-    <div className="card flex items-center gap-4 p-5">
-      <div className={cx('flex h-12 w-12 shrink-0 items-center justify-center rounded-xl', ACCENTS[accent])}>
-        <Icon className="h-6 w-6" strokeWidth={2.2} />
+    <div className="card flex items-center gap-3.5 p-4">
+      <div className={cx('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', ACCENTS[accent])}>
+        <Icon className="h-5 w-5" strokeWidth={2.2} />
       </div>
       <div className="min-w-0">
         <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>

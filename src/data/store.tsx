@@ -30,6 +30,8 @@ interface StoreValue {
   deleteAllTasks: () => Promise<void>
   populateSampleData: (count?: number) => Promise<number>
   saveSettings: (settings: AppSettings) => Promise<void>
+  /** Rename a campaign/type/person in Settings and propagate to all tasks. */
+  renameListItem: (key: 'campaigns' | 'types' | 'people', oldValue: string, newValue: string) => Promise<void>
   /** True while a live (realtime/cross-tab) subscription is active. */
   live: boolean
 }
@@ -140,6 +142,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [repo],
   )
 
+  const renameListItem = useCallback(
+    async (key: 'campaigns' | 'types' | 'people', oldValue: string, newValue: string) => {
+      const trimmed = newValue.trim()
+      if (!trimmed || trimmed === oldValue) return
+      const field = key === 'campaigns' ? 'campaign' : key
+
+      // 1. Propagate the rename to every task that references the old value.
+      await repo.renameValue(field, oldValue, trimmed)
+
+      // 2. Update the Settings list (merge if the new name already exists).
+      setSettings((prev) => {
+        const list = prev[key]
+        const dupe = list.some((v) => v !== oldValue && v.toLowerCase() === trimmed.toLowerCase())
+        const nextList = dupe
+          ? list.filter((v) => v !== oldValue)
+          : list.map((v) => (v === oldValue ? trimmed : v))
+        const nextSettings = { ...prev, [key]: nextList }
+        void repo.saveSettings(nextSettings)
+        return nextSettings
+      })
+
+      // 3. Refresh tasks so counts/labels reflect the rename.
+      setTasks(await repo.listTasks())
+    },
+    [repo],
+  )
+
   const value = useMemo<StoreValue>(
     () => ({
       backend: repo.backend,
@@ -154,6 +183,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteAllTasks,
       populateSampleData,
       saveSettings,
+      renameListItem,
       live,
     }),
     [
@@ -170,6 +200,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteAllTasks,
       populateSampleData,
       saveSettings,
+      renameListItem,
     ],
   )
 

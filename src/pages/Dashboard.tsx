@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { ClipboardList, Images, Megaphone, Users } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
+import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
 import { AreaTrendChart, DonutChart, HBarChart, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
@@ -21,6 +21,7 @@ type Filter = 'all' | Half
 
 export function Dashboard() {
   const { tasks, live } = useStore()
+  const { openNewTask } = useNewTask()
   const [filter, setFilter] = useState<Filter>('all')
 
   const filtered = useMemo(
@@ -35,7 +36,14 @@ export function Dashboard() {
   const assetMix = useMemo(() => assetsByType(filtered), [filtered])
   const byMonth = useMemo(() => assetsByMonth(filtered), [filtered])
   const bySize = useMemo(() => countBySize(filtered), [filtered])
-  const byHalf = useMemo(() => countByField(tasks, 'half'), [tasks])
+  const halfCounts = useMemo(
+    () => ({
+      all: tasks.length,
+      H1: tasks.filter((t) => t.half === 'H1').length,
+      H2: tasks.filter((t) => t.half === 'H2').length,
+    }),
+    [tasks],
+  )
 
   if (tasks.length === 0) {
     return (
@@ -45,15 +53,15 @@ export function Dashboard() {
           Register your first task to start tracking the team’s workload — or populate sample data
           from Settings → Developer.
         </p>
-        <Link to="/new" className="btn-primary mt-2">
+        <button onClick={openNewTask} className="btn-primary mt-2">
           Create a task
-        </Link>
+        </button>
       </Card>
     )
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Live status + Half filter */}
       <div className="flex items-center justify-between gap-3">
         <span
@@ -80,13 +88,14 @@ export function Dashboard() {
               )}
             >
               {f === 'all' ? 'All year' : f}
+              <span className="ml-1.5 opacity-60">{halfCounts[f]}</span>
             </button>
           ))}
         </div>
       </div>
 
       {/* Stat cards */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Total tasks" value={summary.totalTasks} icon={ClipboardList} accent="red" />
         <StatCard
           label="Total assets"
@@ -99,54 +108,45 @@ export function Dashboard() {
         <StatCard label="People engaged" value={summary.peopleEngaged} icon={Users} accent="teal" />
       </div>
 
-      {/* Workload across the year */}
-      <Card>
-        <CardHeader
-          title="Workload across the year"
-          subtitle="Total assets booked per month, by task start date"
-        />
-        <AreaTrendChart data={byMonth} />
-      </Card>
-
-      {/* Campaign bar + asset mix donut */}
-      <div className="grid gap-5 lg:grid-cols-3">
+      {/* Campaign bar + workload trend */}
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Tasks by campaign" subtitle="How work is distributed across campaigns" />
-          <VBarChart data={byCampaign} emptyMessage="Add tasks across at least 2 campaigns." />
+          <CardHeader title="Workload across the year" subtitle="Total assets booked per month, by start date" />
+          <AreaTrendChart data={byMonth} height={180} />
         </Card>
         <Card>
           <CardHeader title="Asset mix" subtitle="Deliverables by type" />
-          <DonutChart data={assetMix} emptyMessage="Add tasks with asset counts to see the mix." />
+          <DonutChart data={assetMix} height={180} emptyMessage="Add tasks with asset counts to see the mix." />
         </Card>
       </div>
 
-      {/* Person + squad */}
-      <div className="grid gap-5 lg:grid-cols-2">
+      {/* Campaign + distribution charts */}
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Workload by person" subtitle="Tasks assigned per team member" />
-          <HBarChart data={byPerson} emptyMessage="Assign people to at least 2 tasks." />
+          <CardHeader title="Tasks by campaign" subtitle="Work distribution across campaigns" />
+          <VBarChart data={byCampaign} height={200} emptyMessage="Add tasks across at least 2 campaigns." />
         </Card>
-        <Card>
-          <CardHeader title="Tasks by squad" subtitle="Requests by stakeholder team" />
-          <HBarChart data={bySquad} emptyMessage="Add tasks for at least 2 squads." />
-        </Card>
-      </div>
-
-      {/* Size + half */}
-      <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardHeader title="Tasks by size" subtitle="Effort distribution (XS → XL)" />
           <VBarChart
             data={bySize}
+            height={200}
             minPoints={1}
             angledLabels={false}
             colors={SIZES.map((s) => SIZE_COLORS[s])}
             emptyMessage="Add tasks to see the size spread."
           />
         </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title="H1 vs H2" subtitle="Split across the year" />
-          <DonutChart data={byHalf} minPoints={1} emptyMessage="Add tasks to see the split." />
+          <CardHeader title="Workload by person" subtitle="Tasks assigned per team member" />
+          <HBarChart data={byPerson} height={210} emptyMessage="Assign people to at least 2 tasks." />
+        </Card>
+        <Card>
+          <CardHeader title="Tasks by squad" subtitle="Requests by stakeholder team" />
+          <HBarChart data={bySquad} height={210} emptyMessage="Add tasks for at least 2 squads." />
         </Card>
       </div>
     </div>
