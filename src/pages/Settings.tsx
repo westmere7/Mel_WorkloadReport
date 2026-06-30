@@ -5,7 +5,7 @@ import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useStore } from '../data/store'
 import { SQUADS, SQUAD_DESCRIPTIONS, SIZES, SIZE_DESCRIPTIONS, SIZE_TONE } from '../constants'
-import { cx } from '../lib/format'
+import { cx, toMessage } from '../lib/format'
 import type { AppSettings } from '../types'
 
 type ListKey = keyof Pick<AppSettings, 'campaigns' | 'types' | 'people'>
@@ -159,7 +159,7 @@ function DangerZone() {
       const n = await populateSampleData(SAMPLE_COUNT)
       setNotice(`Added ${n} sample tasks to the ${backend} database.`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(toMessage(e))
     } finally {
       setPopulating(false)
     }
@@ -180,7 +180,7 @@ function DangerZone() {
       await deleteAllTasks()
       close()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(toMessage(e))
     } finally {
       setBusy(false)
     }

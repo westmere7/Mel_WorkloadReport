@@ -29,3 +29,26 @@ export function todayISO(): string {
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
 }
+
+/**
+ * Turn any thrown value into a readable message. Handles JS Errors, strings,
+ * and Supabase/PostgREST error objects ({ message, details, hint, code }),
+ * which are plain objects and would otherwise stringify to "[object Object]".
+ */
+export function toMessage(e: unknown): string {
+  if (e instanceof Error) return e.message
+  if (typeof e === 'string') return e
+  if (e && typeof e === 'object') {
+    const o = e as Record<string, unknown>
+    const parts = [o.message, o.details, o.hint].filter(
+      (x): x is string => typeof x === 'string' && x.length > 0,
+    )
+    if (parts.length) return parts.join(' — ')
+    try {
+      return JSON.stringify(e)
+    } catch {
+      return String(e)
+    }
+  }
+  return String(e)
+}

@@ -5,7 +5,7 @@ import { EMPTY_BREAKDOWN } from '../types'
 import { SQUADS, SQUAD_DESCRIPTIONS, ASSET_FIELDS, SIZES, SIZE_DESCRIPTIONS } from '../constants'
 import { useStore } from '../data/store'
 import { MultiSelect } from './ui/MultiSelect'
-import { cx } from '../lib/format'
+import { cx, toMessage } from '../lib/format'
 import { deriveHalf, parseTaskCode, suggestCodeForDate } from '../lib/taskCode'
 import { todayISO } from '../lib/format'
 
@@ -98,6 +98,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
         half,
         size,
       })
+    } catch (err) {
+      setErrors([toMessage(err)])
     } finally {
       setSubmitting(false)
     }

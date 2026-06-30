@@ -15,6 +15,7 @@ import { SupabaseRepository } from './supabaseRepository'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { DEFAULT_SETTINGS } from '../constants'
 import { generateSampleTasks } from '../lib/sampleData'
+import { toMessage } from '../lib/format'
 
 interface StoreValue {
   backend: 'local' | 'supabase'
@@ -58,7 +59,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setTasks(t)
       setSettings(s)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(toMessage(e))
     } finally {
       setLoading(false)
     }
