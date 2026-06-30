@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light theme tokens */
+    --surface: #f5f6fa;
+    --card: #ffffff;
+    --subtle: #f1f2f7;
+    --line: #eaecf2;
+    --ink: #1c1c28;
+    --muted: #6b7280;
+    --faint: #9ca3af;
+
+    /* Chart tokens */
+    --chart-axis: #6b7280;
+    --chart-axis-strong: #374151;
+    --chart-grid: #f0f1f5;
+    --chart-cursor: rgba(0, 0, 84, 0.05);
+
+    --scrollbar: #c7c9d9;
+  }
+
+  .dark {
+    /* Dark theme — derived from RMIT navy #000054 */
+    --surface: #060627;
+    --card: #0e0e3f;
+    --subtle: #1a1a55;
+    --line: #272770;
+    --ink: #e9eaf6;
+    --muted: #a2a7cd;
+    --faint: #6b6fa3;
+
+    --chart-axis: #9aa0c6;
+    --chart-axis-strong: #c6caea;
+    --chart-grid: #23235f;
+    --chart-cursor: rgba(255, 255, 255, 0.06);
+
+    --scrollbar: #2c2c78;
+
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-surface text-ink antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* Thin, branded scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-card shadow-card;
+  }
+  /* Crisp card edges in dark mode (shadows don't read on dark backgrounds) */
+  .dark .card {
+    border: 1px solid var(--line);
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-line bg-card px-3.5 py-2.5 text-sm
+           text-ink placeholder:text-faint outline-none transition
+           focus:border-rmit-red focus:ring-2 focus:ring-brand-100;
+  }
+  .dark .input:focus {
+    @apply ring-brand-500/25;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm
+           font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-1
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-rmit-red text-white hover:bg-brand-600 focus:ring-brand-200;
+  }
+  .btn-navy {
+    @apply btn bg-rmit-navy text-white hover:bg-navy-700 focus:ring-navy-200;
+  }
+  .dark .btn-navy {
+    @apply bg-navy-300 text-white hover:bg-navy-200;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-muted hover:bg-subtle hover:text-ink;
+  }
+  .btn-outline {
+    @apply btn border border-line bg-card text-ink hover:bg-subtle;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+}

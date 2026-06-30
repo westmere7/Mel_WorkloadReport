@@ -1,0 +1,29 @@
+import type { AppSettings, Task, TaskInput } from '../types'
+
+/**
+ * Storage-agnostic contract for the app's data.
+ * Implemented by LocalRepository (localStorage) and SupabaseRepository.
+ * The rest of the app only ever talks to this interface.
+ */
+export interface Repository {
+  /** A short label for the active backend, shown in Settings. */
+  readonly backend: 'local' | 'supabase'
+
+  listTasks(): Promise<Task[]>
+  createTask(input: TaskInput): Promise<Task>
+  /** Bulk insert (used by sample-data population). */
+  createManyTasks(inputs: TaskInput[]): Promise<Task[]>
+  updateTask(id: string, input: TaskInput): Promise<Task>
+  deleteTask(id: string): Promise<void>
+  /** Dev/maintenance: remove every task. */
+  deleteAllTasks(): Promise<void>
+
+  getSettings(): Promise<AppSettings>
+  saveSettings(settings: AppSettings): Promise<AppSettings>
+
+  /**
+   * Subscribe to task changes from other clients/tabs. Calls `onChange`
+   * whenever tasks change externally. Returns an unsubscribe function.
+   */
+  subscribe(onChange: () => void): () => void
+}
