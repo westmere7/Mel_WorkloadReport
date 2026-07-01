@@ -166,21 +166,46 @@ export function HBarChart({
   )
 }
 
-/** Vertical bar chart — good for campaigns / sizes. */
+/** Horizontal category-axis tick that wraps long labels onto multiple lines. */
+function WrappedTick(props: { x?: number; y?: number; payload?: { value?: string | number } }) {
+  const { x = 0, y = 0, payload } = props
+  const words = String(payload?.value ?? '').split(' ')
+  const lines: string[] = []
+  let cur = ''
+  for (const w of words) {
+    const next = cur ? `${cur} ${w}` : w
+    if (next.length > 12 && cur) {
+      lines.push(cur)
+      cur = w
+    } else {
+      cur = next
+    }
+  }
+  if (cur) lines.push(cur)
+  return (
+    <text x={x} y={y} textAnchor="middle" fontSize={11} fill="var(--chart-axis)">
+      {lines.map((line, i) => (
+        <tspan key={i} x={x} dy={i === 0 ? '0.72em' : '1.05em'}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  )
+}
+
+/** Vertical bar chart — good for campaigns / sizes. Long labels wrap onto multiple lines. */
 export function VBarChart({
   data,
   height = 260,
   minPoints = 2,
   emptyMessage,
   colors,
-  angledLabels = true,
 }: {
   data: NamedCount[]
   height?: number
   minPoints?: number
   emptyMessage?: string
   colors?: string[]
-  angledLabels?: boolean
 }) {
   const themed = useChartColors()
   if (data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
@@ -190,13 +215,11 @@ export function VBarChart({
       <BarChart data={data} margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
         <XAxis
           dataKey="name"
-          tick={{ fontSize: 11, fill: 'var(--chart-axis)' }}
+          tick={<WrappedTick />}
           axisLine={false}
           tickLine={false}
           interval={0}
-          angle={angledLabels ? -25 : 0}
-          textAnchor={angledLabels ? 'end' : 'middle'}
-          height={angledLabels ? 64 : 28}
+          height={48}
         />
         <YAxis allowDecimals={false} tick={AXIS} axisLine={false} tickLine={false} width={28} />
         <Tooltip
@@ -246,13 +269,11 @@ export function StackedBarChart({
         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
         <XAxis
           dataKey="name"
-          tick={{ fontSize: 11, fill: 'var(--chart-axis)' }}
+          tick={<WrappedTick />}
           axisLine={false}
           tickLine={false}
           interval={0}
-          angle={-25}
-          textAnchor="end"
-          height={72}
+          height={52}
         />
         <YAxis
           tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
@@ -305,17 +326,11 @@ export function AreaTrendChart({
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ left: 0, right: 12, top: 8, bottom: 4 }}>
         <defs>
-          {/* Brand heat gradient: tall (peak season) reaches RMIT red, low season cools to navy */}
+          {/* RMIT red fill fading out toward the baseline */}
           <linearGradient id="workloadFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#E61E2A" stopOpacity={0.55} />
-            <stop offset="45%" stopColor="#FFB81C" stopOpacity={0.28} />
-            <stop offset="100%" stopColor="#000054" stopOpacity={0.05} />
-          </linearGradient>
-          {/* Same heat map at full opacity, for the line itself */}
-          <linearGradient id="workloadStroke" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#E61E2A" />
-            <stop offset="50%" stopColor="#FFB81C" />
-            <stop offset="100%" stopColor="#4D4D8F" />
+            <stop offset="0%" stopColor="#E61E2A" stopOpacity={0.45} />
+            <stop offset="60%" stopColor="#E61E2A" stopOpacity={0.14} />
+            <stop offset="100%" stopColor="#E61E2A" stopOpacity={0.02} />
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
@@ -331,8 +346,8 @@ export function AreaTrendChart({
         <Area
           type="monotone"
           dataKey="value"
-          stroke="url(#workloadStroke)"
-          strokeWidth={3.5}
+          stroke="#E61E2A"
+          strokeWidth={3}
           fill="url(#workloadFill)"
           dot={{ r: 2.5, fill: 'var(--card)', stroke: '#E61E2A', strokeWidth: 1.5 }}
           activeDot={{ r: 5 }}

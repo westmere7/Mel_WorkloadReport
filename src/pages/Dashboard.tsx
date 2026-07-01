@@ -50,7 +50,7 @@ export function Dashboard() {
     () =>
       demandDim === 'asset'
         ? demandByStakeholderAssetType(filtered, withFallback(settings.assetTypes))
-        : demandByStakeholder(filtered, settings.types),
+        : demandByStakeholder(filtered, withFallback(settings.types)),
     [filtered, settings.types, settings.assetTypes, demandDim],
   )
   const byPerson = useMemo(() => countByMulti(filtered, 'people'), [filtered])
@@ -160,7 +160,7 @@ export function Dashboard() {
         <Card>
           <CardHeader
             title="Workload across the year"
-            subtitle={`Assets booked per month in ${activeYear} — warmer band marks peak season`}
+            subtitle={`Assets booked per month in ${activeYear}`}
           />
           <AreaTrendChart data={byMonth} height={200} />
         </Card>
