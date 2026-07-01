@@ -1,5 +1,5 @@
 import type { Squad, Task } from '../types'
-import { ASSET_FIELDS, SIZES } from '../constants'
+import { SIZES } from '../constants'
 
 export interface NamedCount {
   name: string
@@ -78,32 +78,35 @@ export function demandByStakeholder(tasks: Task[], types: string[]): Stakeholder
 }
 
 /**
- * Deliverables per asset type (image/video/…) split across the three
- * stakeholder groups — the asset-type counterpart of demandByStakeholder.
- * Uses each task's per-type asset breakdown. Empty rows are dropped.
+ * Deliverables per asset type split across the three stakeholder groups — the
+ * asset-type counterpart of demandByStakeholder. `assetTypes` sets the axis
+ * order; empty rows are dropped.
  */
-export function demandByStakeholderAssetType(tasks: Task[]): StakeholderRow[] {
-  const rows: StakeholderRow[] = ASSET_FIELDS.map((f) => ({
-    name: f.label,
+export function demandByStakeholderAssetType(tasks: Task[], assetTypes: string[]): StakeholderRow[] {
+  const rows: StakeholderRow[] = assetTypes.map((name) => ({
+    name,
     DOMESTIC: 0,
     INTON: 0,
     'Other Stakeholders': 0,
   }))
+  const byName = new Map(rows.map((r) => [r.name, r]))
   for (const t of tasks) {
     const group = stakeholderGroup(t.squad)
-    ASSET_FIELDS.forEach((f, i) => {
-      rows[i][group] += Number(t.assetBreakdown[f.key]) || 0
-    })
+    for (const name of assetTypes) {
+      byName.get(name)![group] += Number(t.assetBreakdown[name]) || 0
+    }
   }
   return rows.filter((r) => r.DOMESTIC + r.INTON + r['Other Stakeholders'] > 0)
 }
 
-/** Total assets split by asset type (image/video/…). */
-export function assetsByType(tasks: Task[]): NamedCount[] {
-  return ASSET_FIELDS.map((f) => ({
-    name: f.label,
-    value: tasks.reduce((acc, t) => acc + (Number(t.assetBreakdown[f.key]) || 0), 0),
-  })).filter((d) => d.value > 0)
+/** Total assets split by asset type. `assetTypes` sets the order; empty types are dropped. */
+export function assetsByType(tasks: Task[], assetTypes: string[]): NamedCount[] {
+  return assetTypes
+    .map((name) => ({
+      name,
+      value: tasks.reduce((acc, t) => acc + (Number(t.assetBreakdown[name]) || 0), 0),
+    }))
+    .filter((d) => d.value > 0)
 }
 
 /** Total assets per person (splits a task's total evenly is misleading — we sum full total per assignee). */

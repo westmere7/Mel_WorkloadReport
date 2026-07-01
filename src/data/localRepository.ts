@@ -1,6 +1,6 @@
 import type { AppSettings, Task, TaskInput } from '../types'
 import type { Repository } from './repository'
-import { DEFAULT_SETTINGS } from '../constants'
+import { DEFAULT_SETTINGS, normalizeBreakdown } from '../constants'
 import { SEED_TASKS } from './seed'
 
 const TASKS_KEY = 'mwr.tasks.v1'
@@ -43,8 +43,13 @@ export class LocalRepository implements Repository {
   }
 
   async listTasks(): Promise<Task[]> {
-    // Default any field added after a task was first saved (e.g. `size`).
-    return read<Task[]>(TASKS_KEY, []).map((t) => ({ ...t, size: t.size ?? 'M' }))
+    // Default any field added after a task was first saved (e.g. `size`), and
+    // migrate legacy fixed breakdown keys to the name-keyed form.
+    return read<Task[]>(TASKS_KEY, []).map((t) => ({
+      ...t,
+      size: t.size ?? 'M',
+      assetBreakdown: normalizeBreakdown(t.assetBreakdown),
+    }))
   }
 
   async createTask(input: TaskInput): Promise<Task> {
@@ -105,7 +110,7 @@ export class LocalRepository implements Repository {
   }
 
   async renameValue(
-    field: 'campaign' | 'types' | 'people',
+    field: 'campaign' | 'types' | 'people' | 'assetBreakdown',
     oldValue: string,
     newValue: string,
   ): Promise<void> {
@@ -113,6 +118,13 @@ export class LocalRepository implements Repository {
     const next = tasks.map((t) => {
       if (field === 'campaign') {
         return t.campaign === oldValue ? { ...t, campaign: newValue } : t
+      }
+      if (field === 'assetBreakdown') {
+        if (!(oldValue in t.assetBreakdown)) return t
+        const b = { ...t.assetBreakdown }
+        b[newValue] = (b[newValue] ?? 0) + (b[oldValue] ?? 0)
+        delete b[oldValue]
+        return { ...t, assetBreakdown: b }
       }
       const arr = t[field]
       if (!arr.includes(oldValue)) return t

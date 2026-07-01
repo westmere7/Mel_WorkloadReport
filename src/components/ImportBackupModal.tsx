@@ -9,7 +9,7 @@ import { toMessage } from '../lib/format'
 import type { Half, TaskInput } from '../types'
 
 export function ImportBackupModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { tasks, importTasks } = useStore()
+  const { tasks, settings, importTasks } = useStore()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [parsed, setParsed] = useState<TaskInput[] | null>(null)
@@ -147,7 +147,7 @@ export function ImportBackupModal({ open, onClose }: { open: boolean; onClose: (
             type="button"
             className="btn-primary mt-3"
             disabled={backupTasks.length === 0}
-            onClick={() => exportTasksCsv(backupTasks, spanSuffix(span, activeYear, half))}
+            onClick={() => exportTasksCsv(backupTasks, settings.assetTypes, spanSuffix(span, activeYear, half))}
           >
             <Download className="h-4 w-4" /> Download backup
           </button>

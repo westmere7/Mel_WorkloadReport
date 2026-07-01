@@ -16,14 +16,8 @@ export type Half = 'H1' | 'H2'
 /** T-shirt size representing the overall size/effort of a task. */
 export type Size = 'XS' | 'S' | 'M' | 'L' | 'XL'
 
-/** Breakdown of the total asset count by deliverable type. */
-export interface AssetBreakdown {
-  image: number
-  video: number
-  publication: number
-  html5: number
-  gif: number
-}
+/** Breakdown of the total asset count, keyed by asset-type name (editable in Settings). */
+export type AssetBreakdown = Record<string, number>
 
 export interface Task {
   id: string
@@ -62,13 +56,8 @@ export interface AppSettings {
   campaigns: string[]
   types: string[]
   people: string[]
+  assetTypes: string[]
 }
 
-/** Empty breakdown helper shape. */
-export const EMPTY_BREAKDOWN: AssetBreakdown = {
-  image: 0,
-  video: 0,
-  publication: 0,
-  html5: 0,
-  gif: 0,
-}
+/** Empty breakdown helper. */
+export const EMPTY_BREAKDOWN: AssetBreakdown = {}

@@ -61,20 +61,34 @@ export const DEFAULT_PEOPLE: string[] = [
   'Tran',
 ]
 
+/** Default asset (deliverable) types — editable in Settings. */
+export const DEFAULT_ASSET_TYPES: string[] = ['Image', 'Video', 'Publication', 'HTML5 ad', 'GIF / Motion']
+
 export const DEFAULT_SETTINGS: AppSettings = {
   campaigns: DEFAULT_CAMPAIGNS,
   types: DEFAULT_TYPES,
   people: DEFAULT_PEOPLE,
+  assetTypes: DEFAULT_ASSET_TYPES,
 }
 
-/** Asset breakdown fields, in display order. */
-export const ASSET_FIELDS: { key: keyof import('./types').AssetBreakdown; label: string }[] = [
-  { key: 'image', label: 'Image' },
-  { key: 'video', label: 'Video' },
-  { key: 'publication', label: 'Publication' },
-  { key: 'html5', label: 'HTML5 ad' },
-  { key: 'gif', label: 'GIF / Motion' },
-]
+/** Legacy fixed breakdown keys → their default display names, for migrating old data. */
+const LEGACY_ASSET_KEYS: Record<string, string> = {
+  image: 'Image',
+  video: 'Video',
+  publication: 'Publication',
+  html5: 'HTML5 ad',
+  gif: 'GIF / Motion',
+}
+
+/** Normalise a stored asset breakdown to name-keyed form (migrates legacy fixed keys). */
+export function normalizeBreakdown(raw: Record<string, number> | null | undefined): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [k, v] of Object.entries(raw ?? {})) {
+    const key = LEGACY_ASSET_KEYS[k] ?? k
+    out[key] = (out[key] ?? 0) + (Number(v) || 0)
+  }
+  return out
+}
 
 /** Fixed T-shirt sizes (effort/size scale), smallest → largest. */
 export const SIZES: Size[] = ['XS', 'S', 'M', 'L', 'XL']
@@ -88,6 +102,24 @@ export const SIZE_DESCRIPTIONS: Record<Size, string> = {
   M: 'Medium',
   L: 'Large',
   XL: 'Very large / major effort',
+}
+
+/** Turnaround per size, from the GCMC T-shirt sizing guide (upper bound), in days. */
+export const SIZE_DURATION_DAYS: Record<Size, number> = {
+  XS: 7, // 1 week
+  S: 28, // 2–4 weeks
+  M: 42, // 6 weeks
+  L: 56, // 8 weeks
+  XL: 182, // 3–6 months
+}
+
+/** Human-readable turnaround per size (matches the sizing guide). */
+export const SIZE_DURATION_LABEL: Record<Size, string> = {
+  XS: '1 week',
+  S: '2–4 weeks',
+  M: '6 weeks',
+  L: '8 weeks',
+  XL: '3–6 months',
 }
 
 /** Heat-scale colours for sizes (cool → hot), used in charts. */

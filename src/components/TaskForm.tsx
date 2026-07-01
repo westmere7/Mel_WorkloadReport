@@ -1,18 +1,18 @@
-import { useMemo, useState } from 'react'
-import { CalendarClock, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { CalendarClock, Sparkles, Trash2 } from 'lucide-react'
 import type { AssetBreakdown, Half, Size, Squad, Task, TaskInput } from '../types'
-import { EMPTY_BREAKDOWN } from '../types'
 import {
   SQUADS,
   SQUAD_DESCRIPTIONS,
-  ASSET_FIELDS,
   SIZES,
   SIZE_DESCRIPTIONS,
   SIZE_COLORS,
+  SIZE_DURATION_DAYS,
+  SIZE_DURATION_LABEL,
 } from '../constants'
 import { useStore } from '../data/store'
 import { MultiSelect } from './ui/MultiSelect'
-import { cx, toMessage } from '../lib/format'
+import { addDaysISO, cx, toMessage } from '../lib/format'
 import { deriveHalf, parseTaskCode } from '../lib/taskCode'
 
 interface TaskFormProps {
@@ -24,7 +24,7 @@ interface TaskFormProps {
 }
 
 function sumBreakdown(b: AssetBreakdown): number {
-  return ASSET_FIELDS.reduce((acc, f) => acc + (Number(b[f.key]) || 0), 0)
+  return Object.values(b).reduce((acc, v) => acc + (Number(v) || 0), 0)
 }
 
 /** Pick black or white text for a coloured background, by perceived luminance. */
@@ -53,10 +53,13 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   const [name, setName] = useState(initial?.name ?? '')
   const [types, setTypes] = useState<string[]>(initial?.types ?? [])
   const [people, setPeople] = useState<string[]>(initial?.people ?? [])
-  const [breakdown, setBreakdown] = useState<AssetBreakdown>(initial?.assetBreakdown ?? { ...EMPTY_BREAKDOWN })
+  const [breakdown, setBreakdown] = useState<AssetBreakdown>(() =>
+    Object.fromEntries(settings.assetTypes.map((n) => [n, initial?.assetBreakdown?.[n] ?? 0])),
+  )
   const [startDate, setStartDate] = useState<string>(initial?.startDate ?? '')
   const [startDateTouched, setStartDateTouched] = useState(Boolean(initial?.startDate))
   const [endDate, setEndDate] = useState<string>(initial?.endDate ?? '')
+  const [endDateTouched, setEndDateTouched] = useState(Boolean(initial?.endDate))
   const [half, setHalf] = useState<Half>(initial?.half ?? 'H1')
   const [halfTouched, setHalfTouched] = useState(Boolean(initial))
   const [size, setSize] = useState<Size>(initial?.size ?? 'M')
@@ -65,6 +68,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
 
   const parsed = useMemo(() => parseTaskCode(code), [code])
   const breakdownSum = useMemo(() => sumBreakdown(breakdown), [breakdown])
+
+  // End date estimated from start date + size, per the T-shirt sizing guide.
+  const suggestedEnd = useMemo(
+    () => (startDate ? addDaysISO(startDate, SIZE_DURATION_DAYS[size]) : ''),
+    [startDate, size],
+  )
+  // Auto-fill the end date from the estimate until the user sets it themselves.
+  useEffect(() => {
+    if (!endDateTouched && suggestedEnd) setEndDate(suggestedEnd)
+  }, [suggestedEnd, endDateTouched])
+  const endIsAuto = Boolean(suggestedEnd) && !endDateTouched && endDate === suggestedEnd
 
   // Live notice for the task code: wrong format or already used by another task.
   const codeError = useMemo(() => {
@@ -78,7 +92,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     return null
   }, [code, parsed, tasks, initial])
 
-  const setBreakdownField = (key: keyof AssetBreakdown, value: number) => {
+  const setBreakdownField = (key: string, value: number) => {
     setBreakdown((prev) => ({ ...prev, [key]: Math.max(0, value || 0) }))
   }
 
@@ -112,6 +126,18 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     setStartDate(value)
     setStartDateTouched(true)
     if (!halfTouched) setHalf(deriveHalf(value || null))
+  }
+
+  const onEndDateChange = (value: string) => {
+    setEndDate(value)
+    setEndDateTouched(true)
+  }
+
+  // Snap the end date back to the size-based estimate and re-enable auto-fill.
+  const applyEstimatedEnd = () => {
+    if (!suggestedEnd) return
+    setEndDate(suggestedEnd)
+    setEndDateTouched(false)
   }
 
   const applyDateFromCode = () => {
@@ -252,18 +278,25 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           </span>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {ASSET_FIELDS.map((f) => (
-            <div key={f.key}>
-              <span className="mb-1 block text-[11px] font-medium text-muted">{f.label}</span>
+          {settings.assetTypes.map((name) => (
+            <div key={name}>
+              <span className="mb-1 block truncate text-[11px] font-medium text-muted" title={name}>
+                {name}
+              </span>
               <input
                 type="number"
                 min={0}
                 className="input"
-                value={breakdown[f.key] || 0}
-                onChange={(e) => setBreakdownField(f.key, e.target.valueAsNumber)}
+                value={breakdown[name] || 0}
+                onChange={(e) => setBreakdownField(name, e.target.valueAsNumber)}
               />
             </div>
           ))}
+          {settings.assetTypes.length === 0 && (
+            <p className="col-span-full text-xs text-muted">
+              Add asset types in Settings to break down deliverables.
+            </p>
+          )}
         </div>
       </div>
 
@@ -335,8 +368,22 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
             className="input"
             value={endDate}
             min={startDate || undefined}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => onEndDateChange(e.target.value)}
           />
+          {endIsAuto && (
+            <p className="mt-1.5 text-xs text-accent-green">
+              Auto-set from {size} size ({SIZE_DURATION_LABEL[size]})
+            </p>
+          )}
+          {suggestedEnd && endDate !== suggestedEnd && (
+            <button
+              type="button"
+              onClick={applyEstimatedEnd}
+              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-rmit-red hover:underline"
+            >
+              <Sparkles className="h-3.5 w-3.5" /> Auto-set from {size} size ({SIZE_DURATION_LABEL[size]})
+            </button>
+          )}
         </div>
         <div>
           <label className="label">Half of year</label>

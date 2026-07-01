@@ -26,7 +26,11 @@ export interface Repository {
    * renamed in Settings) so tasks stay linked. `field` is the task field:
    * 'campaign' (scalar) or 'types' / 'people' (arrays).
    */
-  renameValue(field: 'campaign' | 'types' | 'people', oldValue: string, newValue: string): Promise<void>
+  renameValue(
+    field: 'campaign' | 'types' | 'people' | 'assetBreakdown',
+    oldValue: string,
+    newValue: string,
+  ): Promise<void>
 
   /**
    * Subscribe to task changes from other clients/tabs. Calls `onChange`

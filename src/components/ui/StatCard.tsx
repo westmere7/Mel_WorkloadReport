@@ -32,7 +32,7 @@ export function StatCard({ label, value, icon: Icon, hint, accent = 'navy', size
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-center">
-          <p className="text-[clamp(3.5rem,7vw,8.5rem)] font-bold leading-none text-ink">{value}</p>
+          <p className="text-[clamp(3.5rem,7vw,8.5rem)] font-bold leading-none text-rmit-navy dark:text-ink">{value}</p>
           {hint && <p className="mt-3 truncate text-base text-muted">{hint}</p>}
         </div>
       </div>

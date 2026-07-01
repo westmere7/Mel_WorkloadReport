@@ -8,7 +8,7 @@ import { SQUADS, SQUAD_DESCRIPTIONS, SIZES, SIZE_DESCRIPTIONS, SIZE_TONE } from 
 import { cx, toMessage } from '../lib/format'
 import type { AppSettings } from '../types'
 
-type ListKey = keyof Pick<AppSettings, 'campaigns' | 'types' | 'people'>
+type ListKey = keyof Pick<AppSettings, 'campaigns' | 'types' | 'people' | 'assetTypes'>
 
 export function SettingsPage() {
   const { settings, saveSettings, backend, tasks, renameListItem } = useStore()
@@ -20,6 +20,7 @@ export function SettingsPage() {
   const usageCount = (key: ListKey, value: string): number => {
     if (key === 'campaigns') return tasks.filter((t) => t.campaign === value).length
     if (key === 'types') return tasks.filter((t) => t.types.includes(value)).length
+    if (key === 'assetTypes') return tasks.filter((t) => (t.assetBreakdown[value] ?? 0) > 0).length
     return tasks.filter((t) => t.people.includes(value)).length
   }
 
@@ -63,7 +64,7 @@ export function SettingsPage() {
       </Card>
 
       {/* Editable lists */}
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
         <ListEditor
           title="Campaigns"
           description="Specific campaigns or groups. Used in the task form."
@@ -81,6 +82,15 @@ export function SettingsPage() {
           onRemove={(v) => mutate('types', settings.types.filter((c) => c !== v))}
           onRename={(o, n) => renameListItem('types', o, n)}
           usage={(v) => usageCount('types', v)}
+        />
+        <ListEditor
+          title="Asset types"
+          description="Deliverable types counted in the asset breakdown."
+          items={settings.assetTypes}
+          onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
+          onRemove={(v) => mutate('assetTypes', settings.assetTypes.filter((c) => c !== v))}
+          onRename={(o, n) => renameListItem('assetTypes', o, n)}
+          usage={(v) => usageCount('assetTypes', v)}
         />
         <ListEditor
           title="People"

@@ -49,12 +49,12 @@ export function Dashboard() {
   const demand = useMemo(
     () =>
       demandDim === 'asset'
-        ? demandByStakeholderAssetType(filtered)
+        ? demandByStakeholderAssetType(filtered, settings.assetTypes)
         : demandByStakeholder(filtered, settings.types),
-    [filtered, settings.types, demandDim],
+    [filtered, settings.types, settings.assetTypes, demandDim],
   )
   const byPerson = useMemo(() => countByMulti(filtered, 'people'), [filtered])
-  const assetMix = useMemo(() => assetsByType(filtered), [filtered])
+  const assetMix = useMemo(() => assetsByType(filtered, settings.assetTypes), [filtered, settings.assetTypes])
   // "Across the year" ignores the half sub-filter — it always shows the full 12
   // months of the active year (the latest year by default, or the selected one).
   const byMonth = useMemo(
@@ -152,44 +152,42 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Campaign bar + workload trend */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      {/* Workload trend + asset mix + workload by person */}
+      <div className="grid items-stretch gap-4 lg:grid-cols-3">
+        <Card>
           <CardHeader
             title="Workload across the year"
             subtitle={`Assets booked per month in ${activeYear} — warmer band marks peak season`}
           />
-          <AreaTrendChart data={byMonth} height={180} />
+          <AreaTrendChart data={byMonth} height={200} />
         </Card>
         <Card>
           <CardHeader title="Asset mix" subtitle="Deliverables by type" />
-          <DonutChart data={assetMix} height={180} emptyMessage="Add tasks with asset counts to see the mix." />
+          <DonutChart data={assetMix} height={200} emptyMessage="Add tasks with asset counts to see the mix." />
         </Card>
-      </div>
-
-      {/* Campaign charts */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Tasks by campaign" subtitle="Work distribution across campaigns" />
-          <VBarChart data={byCampaign} height={220} emptyMessage="Add tasks across at least 2 campaigns." />
-        </Card>
-        <Card>
-          <CardHeader title="Asset count by campaign" subtitle="Total deliverables produced per campaign" />
-          <VBarChart
-            data={assetCampaign}
-            height={220}
-            emptyMessage="Add tasks with asset counts across at least 2 campaigns."
-          />
-        </Card>
-      </div>
-
-      {/* Workload by person + demand by stakeholders */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader title="Workload by person" subtitle="Tasks assigned per team member" />
-          <HBarChart data={byPerson} height={300} emptyMessage="Assign people to at least 2 tasks." />
+          <HBarChart data={byPerson} height={200} emptyMessage="Assign people to at least 2 tasks." />
         </Card>
-        <Card>
+      </div>
+
+      {/* Campaign charts stacked; demand by stakeholders takes the full height on the right */}
+      <div className="grid items-stretch gap-4 lg:grid-cols-2">
+        <div className="grid content-start gap-4">
+          <Card>
+            <CardHeader title="Tasks by campaign" subtitle="Work distribution across campaigns" />
+            <VBarChart data={byCampaign} height={220} emptyMessage="Add tasks across at least 2 campaigns." />
+          </Card>
+          <Card>
+            <CardHeader title="Asset count by campaign" subtitle="Total deliverables produced per campaign" />
+            <VBarChart
+              data={assetCampaign}
+              height={220}
+              emptyMessage="Add tasks with asset counts across at least 2 campaigns."
+            />
+          </Card>
+        </div>
+        <Card className="flex flex-col">
           <CardHeader
             title="Demand by stakeholders"
             subtitle={`Deliverables per ${demandDim === 'asset' ? 'asset type' : 'work type'}, split by stakeholder group`}
@@ -215,14 +213,16 @@ export function Dashboard() {
               </div>
             }
           />
-          <StackedBarChart
-            data={demand}
-            keys={[...STAKEHOLDER_GROUPS]}
-            paletteIndices={[0, 1, 4]}
-            labelColors={['#ffffff', '#ffffff', '#000054']}
-            height={300}
-            emptyMessage="Add tasks with asset counts to see demand."
-          />
+          <div className="flex-1">
+            <StackedBarChart
+              data={demand}
+              keys={[...STAKEHOLDER_GROUPS]}
+              paletteIndices={[0, 1, 4]}
+              labelColors={['#ffffff', '#ffffff', '#000054']}
+              height={540}
+              emptyMessage="Add tasks with asset counts to see demand."
+            />
+          </div>
         </Card>
       </div>
     </div>

@@ -46,20 +46,15 @@ export function generateSampleTasks(count = 60): TaskInput[] {
     const people = sample(DEFAULT_PEOPLE, 1 + ri(4))
 
     const assetBreakdown: AssetBreakdown = {
-      image: ri(13),
-      video: ri(7),
-      publication: ri(9),
-      html5: ri(11),
-      gif: ri(6),
+      Image: ri(13),
+      Video: ri(7),
+      Publication: ri(9),
+      'HTML5 ad': ri(11),
+      'GIF / Motion': ri(6),
     }
-    let assetTotal =
-      assetBreakdown.image +
-      assetBreakdown.video +
-      assetBreakdown.publication +
-      assetBreakdown.html5 +
-      assetBreakdown.gif
+    let assetTotal = Object.values(assetBreakdown).reduce((a, v) => a + v, 0)
     if (assetTotal === 0) {
-      assetBreakdown.image = 1
+      assetBreakdown.Image = 1
       assetTotal = 1
     }
 

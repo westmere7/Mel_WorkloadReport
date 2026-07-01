@@ -32,8 +32,12 @@ interface StoreValue {
   importTasks: (inputs: TaskInput[], mode: 'replace' | 'merge') => Promise<{ created: number; updated: number }>
   populateSampleData: (count?: number) => Promise<number>
   saveSettings: (settings: AppSettings) => Promise<void>
-  /** Rename a campaign/type/person in Settings and propagate to all tasks. */
-  renameListItem: (key: 'campaigns' | 'types' | 'people', oldValue: string, newValue: string) => Promise<void>
+  /** Rename a campaign/type/person/asset-type in Settings and propagate to all tasks. */
+  renameListItem: (
+    key: 'campaigns' | 'types' | 'people' | 'assetTypes',
+    oldValue: string,
+    newValue: string,
+  ) => Promise<void>
   /** True while a live (realtime/cross-tab) subscription is active. */
   live: boolean
 }
@@ -175,10 +179,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const renameListItem = useCallback(
-    async (key: 'campaigns' | 'types' | 'people', oldValue: string, newValue: string) => {
+    async (key: 'campaigns' | 'types' | 'people' | 'assetTypes', oldValue: string, newValue: string) => {
       const trimmed = newValue.trim()
       if (!trimmed || trimmed === oldValue) return
-      const field = key === 'campaigns' ? 'campaign' : key
+      const field = key === 'campaigns' ? 'campaign' : key === 'assetTypes' ? 'assetBreakdown' : key
 
       // 1. Propagate the rename to every task that references the old value.
       await repo.renameValue(field, oldValue, trimmed)

@@ -1,7 +1,8 @@
 import type { Half, Size, Squad, Task, TaskInput } from '../types'
-import { ASSET_FIELDS, SIZES, SQUADS } from '../constants'
+import { SIZES, SQUADS } from '../constants'
 import { deriveHalf } from './taskCode'
 
+// Fixed columns; every other column in a file is treated as an asset type.
 const CORE_HEADERS = [
   'Code',
   'Task name',
@@ -21,8 +22,8 @@ function esc(value: string | number): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
-/** Build a CSV string from tasks, then trigger a browser download. */
-export function exportTasksCsv(tasks: Task[], filenameSuffix = 'all'): void {
+/** Build a CSV string from tasks (with one column per asset type), then download it. */
+export function exportTasksCsv(tasks: Task[], assetTypes: string[], filenameSuffix = 'all'): void {
   const headers = [
     'Code',
     'Task name',
@@ -31,7 +32,7 @@ export function exportTasksCsv(tasks: Task[], filenameSuffix = 'all'): void {
     'Types',
     'People',
     'Total assets',
-    ...ASSET_FIELDS.map((f) => f.label),
+    ...assetTypes,
     'Start date',
     'End date',
     'Half',
@@ -46,7 +47,7 @@ export function exportTasksCsv(tasks: Task[], filenameSuffix = 'all'): void {
     t.types.join('; '),
     t.people.join('; '),
     t.assetTotal,
-    ...ASSET_FIELDS.map((f) => t.assetBreakdown[f.key] ?? 0),
+    ...assetTypes.map((name) => t.assetBreakdown[name] ?? 0),
     t.startDate ?? '',
     t.endDate ?? '',
     t.half,
@@ -111,17 +112,17 @@ const splitList = (s: string): string[] =>
     : []
 
 /**
- * Parse a CSV that this app produced back into TaskInput rows. Throws with a
- * readable message if the file isn't a compatible Workload Report export.
- * assetTotal is recomputed from the per-type breakdown to stay consistent.
+ * Parse a CSV that this app produced back into TaskInput rows. Any column that
+ * isn't a core column is treated as an asset type, so files with different asset
+ * types still import. assetTotal is recomputed from the asset-type columns.
+ * Throws with a readable message if the core columns are missing.
  */
 export function parseTasksCsv(text: string): TaskInput[] {
   const rows = parseCsvRows(text).filter((r) => r.some((c) => c.trim() !== ''))
   if (rows.length === 0) throw new Error('The file is empty.')
 
   const header = rows[0].map((h) => h.trim())
-  const required = [...CORE_HEADERS, ...ASSET_FIELDS.map((f) => f.label)]
-  const missing = required.filter((h) => !header.includes(h))
+  const missing = CORE_HEADERS.filter((h) => !header.includes(h))
   if (missing.length) {
     throw new Error(
       `This isn't a Workload Report export — missing column${missing.length > 1 ? 's' : ''}: ${missing
@@ -130,15 +131,16 @@ export function parseTasksCsv(text: string): TaskInput[] {
     )
   }
 
+  const assetCols = header.filter((h) => !CORE_HEADERS.includes(h))
   const col = (name: string) => header.indexOf(name)
   const num = (s: string) => Math.max(0, Number(s) || 0)
 
   return rows.slice(1).map((row) => {
     const get = (name: string) => (row[col(name)] ?? '').trim()
 
-    const assetBreakdown = { image: 0, video: 0, publication: 0, html5: 0, gif: 0 }
-    for (const f of ASSET_FIELDS) assetBreakdown[f.key] = num(get(f.label))
-    const assetTotal = ASSET_FIELDS.reduce((sum, f) => sum + assetBreakdown[f.key], 0)
+    const assetBreakdown: Record<string, number> = {}
+    for (const name of assetCols) assetBreakdown[name] = num(get(name))
+    const assetTotal = assetCols.reduce((sum, name) => sum + assetBreakdown[name], 0)
 
     const startDate = get('Start date') || null
     const halfRaw = get('Half')

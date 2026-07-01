@@ -1,5 +1,5 @@
 import type { AssetBreakdown, Half, Size, Squad, Task, TaskInput } from '../types'
-import { EMPTY_BREAKDOWN } from '../types'
+import { normalizeBreakdown } from '../constants'
 
 /** Shape of a row in the Supabase `tasks` table (snake_case columns). */
 export interface TaskRow {
@@ -10,7 +10,7 @@ export interface TaskRow {
   name: string
   types: string[] | null
   asset_total: number | null
-  asset_breakdown: Partial<AssetBreakdown> | null
+  asset_breakdown: AssetBreakdown | null
   people: string[] | null
   start_date: string | null
   end_date: string | null
@@ -30,7 +30,7 @@ export function rowToTask(row: TaskRow): Task {
     name: row.name,
     types: row.types ?? [],
     assetTotal: row.asset_total ?? 0,
-    assetBreakdown: { ...EMPTY_BREAKDOWN, ...(row.asset_breakdown ?? {}) },
+    assetBreakdown: normalizeBreakdown(row.asset_breakdown),
     people: row.people ?? [],
     startDate: row.start_date,
     endDate: row.end_date,

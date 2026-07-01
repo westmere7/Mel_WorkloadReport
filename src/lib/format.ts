@@ -10,6 +10,16 @@ export function formatDate(iso: string | null): string {
   return `${d} ${months[m - 1]} ${y}`
 }
 
+/** Add days to an ISO date (yyyy-mm-dd), returning ISO. Returns input unchanged if unparseable. */
+export function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  if (!y || !m || !d) return iso
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + days)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${dt.getUTCFullYear()}-${p(dt.getUTCMonth() + 1)}-${p(dt.getUTCDate())}`
+}
+
 /** Compact number formatting, e.g. 1200 → "1.2k". */
 export function compactNumber(n: number): string {
   if (n < 1000) return String(n)

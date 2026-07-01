@@ -77,7 +77,7 @@ export class SupabaseRepository implements Repository {
   }
 
   async renameValue(
-    field: 'campaign' | 'types' | 'people',
+    field: 'campaign' | 'types' | 'people' | 'assetBreakdown',
     oldValue: string,
     newValue: string,
   ): Promise<void> {
@@ -89,6 +89,32 @@ export class SupabaseRepository implements Repository {
         .update({ campaign: newValue, updated_at: new Date().toISOString() })
         .eq('campaign', oldValue)
       if (error) throw error
+      return
+    }
+
+    if (field === 'assetBreakdown') {
+      // JSONB column: fetch every task, rename the key where present.
+      const { data, error } = await sb.from('tasks').select('id, asset_breakdown')
+      if (error) throw error
+      await Promise.all(
+        (data ?? [])
+          .filter((row) => {
+            const b = (row as { asset_breakdown: Record<string, number> | null }).asset_breakdown
+            return b != null && oldValue in b
+          })
+          .map((row) => {
+            const b = { ...((row as { asset_breakdown: Record<string, number> }).asset_breakdown) }
+            b[newValue] = (b[newValue] ?? 0) + (b[oldValue] ?? 0)
+            delete b[oldValue]
+            return sb
+              .from('tasks')
+              .update({ asset_breakdown: b, updated_at: new Date().toISOString() })
+              .eq('id', (row as { id: string }).id)
+              .then(({ error: e }) => {
+                if (e) throw e
+              })
+          }),
+      )
       return
     }
 
@@ -126,13 +152,21 @@ export class SupabaseRepository implements Repository {
       campaigns: data.campaigns ?? DEFAULT_SETTINGS.campaigns,
       types: data.types ?? DEFAULT_SETTINGS.types,
       people: data.people ?? DEFAULT_SETTINGS.people,
+      assetTypes: data.asset_types ?? DEFAULT_SETTINGS.assetTypes,
     }
   }
 
   async saveSettings(settings: AppSettings): Promise<AppSettings> {
     const { data, error } = await getSupabase()
       .from('settings')
-      .upsert({ id: SETTINGS_ID, ...settings, updated_at: new Date().toISOString() })
+      .upsert({
+        id: SETTINGS_ID,
+        campaigns: settings.campaigns,
+        types: settings.types,
+        people: settings.people,
+        asset_types: settings.assetTypes,
+        updated_at: new Date().toISOString(),
+      })
       .select('*')
       .single()
     if (error) throw error
@@ -140,6 +174,7 @@ export class SupabaseRepository implements Repository {
       campaigns: data.campaigns,
       types: data.types,
       people: data.people,
+      assetTypes: data.asset_types ?? settings.assetTypes,
     }
   }
 }

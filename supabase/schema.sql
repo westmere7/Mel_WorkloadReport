@@ -41,8 +41,15 @@ create table if not exists public.settings (
   campaigns  text[] not null default '{}',
   types      text[] not null default '{}',
   people     text[] not null default '{}',
+  asset_types text[] not null default
+                array['Image','Video','Publication','HTML5 ad','GIF / Motion'],
   updated_at timestamptz not null default now()
 );
+
+-- Add the `asset_types` column to pre-existing tables (idempotent).
+alter table public.settings
+  add column if not exists asset_types text[] not null default
+    array['Image','Video','Publication','HTML5 ad','GIF / Motion'];
 
 insert into public.settings (id, campaigns, types, people)
 values (
