@@ -29,12 +29,83 @@ function sumBreakdown(b: AssetBreakdown): number {
 }
 
 /**
- * A count input that also responds to the mouse wheel on hover (no focus
- * needed) to bump the value up/down. Uses a non-passive listener so the page
- * doesn't scroll while adjusting.
+ * Safely evaluate a basic arithmetic expression (+ - * / and parentheses, with
+ * unary +/-). Returns null if the expression is invalid. No eval/Function.
+ */
+function evalMath(input: string): number | null {
+  const s = input.trim()
+  if (s === '') return 0
+  const tokens: Array<number | string> = []
+  let i = 0
+  while (i < s.length) {
+    const c = s[i]
+    if (c === ' ') {
+      i++
+    } else if ('+-*/()'.includes(c)) {
+      tokens.push(c)
+      i++
+    } else if (/[0-9.]/.test(c)) {
+      let num = ''
+      while (i < s.length && /[0-9.]/.test(s[i])) num += s[i++]
+      const n = Number(num)
+      if (!Number.isFinite(n)) return null
+      tokens.push(n)
+    } else {
+      return null
+    }
+  }
+  // Shunting-yard → RPN
+  const prec: Record<string, number> = { '+': 1, '-': 1, '*': 2, '/': 2 }
+  const out: Array<number | string> = []
+  const ops: string[] = []
+  let prev: 'num' | 'op' | 'open' | null = null
+  for (const tok of tokens) {
+    if (typeof tok === 'number') {
+      out.push(tok)
+      prev = 'num'
+    } else if (tok === '(') {
+      ops.push(tok)
+      prev = 'open'
+    } else if (tok === ')') {
+      while (ops.length && ops[ops.length - 1] !== '(') out.push(ops.pop() as string)
+      if (ops.pop() !== '(') return null
+      prev = 'num'
+    } else {
+      if ((tok === '-' || tok === '+') && prev !== 'num') out.push(0) // unary
+      while (ops.length && ops[ops.length - 1] !== '(' && prec[ops[ops.length - 1]] >= prec[tok])
+        out.push(ops.pop() as string)
+      ops.push(tok)
+      prev = 'op'
+    }
+  }
+  while (ops.length) {
+    const op = ops.pop() as string
+    if (op === '(') return null
+    out.push(op)
+  }
+  // Evaluate RPN
+  const st: number[] = []
+  for (const tok of out) {
+    if (typeof tok === 'number') {
+      st.push(tok)
+      continue
+    }
+    const b = st.pop()
+    const a = st.pop()
+    if (a === undefined || b === undefined) return null
+    st.push(tok === '+' ? a + b : tok === '-' ? a - b : tok === '*' ? a * b : a / b)
+  }
+  return st.length === 1 && Number.isFinite(st[0]) ? st[0] : null
+}
+
+/**
+ * A count input that accepts basic math (e.g. "3+2") — evaluated on blur/Enter —
+ * and responds to the mouse wheel on hover (no focus needed) to bump the value
+ * up/down. The wheel listener is non-passive so the page doesn't scroll.
  */
 function AssetInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   const ref = useRef<HTMLInputElement>(null)
+  const [draft, setDraft] = useState<string | null>(null) // null → show the committed value
   const stateRef = useRef({ value, onChange })
   stateRef.current = { value, onChange }
 
@@ -45,10 +116,18 @@ function AssetInput({ label, value, onChange }: { label: string; value: number; 
       e.preventDefault()
       const { value: v, onChange: cb } = stateRef.current
       cb(Math.max(0, v + (e.deltaY < 0 ? 1 : -1)))
+      setDraft(null)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
+
+  const commit = () => {
+    if (draft === null) return
+    const result = evalMath(draft)
+    if (result !== null) onChange(Math.max(0, Math.round(result)))
+    setDraft(null) // revert to the committed value (discards an invalid expression)
+  }
 
   return (
     <div>
@@ -57,11 +136,19 @@ function AssetInput({ label, value, onChange }: { label: string; value: number; 
       </span>
       <input
         ref={ref}
-        type="number"
-        min={0}
+        type="text"
         className="input"
-        value={value || 0}
-        onChange={(e) => onChange(Math.max(0, e.target.valueAsNumber || 0))}
+        title="Type a number or basic math, e.g. 3+2"
+        value={draft ?? String(value)}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            commit()
+          }
+        }}
       />
     </div>
   )
