@@ -217,7 +217,7 @@ export function Dashboard() {
             <StackedBarChart
               data={demand}
               keys={[...STAKEHOLDER_GROUPS]}
-              paletteIndices={[0, 1, 4]}
+              paletteIndices={[0, 1, 2]}
               labelColors={['#ffffff', '#ffffff', '#000054']}
               height={540}
               emptyMessage="Add tasks with asset counts to see demand."

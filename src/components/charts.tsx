@@ -305,17 +305,17 @@ export function AreaTrendChart({
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ left: 0, right: 12, top: 8, bottom: 4 }}>
         <defs>
-          {/* Vertical heat gradient: tall (peak season) reaches hot red, low season stays cool teal */}
+          {/* Brand heat gradient: tall (peak season) reaches RMIT red, low season cools to navy */}
           <linearGradient id="workloadFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#E61E2A" stopOpacity={0.55} />
-            <stop offset="45%" stopColor="#F58220" stopOpacity={0.3} />
-            <stop offset="100%" stopColor="#00A9CE" stopOpacity={0.06} />
+            <stop offset="45%" stopColor="#FFB81C" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="#000054" stopOpacity={0.05} />
           </linearGradient>
           {/* Same heat map at full opacity, for the line itself */}
           <linearGradient id="workloadStroke" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#E61E2A" />
-            <stop offset="45%" stopColor="#F58220" />
-            <stop offset="100%" stopColor="#00A9CE" />
+            <stop offset="50%" stopColor="#FFB81C" />
+            <stop offset="100%" stopColor="#4D4D8F" />
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />

@@ -140,33 +140,37 @@ export const SIZE_TONE: Record<Size, 'gray' | 'teal' | 'gold' | 'orange' | 'red'
   XL: 'red',
 }
 
-/** Brand-aligned chart palette (red, navy + complementary accents) — light mode. */
+/**
+ * Brand chart palette — RMIT red + navy with yellow as the third colour, then
+ * tones of the same three families. Ordered so the first three are the brand
+ * trio (red, navy, yellow) and adjacent entries alternate warm/cool. Light mode.
+ */
 export const CHART_COLORS_LIGHT = [
   '#E61E2A', // rmit red
   '#000054', // rmit navy
-  '#F58220', // orange
-  '#00A9CE', // teal
-  '#FFB81C', // gold
-  '#5BBA47', // green
-  '#8E5BA6', // plum
-  '#4d4d8f', // navy-300
-  '#f1757f', // brand-300
+  '#FFB81C', // gold / yellow
+  '#F1757F', // soft red (brand-300)
+  '#4D4D8F', // mid navy (navy-300)
+  '#94121B', // deep red (brand-700)
+  '#26266F', // deep navy (navy-400)
+  '#FFD37A', // light gold
+  '#8080AF', // light navy (navy-200)
 ]
 
 /**
- * Dark-mode palette: the near-black navy entries are lightened so bars/slices
- * don't blend into the dark navy background. Other hues are already bright enough.
+ * Dark-mode palette: same red/navy/yellow families, but the near-black navies
+ * are lightened so bars/slices don't blend into the dark navy background.
  */
 export const CHART_COLORS_DARK = [
   '#FF4D58', // brighter red
-  '#6C7BF0', // lifted navy → indigo (was #000054)
-  '#F58220', // orange
-  '#22B8E6', // teal
-  '#FFC72C', // gold
-  '#6FD05A', // green
-  '#A87BC0', // plum
-  '#9AA0E0', // lifted navy-300
-  '#F1757F', // pink
+  '#6C7BF0', // lifted navy → indigo
+  '#FFC72C', // brighter gold
+  '#F58AA0', // pink-red
+  '#9AA0E0', // light indigo
+  '#E61E2A', // rmit red
+  '#7B7BC0', // mid indigo
+  '#FFDE95', // light gold
+  '#B3B3CF', // pale navy
 ]
 
 /** Default palette (kept for any direct importers; light variant). */
