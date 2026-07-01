@@ -148,14 +148,23 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     }
   }
 
+  // Everything is required except the end date; total assets must be positive.
   const validate = (): string[] => {
     const errs: string[] = []
+    if (!code.trim()) errs.push('Task code is required.')
+    else if (codeError) errs.push(codeError)
     if (!name.trim()) errs.push('Task name is required.')
     if (!squad) errs.push('Squad is required.')
     if (!campaign) errs.push('Campaign is required.')
-    if (codeError) errs.push(codeError)
+    if (types.length === 0) errs.push('Select at least one work type.')
+    if (breakdownSum <= 0) errs.push('Total assets must be greater than 0.')
+    if (people.length === 0) errs.push('Assign at least one person in charge.')
+    if (!startDate) errs.push('Start date is required.')
     return errs
   }
+
+  // Recomputed each render so the submit button greys out until the form is valid.
+  const canSubmit = validate().length === 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -428,7 +437,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
               Cancel
             </button>
           )}
-          <button type="submit" className="btn-primary" disabled={submitting}>
+          <button type="submit" className="btn-primary" disabled={submitting || !canSubmit}>
             {submitting ? 'Saving…' : submitLabel}
           </button>
         </div>
