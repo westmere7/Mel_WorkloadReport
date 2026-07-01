@@ -1,5 +1,14 @@
 import { useMemo, useState } from 'react'
-import { ArrowDownUp, ChevronDown, ChevronUp, DatabaseBackup, Pencil, Search, Trash2 } from 'lucide-react'
+import {
+  ArrowDownUp,
+  ChevronDown,
+  ChevronUp,
+  DatabaseBackup,
+  Pencil,
+  Search,
+  StickyNote,
+  Trash2,
+} from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { Badge, toneForLabel } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -182,7 +191,16 @@ export function TaskList() {
                 >
                   <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-muted">{t.code || '—'}</td>
                   <td className="px-3 py-3 font-medium text-ink">
-                    <div className="max-w-[240px] truncate">{t.name}</div>
+                    <div className="flex max-w-[260px] items-center gap-1.5">
+                      <span className="truncate" title={t.name}>
+                        {t.name}
+                      </span>
+                      {t.note ? (
+                        <span title={t.note} className="shrink-0 cursor-help text-faint">
+                          <StickyNote className="h-3.5 w-3.5" />
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3">
                     <Badge tone={toneForLabel(t.squad)}>{t.squad}</Badge>

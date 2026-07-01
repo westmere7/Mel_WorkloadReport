@@ -17,7 +17,7 @@ import {
   STAKEHOLDER_GROUPS,
   summarize,
 } from '../lib/analytics'
-import { SIZE_COLORS } from '../constants'
+import { SIZE_COLORS, withFallback } from '../constants'
 import { compactNumber, cx } from '../lib/format'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
@@ -49,12 +49,15 @@ export function Dashboard() {
   const demand = useMemo(
     () =>
       demandDim === 'asset'
-        ? demandByStakeholderAssetType(filtered, settings.assetTypes)
+        ? demandByStakeholderAssetType(filtered, withFallback(settings.assetTypes))
         : demandByStakeholder(filtered, settings.types),
     [filtered, settings.types, settings.assetTypes, demandDim],
   )
   const byPerson = useMemo(() => countByMulti(filtered, 'people'), [filtered])
-  const assetMix = useMemo(() => assetsByType(filtered, settings.assetTypes), [filtered, settings.assetTypes])
+  const assetMix = useMemo(
+    () => assetsByType(filtered, withFallback(settings.assetTypes)),
+    [filtered, settings.assetTypes],
+  )
   // "Across the year" ignores the half sub-filter — it always shows the full 12
   // months of the active year (the latest year by default, or the selected one).
   const byMonth = useMemo(

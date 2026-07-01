@@ -4,14 +4,14 @@ import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useStore } from '../data/store'
-import { SQUADS, SQUAD_DESCRIPTIONS, SIZES, SIZE_DESCRIPTIONS, SIZE_TONE } from '../constants'
+import { SQUADS, SQUAD_DESCRIPTIONS, SIZES, SIZE_DESCRIPTIONS, SIZE_TONE, FALLBACK_ITEM } from '../constants'
 import { cx, toMessage } from '../lib/format'
 import type { AppSettings } from '../types'
 
 type ListKey = keyof Pick<AppSettings, 'campaigns' | 'types' | 'people' | 'assetTypes'>
 
 export function SettingsPage() {
-  const { settings, saveSettings, backend, tasks, renameListItem } = useStore()
+  const { settings, saveSettings, backend, tasks, renameListItem, removeListItem } = useStore()
 
   const mutate = async (key: ListKey, next: string[]) => {
     await saveSettings({ ...settings, [key]: next })
@@ -69,8 +69,9 @@ export function SettingsPage() {
           title="Campaigns"
           description="Specific campaigns or groups. Used in the task form."
           items={settings.campaigns}
+          fallback={FALLBACK_ITEM}
           onAdd={(v) => mutate('campaigns', [...settings.campaigns, v])}
-          onRemove={(v) => mutate('campaigns', settings.campaigns.filter((c) => c !== v))}
+          onRemove={(v) => removeListItem('campaigns', v)}
           onRename={(o, n) => renameListItem('campaigns', o, n)}
           usage={(v) => usageCount('campaigns', v)}
         />
@@ -78,8 +79,9 @@ export function SettingsPage() {
           title="Work types"
           description="Categories of design work."
           items={settings.types}
+          fallback={FALLBACK_ITEM}
           onAdd={(v) => mutate('types', [...settings.types, v])}
-          onRemove={(v) => mutate('types', settings.types.filter((c) => c !== v))}
+          onRemove={(v) => removeListItem('types', v)}
           onRename={(o, n) => renameListItem('types', o, n)}
           usage={(v) => usageCount('types', v)}
         />
@@ -87,8 +89,9 @@ export function SettingsPage() {
           title="Asset types"
           description="Deliverable types counted in the asset breakdown."
           items={settings.assetTypes}
+          fallback={FALLBACK_ITEM}
           onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
-          onRemove={(v) => mutate('assetTypes', settings.assetTypes.filter((c) => c !== v))}
+          onRemove={(v) => removeListItem('assetTypes', v)}
           onRename={(o, n) => renameListItem('assetTypes', o, n)}
           usage={(v) => usageCount('assetTypes', v)}
         />
@@ -96,8 +99,9 @@ export function SettingsPage() {
           title="People"
           description="Team members who can be assigned."
           items={settings.people}
+          fallback={FALLBACK_ITEM}
           onAdd={(v) => mutate('people', [...settings.people, v])}
-          onRemove={(v) => mutate('people', settings.people.filter((c) => c !== v))}
+          onRemove={(v) => removeListItem('people', v)}
           onRename={(o, n) => renameListItem('people', o, n)}
           usage={(v) => usageCount('people', v)}
         />
@@ -312,6 +316,7 @@ function ListEditor({
   onRemove,
   onRename,
   usage,
+  fallback,
 }: {
   title: string
   description: string
@@ -320,6 +325,7 @@ function ListEditor({
   onRemove: (value: string) => void
   onRename: (oldValue: string, newValue: string) => void | Promise<void>
   usage: (value: string) => number
+  fallback?: string
 }) {
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
@@ -328,6 +334,10 @@ function ListEditor({
   const add = () => {
     const v = draft.trim()
     if (!v) return
+    if (fallback && v.toLowerCase() === fallback.toLowerCase()) {
+      setDraft('')
+      return
+    }
     if (items.some((i) => i.toLowerCase() === v.toLowerCase())) {
       setDraft('')
       return
@@ -447,7 +457,24 @@ function ListEditor({
             </li>
           )
         })}
-        {items.length === 0 && <li className="py-2 text-sm text-muted">Nothing here yet.</li>}
+        {fallback && (
+          <li className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-line px-3 py-2">
+            <span className="flex min-w-0 items-center gap-2 text-sm">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-faint" />
+              <span className="truncate text-ink">{fallback}</span>
+              <Lock className="h-3 w-3 shrink-0 text-faint" />
+            </span>
+            <span className="flex shrink-0 items-center gap-2">
+              {usage(fallback) > 0 && (
+                <span className="text-[11px] text-muted">
+                  {usage(fallback)} task{usage(fallback) === 1 ? '' : 's'}
+                </span>
+              )}
+              <span className="text-[11px] uppercase tracking-wide text-faint">fallback</span>
+            </span>
+          </li>
+        )}
+        {items.length === 0 && !fallback && <li className="py-2 text-sm text-muted">Nothing here yet.</li>}
       </ul>
     </Card>
   )

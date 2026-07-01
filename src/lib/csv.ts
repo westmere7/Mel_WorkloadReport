@@ -2,7 +2,7 @@ import type { Half, Size, Squad, Task, TaskInput } from '../types'
 import { SIZES, SQUADS } from '../constants'
 import { deriveHalf } from './taskCode'
 
-// Fixed columns; every other column in a file is treated as an asset type.
+// Required columns; every column outside NON_ASSET_HEADERS is treated as an asset type.
 const CORE_HEADERS = [
   'Code',
   'Task name',
@@ -16,6 +16,9 @@ const CORE_HEADERS = [
   'Half',
   'Size',
 ]
+
+// Non-asset columns: core + optional extras (Note) that also aren't asset types.
+const NON_ASSET_HEADERS = [...CORE_HEADERS, 'Note']
 
 function esc(value: string | number): string {
   const s = String(value ?? '')
@@ -37,6 +40,7 @@ export function exportTasksCsv(tasks: Task[], assetTypes: string[], filenameSuff
     'End date',
     'Half',
     'Size',
+    'Note',
   ]
 
   const rows = tasks.map((t) => [
@@ -52,6 +56,7 @@ export function exportTasksCsv(tasks: Task[], assetTypes: string[], filenameSuff
     t.endDate ?? '',
     t.half,
     t.size,
+    t.note ?? '',
   ])
 
   const csv = [headers, ...rows].map((r) => r.map(esc).join(',')).join('\n')
@@ -131,7 +136,7 @@ export function parseTasksCsv(text: string): TaskInput[] {
     )
   }
 
-  const assetCols = header.filter((h) => !CORE_HEADERS.includes(h))
+  const assetCols = header.filter((h) => !NON_ASSET_HEADERS.includes(h))
   const col = (name: string) => header.indexOf(name)
   const num = (s: string) => Math.max(0, Number(s) || 0)
 
@@ -163,6 +168,7 @@ export function parseTasksCsv(text: string): TaskInput[] {
       endDate: get('End date') || null,
       half,
       size,
+      note: get('Note'),
     }
   })
 }

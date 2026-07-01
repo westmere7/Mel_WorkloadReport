@@ -16,6 +16,7 @@ export interface TaskRow {
   end_date: string | null
   half: string
   size: string | null
+  note: string | null
   created_at: string
   updated_at: string
 }
@@ -36,6 +37,7 @@ export function rowToTask(row: TaskRow): Task {
     endDate: row.end_date,
     half: (row.half as Half) ?? 'H1',
     size: (row.size as Size) ?? 'M',
+    note: row.note ?? '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -56,5 +58,6 @@ export function taskInputToRow(input: TaskInput): Omit<TaskRow, 'id' | 'created_
     end_date: input.endDate,
     half: input.half,
     size: input.size,
+    note: input.note ?? '',
   }
 }

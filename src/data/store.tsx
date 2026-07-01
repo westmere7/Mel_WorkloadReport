@@ -13,7 +13,7 @@ import type { Repository } from './repository'
 import { LocalRepository } from './localRepository'
 import { SupabaseRepository } from './supabaseRepository'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
-import { DEFAULT_SETTINGS } from '../constants'
+import { DEFAULT_SETTINGS, FALLBACK_ITEM } from '../constants'
 import { generateSampleTasks } from '../lib/sampleData'
 import { toMessage } from '../lib/format'
 
@@ -37,6 +37,11 @@ interface StoreValue {
     key: 'campaigns' | 'types' | 'people' | 'assetTypes',
     oldValue: string,
     newValue: string,
+  ) => Promise<void>
+  /** Remove a list item, reassigning any tasks that use it to the "Others" fallback. */
+  removeListItem: (
+    key: 'campaigns' | 'types' | 'people' | 'assetTypes',
+    value: string,
   ) => Promise<void>
   /** True while a live (realtime/cross-tab) subscription is active. */
   live: boolean
@@ -205,6 +210,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [repo],
   )
 
+  const removeListItem = useCallback(
+    async (key: 'campaigns' | 'types' | 'people' | 'assetTypes', value: string) => {
+      if (value === FALLBACK_ITEM) return // the fallback itself can't be removed
+      const field = key === 'campaigns' ? 'campaign' : key === 'assetTypes' ? 'assetBreakdown' : key
+
+      // 1. Reassign any tasks still using this value to the "Others" fallback.
+      await repo.renameValue(field, value, FALLBACK_ITEM)
+
+      // 2. Drop it from the Settings list.
+      setSettings((prev) => {
+        const nextSettings = { ...prev, [key]: prev[key].filter((v) => v !== value) }
+        void repo.saveSettings(nextSettings)
+        return nextSettings
+      })
+
+      // 3. Refresh tasks so counts reflect the reassignment.
+      setTasks(await repo.listTasks())
+    },
+    [repo],
+  )
+
   const value = useMemo<StoreValue>(
     () => ({
       backend: repo.backend,
@@ -221,6 +247,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       populateSampleData,
       saveSettings,
       renameListItem,
+      removeListItem,
       live,
     }),
     [
@@ -239,6 +266,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       populateSampleData,
       saveSettings,
       renameListItem,
+      removeListItem,
     ],
   )
 

@@ -6,6 +6,18 @@ import { rowToTask, taskInputToRow } from './mappers'
 
 const SETTINGS_ID = 'app'
 
+/** True if a Supabase error is complaining about a missing `note` column (pre-migration). */
+function isMissingNoteColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('note') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** Drop the `note` key from a row (used to retry when the column isn't there yet). */
+function stripNote<T extends { note?: unknown }>(row: T): Omit<T, 'note'> {
+  const { note: _drop, ...rest } = row
+  return rest
+}
+
 /**
  * Supabase-backed repository. Active automatically when VITE_SUPABASE_URL
  * and VITE_SUPABASE_ANON_KEY are set. Expects the schema in supabase/schema.sql.
@@ -23,31 +35,31 @@ export class SupabaseRepository implements Repository {
   }
 
   async createTask(input: TaskInput): Promise<Task> {
-    const { data, error } = await getSupabase()
-      .from('tasks')
-      .insert(taskInputToRow(input))
-      .select('*')
-      .single()
+    const row = taskInputToRow(input)
+    let { data, error } = await getSupabase().from('tasks').insert(row).select('*').single()
+    if (error && isMissingNoteColumn(error)) {
+      ;({ data, error } = await getSupabase().from('tasks').insert(stripNote(row)).select('*').single())
+    }
     if (error) throw error
     return rowToTask(data)
   }
 
   async createManyTasks(inputs: TaskInput[]): Promise<Task[]> {
-    const { data, error } = await getSupabase()
-      .from('tasks')
-      .insert(inputs.map(taskInputToRow))
-      .select('*')
+    const rows = inputs.map(taskInputToRow)
+    let { data, error } = await getSupabase().from('tasks').insert(rows).select('*')
+    if (error && isMissingNoteColumn(error)) {
+      ;({ data, error } = await getSupabase().from('tasks').insert(rows.map(stripNote)).select('*'))
+    }
     if (error) throw error
     return (data ?? []).map(rowToTask)
   }
 
   async updateTask(id: string, input: TaskInput): Promise<Task> {
-    const { data, error } = await getSupabase()
-      .from('tasks')
-      .update({ ...taskInputToRow(input), updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select('*')
-      .single()
+    const row = { ...taskInputToRow(input), updated_at: new Date().toISOString() }
+    let { data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single()
+    if (error && isMissingNoteColumn(error)) {
+      ;({ data, error } = await getSupabase().from('tasks').update(stripNote(row)).eq('id', id).select('*').single())
+    }
     if (error) throw error
     return rowToTask(data)
   }

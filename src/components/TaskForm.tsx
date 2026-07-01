@@ -9,6 +9,7 @@ import {
   SIZE_COLORS,
   SIZE_DURATION_DAYS,
   SIZE_DURATION_LABEL,
+  withFallback,
 } from '../constants'
 import { useStore } from '../data/store'
 import { MultiSelect } from './ui/MultiSelect'
@@ -86,6 +87,12 @@ function splitPastedName(value: string): { code?: string; name: string } {
 export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }: TaskFormProps) {
   const { settings, tasks } = useStore()
 
+  // Editable lists always include the reserved "Others" fallback as an option.
+  const campaignOptions = withFallback(settings.campaigns)
+  const typeOptions = withFallback(settings.types)
+  const peopleOptions = withFallback(settings.people)
+  const assetTypeOptions = withFallback(settings.assetTypes)
+
   const [squad, setSquad] = useState<Squad>(initial?.squad ?? 'INTON')
   const [campaign, setCampaign] = useState<string>(initial?.campaign ?? settings.campaigns[0] ?? '')
   const [code, setCode] = useState(initial?.code ?? '')
@@ -93,7 +100,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   const [types, setTypes] = useState<string[]>(initial?.types ?? [])
   const [people, setPeople] = useState<string[]>(initial?.people ?? [])
   const [breakdown, setBreakdown] = useState<AssetBreakdown>(() =>
-    Object.fromEntries(settings.assetTypes.map((n) => [n, initial?.assetBreakdown?.[n] ?? 0])),
+    Object.fromEntries(assetTypeOptions.map((n) => [n, initial?.assetBreakdown?.[n] ?? 0])),
   )
   const [startDate, setStartDate] = useState<string>(initial?.startDate ?? '')
   const [startDateTouched, setStartDateTouched] = useState(Boolean(initial?.startDate))
@@ -102,6 +109,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   const [half, setHalf] = useState<Half>(initial?.half ?? 'H1')
   const [halfTouched, setHalfTouched] = useState(Boolean(initial))
   const [size, setSize] = useState<Size>(initial?.size ?? 'M')
+  const [note, setNote] = useState(initial?.note ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
 
@@ -225,6 +233,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         endDate: endDate || null,
         half,
         size,
+        note: note.trim(),
       })
     } catch (err) {
       setErrors([toMessage(err)])
@@ -296,8 +305,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         <div>
           <label className="label">Campaign</label>
           <select className="input" value={campaign} onChange={(e) => setCampaign(e.target.value)}>
-            {!settings.campaigns.includes(campaign) && campaign && <option value={campaign}>{campaign}</option>}
-            {settings.campaigns.map((c) => (
+            {!campaignOptions.includes(campaign) && campaign && <option value={campaign}>{campaign}</option>}
+            {campaignOptions.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
@@ -310,7 +319,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       <div>
         <label className="label">Work type(s)</label>
         <MultiSelect
-          options={settings.types}
+          options={typeOptions}
           value={types}
           onChange={setTypes}
           placeholder="Select work types…"
@@ -326,7 +335,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           </span>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {settings.assetTypes.map((name) => (
+          {assetTypeOptions.map((name) => (
             <AssetInput
               key={name}
               label={name}
@@ -347,7 +356,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         <div>
           <label className="label">Person(s) in charge</label>
           <MultiSelect
-            options={settings.people}
+            options={peopleOptions}
             value={people}
             onChange={setPeople}
             placeholder="Assign team members…"
@@ -450,6 +459,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Note */}
+      <div>
+        <label className="label">Note</label>
+        <textarea
+          className="input min-h-[64px] resize-y"
+          placeholder="Optional — shows on hover in the task list."
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
       </div>
 
       <div className="flex items-center justify-between gap-2 pt-2">

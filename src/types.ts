@@ -44,6 +44,8 @@ export interface Task {
   half: Half
   /** T-shirt size / effort of the task. */
   size: Size
+  /** Freeform note — shown on hover in the task list. Optional. */
+  note?: string
   createdAt: string
   updatedAt: string
 }

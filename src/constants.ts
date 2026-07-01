@@ -64,6 +64,18 @@ export const DEFAULT_PEOPLE: string[] = [
 /** Default asset (deliverable) types — editable in Settings. */
 export const DEFAULT_ASSET_TYPES: string[] = ['Image', 'Video', 'Publication', 'HTML5 ad', 'GIF / Motion']
 
+/**
+ * Reserved catch-all present in every editable list (campaigns/types/people/asset
+ * types). It can't be edited or removed; deleting a list item that tasks still use
+ * reassigns those tasks to this value so nothing is orphaned.
+ */
+export const FALLBACK_ITEM = 'Others'
+
+/** Append the reserved "Others" fallback to an editable list (deduped, always last). */
+export function withFallback(items: string[]): string[] {
+  return [...items.filter((v) => v !== FALLBACK_ITEM), FALLBACK_ITEM]
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   campaigns: DEFAULT_CAMPAIGNS,
   types: DEFAULT_TYPES,
