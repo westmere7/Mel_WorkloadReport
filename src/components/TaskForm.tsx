@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock, Sparkles, Trash2 } from 'lucide-react'
 import type { AssetBreakdown, Half, Size, Squad, Task, TaskInput } from '../types'
 import {
@@ -25,6 +25,45 @@ interface TaskFormProps {
 
 function sumBreakdown(b: AssetBreakdown): number {
   return Object.values(b).reduce((acc, v) => acc + (Number(v) || 0), 0)
+}
+
+/**
+ * A count input that also responds to the mouse wheel on hover (no focus
+ * needed) to bump the value up/down. Uses a non-passive listener so the page
+ * doesn't scroll while adjusting.
+ */
+function AssetInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  const ref = useRef<HTMLInputElement>(null)
+  const stateRef = useRef({ value, onChange })
+  stateRef.current = { value, onChange }
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const { value: v, onChange: cb } = stateRef.current
+      cb(Math.max(0, v + (e.deltaY < 0 ? 1 : -1)))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  return (
+    <div>
+      <span className="mb-1 block truncate text-[11px] font-medium text-muted" title={label}>
+        {label}
+      </span>
+      <input
+        ref={ref}
+        type="number"
+        min={0}
+        className="input"
+        value={value || 0}
+        onChange={(e) => onChange(Math.max(0, e.target.valueAsNumber || 0))}
+      />
+    </div>
+  )
 }
 
 /** Pick black or white text for a coloured background, by perceived luminance. */
@@ -288,18 +327,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {settings.assetTypes.map((name) => (
-            <div key={name}>
-              <span className="mb-1 block truncate text-[11px] font-medium text-muted" title={name}>
-                {name}
-              </span>
-              <input
-                type="number"
-                min={0}
-                className="input"
-                value={breakdown[name] || 0}
-                onChange={(e) => setBreakdownField(name, e.target.valueAsNumber)}
-              />
-            </div>
+            <AssetInput
+              key={name}
+              label={name}
+              value={breakdown[name] || 0}
+              onChange={(v) => setBreakdownField(name, v)}
+            />
           ))}
           {settings.assetTypes.length === 0 && (
             <p className="col-span-full text-xs text-muted">
