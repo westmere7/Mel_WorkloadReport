@@ -1,22 +1,17 @@
 import { useMemo, useState } from 'react'
-import {
-  ArrowDownUp,
-  Download,
-  Pencil,
-  Search,
-  Trash2,
-  ChevronUp,
-  ChevronDown,
-} from 'lucide-react'
+import { ArrowDownUp, ChevronDown, ChevronUp, DatabaseBackup, Pencil, Search, Trash2 } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { Badge, toneForLabel } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
+import { MultiSelect } from '../components/ui/MultiSelect'
+import { SpanFilter } from '../components/SpanFilter'
+import { ImportBackupModal } from '../components/ImportBackupModal'
 import { TaskForm } from '../components/TaskForm'
 import { useStore } from '../data/store'
 import { SQUADS, SIZES, SIZE_ORDER, SIZE_TONE } from '../constants'
 import { cx, formatDate } from '../lib/format'
-import { exportTasksCsv } from '../lib/csv'
-import type { Task, TaskInput } from '../types'
+import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
+import type { Half, Task, TaskInput } from '../types'
 
 type SortKey = 'code' | 'name' | 'squad' | 'campaign' | 'assetTotal' | 'startDate' | 'half' | 'size'
 
@@ -24,25 +19,30 @@ export function TaskList() {
   const { tasks, settings, updateTask, deleteTask } = useStore()
 
   const [query, setQuery] = useState('')
-  const [squad, setSquad] = useState('')
-  const [campaign, setCampaign] = useState('')
-  const [person, setPerson] = useState('')
-  const [half, setHalf] = useState('')
-  const [size, setSize] = useState('')
+  const [spanMode, setSpanMode] = useState<SpanMode>('total')
+  const [spanYear, setSpanYear] = useState<number | null>(null)
+  const [spanHalf, setSpanHalf] = useState<Half>('H1')
+  const [squads, setSquads] = useState<string[]>([])
+  const [campaigns, setCampaigns] = useState<string[]>([])
+  const [people, setPeople] = useState<string[]>([])
+  const [sizes, setSizes] = useState<string[]>([])
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'startDate', dir: 'desc' })
 
   const [editing, setEditing] = useState<Task | null>(null)
   const [deleting, setDeleting] = useState<Task | null>(null)
+  const [ioOpen, setIoOpen] = useState(false)
+
+  const years = useMemo(() => taskYears(tasks), [tasks])
+  const activeYear = spanYear ?? years[0] ?? 0
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const rows = tasks.filter((t) => {
-      if (q && !(`${t.code} ${t.name}`.toLowerCase().includes(q))) return false
-      if (squad && t.squad !== squad) return false
-      if (campaign && t.campaign !== campaign) return false
-      if (half && t.half !== half) return false
-      if (size && t.size !== size) return false
-      if (person && !t.people.includes(person)) return false
+    const rows = filterBySpan(tasks, spanMode, activeYear, spanHalf).filter((t) => {
+      if (q && !`${t.code} ${t.name}`.toLowerCase().includes(q)) return false
+      if (squads.length && !squads.includes(t.squad)) return false
+      if (campaigns.length && !campaigns.includes(t.campaign)) return false
+      if (sizes.length && !sizes.includes(t.size)) return false
+      if (people.length && !t.people.some((p) => people.includes(p))) return false
       return true
     })
     const dir = sort.dir === 'asc' ? 1 : -1
@@ -53,7 +53,7 @@ export function TaskList() {
       const bv = b[sort.key]
       return String(av ?? '').localeCompare(String(bv ?? '')) * dir
     })
-  }, [tasks, query, squad, campaign, person, half, size, sort])
+  }, [tasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, sort])
 
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
@@ -68,23 +68,32 @@ export function TaskList() {
     if (!deleting) return
     await deleteTask(deleting.id)
     setDeleting(null)
+    setEditing(null)
   }
 
   const clearFilters = () => {
     setQuery('')
-    setSquad('')
-    setCampaign('')
-    setPerson('')
-    setHalf('')
-    setSize('')
+    setSpanMode('total')
+    setSpanYear(null)
+    setSpanHalf('H1')
+    setSquads([])
+    setCampaigns([])
+    setPeople([])
+    setSizes([])
   }
 
-  const hasFilters = query || squad || campaign || person || half || size
+  const hasFilters =
+    query ||
+    spanMode !== 'total' ||
+    squads.length ||
+    campaigns.length ||
+    people.length ||
+    sizes.length
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <Card className="p-4">
+      <Card className="flex flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-[220px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
@@ -96,54 +105,45 @@ export function TaskList() {
             />
           </div>
 
-          <select className="input w-auto" value={squad} onChange={(e) => setSquad(e.target.value)}>
-            <option value="">All squads</option>
-            {SQUADS.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+          <SpanFilter
+            mode={spanMode}
+            year={activeYear}
+            half={spanHalf}
+            years={years}
+            onMode={setSpanMode}
+            onYear={setSpanYear}
+            onHalf={setSpanHalf}
+          />
 
-          <select className="input w-auto" value={campaign} onChange={(e) => setCampaign(e.target.value)}>
-            <option value="">All campaigns</option>
-            {settings.campaigns.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-
-          <select className="input w-auto" value={person} onChange={(e) => setPerson(e.target.value)}>
-            <option value="">All people</option>
-            {settings.people.map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
-
-          <select className="input w-auto" value={half} onChange={(e) => setHalf(e.target.value)}>
-            <option value="">H1 + H2</option>
-            <option value="H1">H1</option>
-            <option value="H2">H2</option>
-          </select>
-
-          <select className="input w-auto" value={size} onChange={(e) => setSize(e.target.value)}>
-            <option value="">All sizes</option>
-            {SIZES.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-
-          {hasFilters && (
-            <button className="btn-ghost" onClick={clearFilters}>
-              Clear
-            </button>
-          )}
-
-          <button
-            className="btn-outline ml-auto"
-            onClick={() => exportTasksCsv(filtered)}
-            disabled={filtered.length === 0}
-          >
-            <Download className="h-4 w-4" /> Export CSV
+          <button className="btn-outline ml-auto" onClick={() => setIoOpen(true)}>
+            <DatabaseBackup className="h-4 w-4" /> Import &amp; Backup
           </button>
         </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <MultiSelect options={SQUADS} value={squads} onChange={setSquads} placeholder="All squads" overflowCollapse />
+          <MultiSelect
+            options={settings.campaigns}
+            value={campaigns}
+            onChange={setCampaigns}
+            placeholder="All campaigns"
+            overflowCollapse
+          />
+          <MultiSelect
+            options={settings.people}
+            value={people}
+            onChange={setPeople}
+            placeholder="All people"
+            overflowCollapse
+          />
+          <MultiSelect options={SIZES} value={sizes} onChange={setSizes} placeholder="All sizes" overflowCollapse />
+        </div>
+
+        {hasFilters ? (
+          <button className="btn-ghost self-start" onClick={clearFilters}>
+            Clear filters
+          </button>
+        ) : null}
       </Card>
 
       {/* Table */}
@@ -176,7 +176,7 @@ export function TaskList() {
               {filtered.map((t) => (
                 <tr
                   key={t.id}
-                  className="group cursor-pointer hover:bg-subtle/60"
+                  className="group cursor-pointer transition-colors hover:bg-subtle"
                   onClick={() => setEditing(t)}
                   title="Click to edit"
                 >
@@ -268,6 +268,7 @@ export function TaskList() {
             submitLabel="Save changes"
             onSubmit={handleUpdate}
             onCancel={() => setEditing(null)}
+            onDelete={() => setDeleting(editing)}
           />
         )}
       </Modal>
@@ -293,6 +294,9 @@ export function TaskList() {
           {deleting?.code ? ` (${deleting.code})` : ''}? This cannot be undone.
         </p>
       </Modal>
+
+      {/* Import & backup */}
+      <ImportBackupModal open={ioOpen} onClose={() => setIoOpen(false)} />
     </div>
   )
 }

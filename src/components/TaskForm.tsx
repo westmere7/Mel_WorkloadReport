@@ -1,26 +1,50 @@
 import { useMemo, useState } from 'react'
-import { Sparkles, CalendarClock } from 'lucide-react'
+import { CalendarClock, Trash2 } from 'lucide-react'
 import type { AssetBreakdown, Half, Size, Squad, Task, TaskInput } from '../types'
 import { EMPTY_BREAKDOWN } from '../types'
-import { SQUADS, SQUAD_DESCRIPTIONS, ASSET_FIELDS, SIZES, SIZE_DESCRIPTIONS } from '../constants'
+import {
+  SQUADS,
+  SQUAD_DESCRIPTIONS,
+  ASSET_FIELDS,
+  SIZES,
+  SIZE_DESCRIPTIONS,
+  SIZE_COLORS,
+} from '../constants'
 import { useStore } from '../data/store'
 import { MultiSelect } from './ui/MultiSelect'
 import { cx, toMessage } from '../lib/format'
-import { deriveHalf, parseTaskCode, suggestCodeForDate } from '../lib/taskCode'
-import { todayISO } from '../lib/format'
+import { deriveHalf, parseTaskCode } from '../lib/taskCode'
 
 interface TaskFormProps {
   initial?: Task
   submitLabel: string
   onSubmit: (input: TaskInput) => Promise<void> | void
   onCancel?: () => void
+  onDelete?: () => void
 }
 
 function sumBreakdown(b: AssetBreakdown): number {
   return ASSET_FIELDS.reduce((acc, f) => acc + (Number(b[f.key]) || 0), 0)
 }
 
-export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormProps) {
+/** Pick black or white text for a coloured background, by perceived luminance. */
+function readableOn(hex: string): string {
+  const c = hex.replace('#', '')
+  const r = parseInt(c.slice(0, 2), 16)
+  const g = parseInt(c.slice(2, 4), 16)
+  const b = parseInt(c.slice(4, 6), 16)
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return luminance > 0.6 ? '#1c1c28' : '#ffffff'
+}
+
+/** Split a pasted "[26.0608.A] Some name" into its bracketed code + remaining name. */
+function splitPastedName(value: string): { code?: string; name: string } {
+  const m = value.match(/^\s*\[([^\]]+)\]\s*(.*)$/)
+  if (m) return { code: m[1].trim(), name: m[2] }
+  return { name: value }
+}
+
+export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }: TaskFormProps) {
   const { settings, tasks } = useStore()
 
   const [squad, setSquad] = useState<Squad>(initial?.squad ?? 'INTON')
@@ -30,8 +54,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
   const [types, setTypes] = useState<string[]>(initial?.types ?? [])
   const [people, setPeople] = useState<string[]>(initial?.people ?? [])
   const [breakdown, setBreakdown] = useState<AssetBreakdown>(initial?.assetBreakdown ?? { ...EMPTY_BREAKDOWN })
-  const [assetTotal, setAssetTotal] = useState<number>(initial?.assetTotal ?? 0)
   const [startDate, setStartDate] = useState<string>(initial?.startDate ?? '')
+  const [startDateTouched, setStartDateTouched] = useState(Boolean(initial?.startDate))
   const [endDate, setEndDate] = useState<string>(initial?.endDate ?? '')
   const [half, setHalf] = useState<Half>(initial?.half ?? 'H1')
   const [halfTouched, setHalfTouched] = useState(Boolean(initial))
@@ -42,30 +66,60 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
   const parsed = useMemo(() => parseTaskCode(code), [code])
   const breakdownSum = useMemo(() => sumBreakdown(breakdown), [breakdown])
 
+  // Live notice for the task code: wrong format or already used by another task.
+  const codeError = useMemo(() => {
+    const c = code.trim()
+    if (!c) return null
+    if (!parsed.valid) return 'Code must look like 26.0608.A (YY.MMDD.seq).'
+    const dup = tasks.some(
+      (t) => t.id !== initial?.id && t.code.trim().toUpperCase() === c.toUpperCase(),
+    )
+    if (dup) return 'This code is already used by another task.'
+    return null
+  }, [code, parsed, tasks, initial])
+
   const setBreakdownField = (key: keyof AssetBreakdown, value: number) => {
     setBreakdown((prev) => ({ ...prev, [key]: Math.max(0, value || 0) }))
+  }
+
+  // Auto-fill the start date from a valid code — unless the user has set it themselves.
+  const fillDateFromCode = (codeValue: string) => {
+    const p = parseTaskCode(codeValue)
+    if (p.valid && p.iso && !startDateTouched) {
+      setStartDate(p.iso)
+      if (!halfTouched) setHalf(deriveHalf(p.iso))
+    }
+  }
+
+  const onCodeChange = (value: string) => {
+    setCode(value)
+    fillDateFromCode(value)
+  }
+
+  // Pasting "[26.0608.A] ISC Roadshow 2026…" pulls the code out and fills it + the date.
+  const onNameChange = (value: string) => {
+    const parts = splitPastedName(value)
+    if (parts.code !== undefined) {
+      setCode(parts.code)
+      setName(parts.name)
+      fillDateFromCode(parts.code)
+    } else {
+      setName(value)
+    }
+  }
+
+  const onStartDateChange = (value: string) => {
+    setStartDate(value)
+    setStartDateTouched(true)
+    if (!halfTouched) setHalf(deriveHalf(value || null))
   }
 
   const applyDateFromCode = () => {
     if (parsed.valid && parsed.iso) {
       setStartDate(parsed.iso)
+      setStartDateTouched(true)
       if (!halfTouched) setHalf(deriveHalf(parsed.iso))
     }
-  }
-
-  const onCodeBlur = () => {
-    if (parsed.valid && parsed.iso && !startDate) applyDateFromCode()
-  }
-
-  const onStartDateChange = (value: string) => {
-    setStartDate(value)
-    if (!halfTouched) setHalf(deriveHalf(value || null))
-  }
-
-  const suggestCode = () => {
-    const iso = startDate || todayISO()
-    setCode(suggestCodeForDate(iso, tasks))
-    if (!startDate) onStartDateChange(iso)
   }
 
   const validate = (): string[] => {
@@ -73,7 +127,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
     if (!name.trim()) errs.push('Task name is required.')
     if (!squad) errs.push('Squad is required.')
     if (!campaign) errs.push('Campaign is required.')
-    if (code && !parsed.valid) errs.push('Task code must look like 26.0629.A (YY.MMDD.seq).')
+    if (codeError) errs.push(codeError)
     return errs
   }
 
@@ -90,7 +144,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
         code: code.trim(),
         name: name.trim(),
         types,
-        assetTotal: assetTotal || breakdownSum,
+        assetTotal: breakdownSum,
         assetBreakdown: breakdown,
         people,
         startDate: startDate || null,
@@ -106,7 +160,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="task-form space-y-6">
       {errors.length > 0 && (
         <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
           <ul className="list-disc space-y-0.5 pl-4">
@@ -117,6 +171,41 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
         </div>
       )}
 
+      {/* Code + Name — the task's identity, kept at the top */}
+      <div className="grid gap-4 sm:grid-cols-[170px_1fr]">
+        <div>
+          <label className="label">Task code</label>
+          <input
+            className={cx('input font-mono', codeError && 'border-rmit-red focus:border-rmit-red')}
+            placeholder="26.0608.A"
+            value={code}
+            onChange={(e) => onCodeChange(e.target.value)}
+          />
+          {codeError ? (
+            <p className="mt-1.5 text-xs font-medium text-rmit-red">{codeError}</p>
+          ) : (
+            parsed.valid &&
+            parsed.iso && <p className="mt-1.5 text-xs text-accent-green">Booked {parsed.iso}</p>
+          )}
+        </div>
+        <div>
+          <label className="label">Task name</label>
+          <input
+            className="input text-base font-semibold"
+            placeholder="Paste “[26.0608.A] ISC Roadshow 2026…” or type a name"
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+          />
+          <p className="mt-1.5 text-xs text-muted">
+            Saved as{' '}
+            <span className="font-mono text-ink">
+              {code ? `[${code}] ` : ''}
+              {name || '…'}
+            </span>
+          </p>
+        </div>
+      </div>
+
       {/* Squad + Campaign */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
@@ -124,10 +213,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
           <select className="input" value={squad} onChange={(e) => setSquad(e.target.value as Squad)}>
             {SQUADS.map((s) => (
               <option key={s} value={s}>
-                {s} — {SQUAD_DESCRIPTIONS[s]}
+                {s}
               </option>
             ))}
           </select>
+          <p className="mt-1.5 text-[11px] text-faint">{SQUAD_DESCRIPTIONS[squad]}</p>
         </div>
         <div>
           <label className="label">Campaign</label>
@@ -142,46 +232,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
         </div>
       </div>
 
-      {/* Code + Name */}
-      <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
-        <div>
-          <label className="label">Task code</label>
-          <input
-            className="input font-mono"
-            placeholder="26.0629.A"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            onBlur={onCodeBlur}
-          />
-          <button
-            type="button"
-            onClick={suggestCode}
-            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-rmit-red hover:underline"
-          >
-            <Sparkles className="h-3.5 w-3.5" /> Suggest next code
-          </button>
-        </div>
-        <div>
-          <label className="label">Task name</label>
-          <input
-            className="input"
-            placeholder="2026 Open Day"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <p className="mt-1.5 text-xs text-muted">
-            Saved as{' '}
-            <span className="font-mono text-ink">
-              {code ? `[${code}] ` : ''}
-              {name || '…'}
-            </span>
-            {parsed.valid && parsed.iso && (
-              <span className="ml-2 text-accent-green">· booked {parsed.iso}</span>
-            )}
-          </p>
-        </div>
-      </div>
-
       {/* Types */}
       <div>
         <label className="label">Work type(s)</label>
@@ -193,21 +243,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
         />
       </div>
 
-      {/* Assets */}
+      {/* Assets — total is the live sum of the breakdown */}
       <div>
-        <div className="mb-1.5 flex items-end justify-between">
+        <div className="mb-1.5 flex items-center gap-2">
           <label className="label mb-0">Asset breakdown</label>
-          <span className="text-xs text-muted">
-            Breakdown sums to <strong className="text-ink">{breakdownSum}</strong>
-            {assetTotal !== breakdownSum && (
-              <button
-                type="button"
-                onClick={() => setAssetTotal(breakdownSum)}
-                className="ml-2 font-medium text-rmit-red hover:underline"
-              >
-                use as total
-              </button>
-            )}
+          <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
+            {breakdownSum} total
           </span>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -224,51 +265,47 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
             </div>
           ))}
         </div>
-        <div className="mt-3 max-w-[200px]">
-          <label className="label">Total assets</label>
-          <input
-            type="number"
-            min={0}
-            className="input font-semibold"
-            value={assetTotal}
-            onChange={(e) => setAssetTotal(Math.max(0, e.target.valueAsNumber || 0))}
+      </div>
+
+      {/* People + Task size on one line */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label">Person(s) in charge</label>
+          <MultiSelect
+            options={settings.people}
+            value={people}
+            onChange={setPeople}
+            placeholder="Assign team members…"
+            overflowCollapse
           />
         </div>
-      </div>
-
-      {/* People */}
-      <div>
-        <label className="label">Person(s) in charge</label>
-        <MultiSelect
-          options={settings.people}
-          value={people}
-          onChange={setPeople}
-          placeholder="Assign team members…"
-        />
-      </div>
-
-      {/* Task size */}
-      <div>
-        <label className="label">Task size</label>
-        <div className="grid grid-cols-5 gap-2">
-          {SIZES.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSize(s)}
-              title={SIZE_DESCRIPTIONS[s]}
-              className={cx(
-                'rounded-xl border px-3 py-2.5 text-sm font-bold transition',
-                size === s
-                  ? 'border-rmit-navy bg-rmit-navy text-white dark:border-navy-300 dark:bg-navy-300'
-                  : 'border-line bg-card text-muted hover:border-navy-300',
-              )}
-            >
-              {s}
-            </button>
-          ))}
+        <div>
+          <label className="label">Task size</label>
+          <div className="grid grid-cols-5 gap-1.5">
+            {SIZES.map((s) => {
+              const active = size === s
+              const color = SIZE_COLORS[s]
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSize(s)}
+                  title={SIZE_DESCRIPTIONS[s]}
+                  className={cx(
+                    'rounded-lg border px-1 py-1.5 text-xs font-bold transition',
+                    !active && 'border-line bg-card text-muted hover:border-navy-300 hover:text-ink',
+                  )}
+                  style={
+                    active ? { backgroundColor: color, borderColor: color, color: readableOn(color) } : undefined
+                  }
+                >
+                  {s}
+                </button>
+              )
+            })}
+          </div>
+          <p className="mt-1.5 truncate text-xs text-muted">{SIZE_DESCRIPTIONS[size]}</p>
         </div>
-        <p className="mt-1.5 text-xs text-muted">{SIZE_DESCRIPTIONS[size]}</p>
       </div>
 
       {/* Timeline + Half */}
@@ -326,15 +363,28 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel }: TaskFormP
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 pt-2">
-        {onCancel && (
-          <button type="button" className="btn-outline" onClick={onCancel}>
-            Cancel
+      <div className="flex items-center justify-between gap-2 pt-2">
+        {onDelete ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
+          >
+            <Trash2 className="h-4 w-4" /> Remove task
           </button>
+        ) : (
+          <span />
         )}
-        <button type="submit" className="btn-primary" disabled={submitting}>
-          {submitting ? 'Saving…' : submitLabel}
-        </button>
+        <div className="flex gap-2">
+          {onCancel && (
+            <button type="button" className="btn-outline" onClick={onCancel}>
+              Cancel
+            </button>
+          )}
+          <button type="submit" className="btn-primary" disabled={submitting}>
+            {submitting ? 'Saving…' : submitLabel}
+          </button>
+        </div>
       </div>
     </form>
   )

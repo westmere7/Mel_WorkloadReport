@@ -1,49 +1,67 @@
 import { useMemo, useState } from 'react'
-import { ClipboardList, Images, Megaphone, Users } from 'lucide-react'
+import { ClipboardList, Images, Layers, Megaphone } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
-import { AreaTrendChart, DonutChart, HBarChart, VBarChart } from '../components/charts'
+import { AreaTrendChart, DonutChart, HBarChart, StackedBarChart, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
 import {
+  assetsByCampaign,
   assetsByMonth,
   assetsByType,
   countByField,
   countByMulti,
   countBySize,
+  demandByStakeholder,
+  demandByStakeholderAssetType,
+  STAKEHOLDER_GROUPS,
   summarize,
 } from '../lib/analytics'
-import { SIZES, SIZE_COLORS } from '../constants'
+import { SIZE_COLORS } from '../constants'
 import { compactNumber, cx } from '../lib/format'
-import type { Half } from '../types'
+import { SpanFilter } from '../components/SpanFilter'
+import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
+import type { Half, Size } from '../types'
 
-type Filter = 'all' | Half
+type DemandDim = 'type' | 'asset'
 
 export function Dashboard() {
-  const { tasks, live } = useStore()
+  const { tasks, live, settings } = useStore()
   const { openNewTask } = useNewTask()
-  const [filter, setFilter] = useState<Filter>('all')
+  const [span, setSpan] = useState<SpanMode>('total')
+  const [year, setYear] = useState<number | null>(null)
+  const [half, setHalf] = useState<Half>('H1')
+  const [demandDim, setDemandDim] = useState<DemandDim>('type')
+
+  const years = useMemo(() => taskYears(tasks), [tasks])
+
+  // Selected year falls back to the most recent year present in the data.
+  const activeYear = year ?? years[0] ?? 0
 
   const filtered = useMemo(
-    () => (filter === 'all' ? tasks : tasks.filter((t) => t.half === filter)),
-    [tasks, filter],
+    () => filterBySpan(tasks, span, activeYear, half),
+    [tasks, span, activeYear, half],
   )
 
   const summary = useMemo(() => summarize(filtered), [filtered])
-  const bySquad = useMemo(() => countByField(filtered, 'squad'), [filtered])
   const byCampaign = useMemo(() => countByField(filtered, 'campaign'), [filtered])
+  const assetCampaign = useMemo(() => assetsByCampaign(filtered), [filtered])
+  const demand = useMemo(
+    () =>
+      demandDim === 'asset'
+        ? demandByStakeholderAssetType(filtered)
+        : demandByStakeholder(filtered, settings.types),
+    [filtered, settings.types, demandDim],
+  )
   const byPerson = useMemo(() => countByMulti(filtered, 'people'), [filtered])
   const assetMix = useMemo(() => assetsByType(filtered), [filtered])
-  const byMonth = useMemo(() => assetsByMonth(filtered), [filtered])
-  const bySize = useMemo(() => countBySize(filtered), [filtered])
-  const halfCounts = useMemo(
-    () => ({
-      all: tasks.length,
-      H1: tasks.filter((t) => t.half === 'H1').length,
-      H2: tasks.filter((t) => t.half === 'H2').length,
-    }),
-    [tasks],
+  // "Across the year" ignores the half sub-filter — it always shows the full 12
+  // months of the active year (the latest year by default, or the selected one).
+  const byMonth = useMemo(
+    () => assetsByMonth(tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === activeYear)),
+    [tasks, activeYear],
   )
+  const bySize = useMemo(() => countBySize(filtered), [filtered])
 
   if (tasks.length === 0) {
     return (
@@ -62,8 +80,8 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4">
-      {/* Live status + Half filter */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Live status + time-span selector */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <span
           className="inline-flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 text-xs font-semibold text-muted shadow-soft"
           title={live ? 'Dashboard updates automatically when tasks change' : 'Live updates unavailable'}
@@ -77,41 +95,70 @@ export function Dashboard() {
           {live ? 'Live' : 'Offline'}
         </span>
 
-        <div className="flex items-center gap-1.5">
-          {(['all', 'H1', 'H2'] as Filter[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={cx(
-                'rounded-lg px-3.5 py-1.5 text-sm font-semibold transition',
-                filter === f ? 'bg-rmit-navy text-white dark:bg-navy-300' : 'bg-card text-muted shadow-soft hover:text-ink',
-              )}
-            >
-              {f === 'all' ? 'All year' : f}
-              <span className="ml-1.5 opacity-60">{halfCounts[f]}</span>
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <SpanFilter
+            mode={span}
+            year={activeYear}
+            half={half}
+            years={years}
+            onMode={setSpan}
+            onYear={setYear}
+            onHalf={setHalf}
+          />
+          <span className="text-xs font-semibold text-muted">{filtered.length} tasks</span>
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total tasks" value={summary.totalTasks} icon={ClipboardList} accent="red" />
+      {/* Header stats: three big hero cards + a stacked secondary column */}
+      <div className="grid items-stretch gap-3 lg:grid-cols-4">
         <StatCard
           label="Total assets"
           value={compactNumber(summary.totalAssets)}
           icon={Images}
           accent="navy"
+          size="xl"
           hint={`${summary.totalAssets} deliverables`}
         />
-        <StatCard label="Active campaigns" value={summary.activeCampaigns} icon={Megaphone} accent="orange" />
-        <StatCard label="People engaged" value={summary.peopleEngaged} icon={Users} accent="teal" />
+        <StatCard label="Total tasks" value={summary.totalTasks} icon={ClipboardList} accent="red" size="xl" />
+        <StatCard label="Total campaigns" value={summary.totalCampaigns} icon={Megaphone} accent="orange" size="xl" />
+
+        <div className="grid content-start gap-3">
+          <StatCard
+            label="Top request type"
+            value={summary.topRequestType?.name ?? '—'}
+            icon={Layers}
+            accent="teal"
+            size="md"
+            hint={summary.topRequestType ? `${summary.topRequestType.count} tasks` : undefined}
+          />
+          <Card>
+            <CardHeader title="Tasks by size" subtitle="Effort distribution (XS → XL)" />
+            <div className="grid grid-cols-5 gap-1.5">
+              {bySize.map((s) => (
+                <div
+                  key={s.name}
+                  className="flex flex-col items-center gap-1 rounded-xl border border-line px-1 py-2.5"
+                >
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: SIZE_COLORS[s.name as Size] }}
+                  />
+                  <span className="text-xl font-bold leading-none text-ink">{s.value}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">{s.name}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
       </div>
 
       {/* Campaign bar + workload trend */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Workload across the year" subtitle="Total assets booked per month, by start date" />
+          <CardHeader
+            title="Workload across the year"
+            subtitle={`Assets booked per month in ${activeYear} — warmer band marks peak season`}
+          />
           <AreaTrendChart data={byMonth} height={180} />
         </Card>
         <Card>
@@ -120,33 +167,62 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* Campaign + distribution charts */}
+      {/* Campaign charts */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader title="Tasks by campaign" subtitle="Work distribution across campaigns" />
-          <VBarChart data={byCampaign} height={200} emptyMessage="Add tasks across at least 2 campaigns." />
+          <VBarChart data={byCampaign} height={220} emptyMessage="Add tasks across at least 2 campaigns." />
         </Card>
         <Card>
-          <CardHeader title="Tasks by size" subtitle="Effort distribution (XS → XL)" />
+          <CardHeader title="Asset count by campaign" subtitle="Total deliverables produced per campaign" />
           <VBarChart
-            data={bySize}
-            height={200}
-            minPoints={1}
-            angledLabels={false}
-            colors={SIZES.map((s) => SIZE_COLORS[s])}
-            emptyMessage="Add tasks to see the size spread."
+            data={assetCampaign}
+            height={220}
+            emptyMessage="Add tasks with asset counts across at least 2 campaigns."
           />
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Workload by person + demand by stakeholders */}
+      <div className="grid items-stretch gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader title="Workload by person" subtitle="Tasks assigned per team member" />
-          <HBarChart data={byPerson} height={210} emptyMessage="Assign people to at least 2 tasks." />
+          <HBarChart data={byPerson} height={300} emptyMessage="Assign people to at least 2 tasks." />
         </Card>
         <Card>
-          <CardHeader title="Tasks by squad" subtitle="Requests by stakeholder team" />
-          <HBarChart data={bySquad} height={210} emptyMessage="Add tasks for at least 2 squads." />
+          <CardHeader
+            title="Demand by stakeholders"
+            subtitle={`Deliverables per ${demandDim === 'asset' ? 'asset type' : 'work type'}, split by stakeholder group`}
+            action={
+              <div className="flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
+                {(
+                  [
+                    ['type', 'Work type'],
+                    ['asset', 'Asset type'],
+                  ] as [DemandDim, string][]
+                ).map(([d, label]) => (
+                  <button
+                    key={d}
+                    onClick={() => setDemandDim(d)}
+                    className={cx(
+                      'rounded-md px-2.5 py-1 text-xs font-semibold transition',
+                      demandDim === d ? 'bg-rmit-navy text-white dark:bg-navy-300' : 'text-muted hover:text-ink',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            }
+          />
+          <StackedBarChart
+            data={demand}
+            keys={[...STAKEHOLDER_GROUPS]}
+            paletteIndices={[0, 1, 4]}
+            labelColors={['#ffffff', '#ffffff', '#000054']}
+            height={300}
+            emptyMessage="Add tasks with asset counts to see demand."
+          />
         </Card>
       </div>
     </div>

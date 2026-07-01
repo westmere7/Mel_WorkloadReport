@@ -1,0 +1,41 @@
+The 2 big stats should be bigger to fill those empty spaces.
+
+In task list page, allow selecting the span as well just like the dash. Also the dropdowns should all feature multi-selection (it's a filter at this point, might as well re-work it).
+
+
+Add some export-import feature for the task list. These should be combined into a button and will open a pop-up called "Import & Backup". This will
+
+1. Allow users to load an external CSV file, this must be a compatible file made by this app. Prompt user if they want to clean and load all, or only update what's new.
+
+2. Allow back-up of the task list. Allow selecting spans for back-up
+
+
+-----
+
+
+You're right, it should ignore spans that are shorter than a year but still follows selected year if a year selection is active (total by defaul so latest year), Also I want the line itself thicker and carries that same gradient map as the fill section of the chart. When selecting a year that isn't completed (like 2026), gray out the future section of the chart.
+
+Remove the tasks by Squad section in the dash. With this remove, extend the Demand by Stakeholder vertically to take up that new space. For This demand by stakeholder section, add a switch between Work Type and Asset Type. 
+
+
+-------
+
+On the dashboard, specify the display time span: total, by year and by half.
+
+Remove the longest campaign. Turn the Task by size into stats and not charts.
+
+The workload across the year should have a gradient to indicate peak season and low season.
+
+In New Task pop-up, the squad (STAKEHOLDER): the explanation should be more subtle and a bit smaller. Also with the red color as accent color, use subtle red dots before each field title.
+
+For person in charge, only say "+1" when we have no more space. Leave full when space still allows it.
+
+------
+
+Tune down the white glow a bit
+The task code and task name should be at the top, with the task name stands out a bit more.
+Remove the total assets input, just use the actual sum, keep this sum next to the ASSET BReakDOWN title, in a rounded outline box.
+
+I want an auto-code-filling system here. So when I paste "[26.0608.A] ISC Roadshow 2026 creative asset brief" into the name, the code is autometically filled as well as the start date (but users can still override the start date). Notify if the code is in wrong format or duplicated. Remove the "suggest next code"
+
+PIC and Task size should be on the same line so half widlth for both. Just say "Eden +2..." if the PIC list is too long". Task size selection should be smaller and follows the actual color codes in the setting.

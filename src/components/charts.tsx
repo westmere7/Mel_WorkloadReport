@@ -5,6 +5,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
+  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -31,6 +33,12 @@ const tooltipStyle = {
   fontSize: 12,
   padding: '8px 12px',
 }
+
+// Recharts colours item/label text from the series colour, which is undefined
+// when bars are coloured via <Cell> (defaults to black → invisible on dark).
+// Force both to the themed ink so tooltips stay readable in either theme.
+const tooltipItemStyle = { color: 'var(--ink)' }
+const tooltipLabelStyle = { color: 'var(--ink)', fontWeight: 600 }
 
 const AXIS = { fontSize: 12, fill: 'var(--chart-axis)' }
 const AXIS_STRONG = { fontSize: 12, fill: 'var(--chart-axis-strong)' }
@@ -86,7 +94,11 @@ export function DonutChart({
                 <Cell key={i} fill={colors[i % colors.length]} />
               ))}
             </Pie>
-            <Tooltip contentStyle={tooltipStyle} />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              itemStyle={tooltipItemStyle}
+              labelStyle={tooltipLabelStyle}
+            />
           </PieChart>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
@@ -138,7 +150,12 @@ export function HBarChart({
           axisLine={false}
           tickLine={false}
         />
-        <Tooltip cursor={CURSOR} contentStyle={tooltipStyle} />
+        <Tooltip
+          cursor={CURSOR}
+          contentStyle={tooltipStyle}
+          itemStyle={tooltipItemStyle}
+          labelStyle={tooltipLabelStyle}
+        />
         <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={18}>
           {data.map((_, i) => (
             <Cell key={i} fill={colors[i % colors.length]} />
@@ -182,12 +199,87 @@ export function VBarChart({
           height={angledLabels ? 64 : 28}
         />
         <YAxis allowDecimals={false} tick={AXIS} axisLine={false} tickLine={false} width={28} />
-        <Tooltip cursor={CURSOR} contentStyle={tooltipStyle} />
+        <Tooltip
+          cursor={CURSOR}
+          contentStyle={tooltipStyle}
+          itemStyle={tooltipItemStyle}
+          labelStyle={tooltipLabelStyle}
+        />
         <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={26}>
           {data.map((_, i) => (
             <Cell key={i} fill={palette[i % palette.length]} />
           ))}
         </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+/**
+ * 100%-stacked bar chart. Each row is stacked across `keys`, normalised so every
+ * bar fills the height; absolute segment totals are labelled inside. Colours come
+ * from the themed palette via `paletteIndices` (defaults to sequential).
+ */
+export function StackedBarChart({
+  data,
+  keys,
+  paletteIndices,
+  labelColors,
+  height = 300,
+  minPoints = 1,
+  emptyMessage,
+}: {
+  data: Array<Record<string, string | number>>
+  keys: string[]
+  paletteIndices?: number[]
+  labelColors?: string[]
+  height?: number
+  minPoints?: number
+  emptyMessage?: string
+}) {
+  const themed = useChartColors()
+  if (data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
+  const colorAt = (i: number) => themed[(paletteIndices?.[i] ?? i) % themed.length]
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} stackOffset="expand" margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
+        <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+        <XAxis
+          dataKey="name"
+          tick={{ fontSize: 11, fill: 'var(--chart-axis)' }}
+          axisLine={false}
+          tickLine={false}
+          interval={0}
+          angle={-25}
+          textAnchor="end"
+          height={72}
+        />
+        <YAxis
+          tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
+          tick={AXIS}
+          axisLine={false}
+          tickLine={false}
+          width={40}
+        />
+        <Tooltip
+          cursor={CURSOR}
+          contentStyle={tooltipStyle}
+          itemStyle={tooltipItemStyle}
+          labelStyle={tooltipLabelStyle}
+        />
+        <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" />
+        {keys.map((k, i) => (
+          <Bar key={k} dataKey={k} stackId="stack" fill={colorAt(i)} maxBarSize={64}>
+            <LabelList
+              dataKey={k}
+              position="center"
+              formatter={(v: number | string) => (v ? `${v}` : '')}
+              fill={labelColors?.[i] ?? '#ffffff'}
+              fontSize={11}
+              fontWeight={700}
+            />
+          </Bar>
+        ))}
       </BarChart>
     </ResponsiveContainer>
   )
@@ -213,9 +305,17 @@ export function AreaTrendChart({
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ left: 0, right: 12, top: 8, bottom: 4 }}>
         <defs>
+          {/* Vertical heat gradient: tall (peak season) reaches hot red, low season stays cool teal */}
           <linearGradient id="workloadFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#E61E2A" stopOpacity={0.32} />
-            <stop offset="100%" stopColor="#E61E2A" stopOpacity={0.02} />
+            <stop offset="0%" stopColor="#E61E2A" stopOpacity={0.55} />
+            <stop offset="45%" stopColor="#F58220" stopOpacity={0.3} />
+            <stop offset="100%" stopColor="#00A9CE" stopOpacity={0.06} />
+          </linearGradient>
+          {/* Same heat map at full opacity, for the line itself */}
+          <linearGradient id="workloadStroke" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#E61E2A" />
+            <stop offset="45%" stopColor="#F58220" />
+            <stop offset="100%" stopColor="#00A9CE" />
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
@@ -224,15 +324,17 @@ export function AreaTrendChart({
         <Tooltip
           cursor={{ stroke: '#E61E2A', strokeWidth: 1, strokeDasharray: '4 4' }}
           contentStyle={tooltipStyle}
+          itemStyle={tooltipItemStyle}
+          labelStyle={tooltipLabelStyle}
           formatter={(v: number) => [`${v} assets`, 'Workload']}
         />
         <Area
           type="monotone"
           dataKey="value"
-          stroke="#E61E2A"
-          strokeWidth={2.5}
+          stroke="url(#workloadStroke)"
+          strokeWidth={3.5}
           fill="url(#workloadFill)"
-          dot={{ r: 3, fill: '#E61E2A', strokeWidth: 0 }}
+          dot={{ r: 2.5, fill: 'var(--card)', stroke: '#E61E2A', strokeWidth: 1.5 }}
           activeDot={{ r: 5 }}
         />
       </AreaChart>

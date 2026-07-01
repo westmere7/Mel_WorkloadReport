@@ -94,6 +94,15 @@
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted;
   }
 
+  /* Subtle red dot before each field title inside the task form. */
+  .task-form .label {
+    @apply flex items-center gap-1.5;
+  }
+  .task-form .label::before {
+    content: '';
+    @apply h-1.5 w-1.5 shrink-0 rounded-full bg-rmit-red/50;
+  }
+
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm
            font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-1

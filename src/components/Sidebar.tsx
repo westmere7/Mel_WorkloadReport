@@ -19,11 +19,9 @@ export function Sidebar() {
     <aside className="flex w-[68px] flex-col items-center gap-1 bg-rmit-navy py-5 md:w-60 md:items-stretch md:px-4">
       {/* Brand */}
       <div className="mb-6 flex items-center gap-3 px-1 md:px-2">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rmit-red font-extrabold text-white">
-          R
-        </div>
+        <img src="/RMIT_white.svg" alt="RMIT" className="h-5 w-auto shrink-0 md:h-7" />
         <div className="hidden md:block">
-          <p className="text-sm font-bold leading-tight text-white">RMIT</p>
+          <p className="text-sm font-bold leading-tight text-white">GCMC</p>
           <p className="text-[11px] leading-tight text-navy-100">Workload Report</p>
         </div>
       </div>

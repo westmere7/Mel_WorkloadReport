@@ -22,7 +22,10 @@ export function Modal({ open, onClose, title, children, footer, wide }: ModalPro
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-900/40 p-4 backdrop-blur-sm sm:p-8">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-900/70 p-4 backdrop-blur-sm sm:p-8"
+      onClick={onClose}
+    >
       <div
         className={`card my-auto w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} p-0`}
         onClick={(e) => e.stopPropagation()}

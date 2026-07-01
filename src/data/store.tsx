@@ -28,6 +28,8 @@ interface StoreValue {
   updateTask: (id: string, input: TaskInput) => Promise<Task>
   deleteTask: (id: string) => Promise<void>
   deleteAllTasks: () => Promise<void>
+  /** Bulk import from a parsed CSV: 'replace' wipes first, 'merge' adds new & updates matching codes. */
+  importTasks: (inputs: TaskInput[], mode: 'replace' | 'merge') => Promise<{ created: number; updated: number }>
   populateSampleData: (count?: number) => Promise<number>
   saveSettings: (settings: AppSettings) => Promise<void>
   /** Rename a campaign/type/person in Settings and propagate to all tasks. */
@@ -124,6 +126,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setTasks([])
   }, [repo])
 
+  const importTasks = useCallback(
+    async (inputs: TaskInput[], mode: 'replace' | 'merge') => {
+      if (mode === 'replace') {
+        await repo.deleteAllTasks()
+        const created = await repo.createManyTasks(inputs)
+        setTasks(created)
+        return { created: created.length, updated: 0 }
+      }
+      // merge: update tasks whose code matches, create the rest.
+      const existing = await repo.listTasks()
+      const byCode = new Map(existing.filter((t) => t.code.trim()).map((t) => [t.code.trim(), t]))
+      const toCreate: TaskInput[] = []
+      let updated = 0
+      for (const input of inputs) {
+        const key = input.code.trim()
+        const match = key ? byCode.get(key) : undefined
+        if (match) {
+          await repo.updateTask(match.id, input)
+          updated++
+        } else {
+          toCreate.push(input)
+        }
+      }
+      if (toCreate.length) await repo.createManyTasks(toCreate)
+      setTasks(await repo.listTasks())
+      return { created: toCreate.length, updated }
+    },
+    [repo],
+  )
+
   const populateSampleData = useCallback(
     async (count = 60) => {
       const inputs = generateSampleTasks(count)
@@ -181,6 +213,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateTask,
       deleteTask,
       deleteAllTasks,
+      importTasks,
       populateSampleData,
       saveSettings,
       renameListItem,
@@ -198,6 +231,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateTask,
       deleteTask,
       deleteAllTasks,
+      importTasks,
       populateSampleData,
       saveSettings,
       renameListItem,
