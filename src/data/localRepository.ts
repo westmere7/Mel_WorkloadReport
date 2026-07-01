@@ -1,6 +1,6 @@
 import type { AppSettings, Task, TaskInput } from '../types'
 import type { Repository } from './repository'
-import { DEFAULT_SETTINGS, normalizeBreakdown } from '../constants'
+import { DEFAULT_SETTINGS, canonicalAssetName, normalizeBreakdown } from '../constants'
 import { SEED_TASKS } from './seed'
 
 const TASKS_KEY = 'mwr.tasks.v1'
@@ -120,10 +120,15 @@ export class LocalRepository implements Repository {
         return t.campaign === oldValue ? { ...t, campaign: newValue } : t
       }
       if (field === 'assetBreakdown') {
-        if (!(oldValue in t.assetBreakdown)) return t
+        const keys = Object.keys(t.assetBreakdown).filter(
+          (k) => canonicalAssetName(k) === oldValue && k !== newValue,
+        )
+        if (keys.length === 0) return t
         const b = { ...t.assetBreakdown }
-        b[newValue] = (b[newValue] ?? 0) + (b[oldValue] ?? 0)
-        delete b[oldValue]
+        for (const k of keys) {
+          b[newValue] = (b[newValue] ?? 0) + (b[k] ?? 0)
+          delete b[k]
+        }
         return { ...t, assetBreakdown: b }
       }
       const arr = t[field]

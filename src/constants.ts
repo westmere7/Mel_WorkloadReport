@@ -80,6 +80,11 @@ const LEGACY_ASSET_KEYS: Record<string, string> = {
   gif: 'GIF / Motion',
 }
 
+/** Canonical display name for a stored breakdown key (maps legacy fixed keys to names). */
+export function canonicalAssetName(key: string): string {
+  return LEGACY_ASSET_KEYS[key] ?? key
+}
+
 /** Normalise a stored asset breakdown to name-keyed form (migrates legacy fixed keys). */
 export function normalizeBreakdown(raw: Record<string, number> | null | undefined): Record<string, number> {
   const out: Record<string, number> = {}

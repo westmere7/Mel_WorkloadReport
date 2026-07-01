@@ -1,7 +1,7 @@
 import type { AppSettings, Task, TaskInput } from '../types'
 import type { Repository } from './repository'
 import { getSupabase } from '../lib/supabaseClient'
-import { DEFAULT_SETTINGS } from '../constants'
+import { DEFAULT_SETTINGS, canonicalAssetName } from '../constants'
 import { rowToTask, taskInputToRow } from './mappers'
 
 const SETTINGS_ID = 'app'
@@ -93,19 +93,22 @@ export class SupabaseRepository implements Repository {
     }
 
     if (field === 'assetBreakdown') {
-      // JSONB column: fetch every task, rename the key where present.
+      // JSONB column: fetch every task and rename any key that resolves to
+      // oldValue (matches both legacy fixed keys like "html5" and name keys).
       const { data, error } = await sb.from('tasks').select('id, asset_breakdown')
       if (error) throw error
       await Promise.all(
         (data ?? [])
-          .filter((row) => {
-            const b = (row as { asset_breakdown: Record<string, number> | null }).asset_breakdown
-            return b != null && oldValue in b
-          })
           .map((row) => {
-            const b = { ...((row as { asset_breakdown: Record<string, number> }).asset_breakdown) }
-            b[newValue] = (b[newValue] ?? 0) + (b[oldValue] ?? 0)
-            delete b[oldValue]
+            const raw = (row as { asset_breakdown: Record<string, number> | null }).asset_breakdown
+            if (!raw) return null
+            const keys = Object.keys(raw).filter((k) => canonicalAssetName(k) === oldValue && k !== newValue)
+            if (keys.length === 0) return null
+            const b: Record<string, number> = { ...raw }
+            for (const k of keys) {
+              b[newValue] = (b[newValue] ?? 0) + (b[k] ?? 0)
+              delete b[k]
+            }
             return sb
               .from('tasks')
               .update({ asset_breakdown: b, updated_at: new Date().toISOString() })
@@ -113,7 +116,8 @@ export class SupabaseRepository implements Repository {
               .then(({ error: e }) => {
                 if (e) throw e
               })
-          }),
+          })
+          .filter((p): p is Promise<void> => p !== null),
       )
       return
     }
