@@ -13,6 +13,9 @@
     --muted: #6b7280;
     --faint: #9ca3af;
 
+    /* Sidebar (dark navy in light theme for contrast against light content) */
+    --sidebar: #000054;
+
     /* Chart tokens */
     --chart-axis: #6b7280;
     --chart-axis-strong: #374151;
@@ -31,6 +34,10 @@
     --ink: #e9eaf6;
     --muted: #a2a7cd;
     --faint: #6b6fa3;
+
+    /* Sidebar: a calm dark navy that harmonises with the surface/card tones
+       (less saturated than #000054) while staying a touch lighter to stand out. */
+    --sidebar: #0b0b32;
 
     --chart-axis: #9aa0c6;
     --chart-axis-strong: #c6caea;

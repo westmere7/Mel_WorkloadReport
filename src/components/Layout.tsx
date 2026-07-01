@@ -1,9 +1,8 @@
 import { useLocation } from 'react-router-dom'
-import { Database, HardDrive, Moon, Plus, Sun } from 'lucide-react'
+import { Database, HardDrive, Moon, Sun } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { useStore } from '../data/store'
 import { useTheme } from '../lib/theme'
-import { useNewTask } from './NewTaskModal'
 
 const TITLES: Record<string, { title: string; subtitle: string }> = {
   '/': { title: 'Dashboard', subtitle: 'Team workload at a glance' },
@@ -16,7 +15,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const meta = TITLES[pathname] ?? { title: 'Workload Report', subtitle: '' }
   const { backend } = useStore()
   const { theme, toggle } = useTheme()
-  const { openNewTask } = useNewTask()
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
@@ -51,10 +49,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               aria-label="Toggle theme"
             >
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-            <button onClick={openNewTask} className="btn-primary">
-              <Plus className="h-4 w-4" strokeWidth={2.5} />
-              <span className="hidden sm:inline">New Task</span>
             </button>
           </div>
         </header>

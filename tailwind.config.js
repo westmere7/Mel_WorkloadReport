@@ -53,6 +53,7 @@ export default {
         card: 'var(--card)',
         subtle: 'var(--subtle)',
         line: 'var(--line)',
+        sidebar: 'var(--sidebar)',
       },
       fontFamily: {
         sans: [

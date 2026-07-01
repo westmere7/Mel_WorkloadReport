@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Table2, Settings, type LucideIcon } from 'lucide-react'
+import { LayoutDashboard, Plus, Table2, Settings, type LucideIcon } from 'lucide-react'
 import { cx } from '../lib/format'
+import { useNewTask } from './NewTaskModal'
 
 interface NavItem {
   to: string
@@ -15,8 +16,9 @@ const NAV: NavItem[] = [
 ]
 
 export function Sidebar() {
+  const { openNewTask } = useNewTask()
   return (
-    <aside className="flex w-[68px] flex-col items-center gap-1 bg-rmit-navy py-5 md:w-60 md:items-stretch md:px-4">
+    <aside className="flex w-[68px] flex-col items-center gap-1 border-r border-line bg-[var(--sidebar)] py-5 md:w-60 md:items-stretch md:px-4">
       {/* Brand */}
       <div className="mb-6 flex items-center gap-3 px-1 md:px-2">
         <img src="/RMIT_white.svg" alt="RMIT" className="h-5 w-auto shrink-0 md:h-7" />
@@ -26,7 +28,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1.5">
+      <nav className="flex flex-col gap-1.5">
         {NAV.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
@@ -55,6 +57,19 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      {/* Subtle separator + primary action */}
+      <div className="my-3 border-t border-white/10" />
+      <button
+        onClick={openNewTask}
+        className="btn-primary w-full justify-center"
+        title="New Task"
+      >
+        <Plus className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+        <span className="hidden md:inline">New Task</span>
+      </button>
+
+      <div className="flex-1" />
 
       <div className="hidden px-2 pt-4 md:block">
         <p className="text-[11px] leading-relaxed text-navy-200">
