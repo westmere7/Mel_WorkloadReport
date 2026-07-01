@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { cx } from '../../lib/format'
 
@@ -6,6 +7,8 @@ interface StatCardProps {
   value: string | number
   icon: LucideIcon
   hint?: string
+  /** Rich footer under the value (xl only) — e.g. a per-size distribution. */
+  footer?: ReactNode
   accent?: 'red' | 'navy' | 'orange' | 'teal' | 'green'
   size?: 'md' | 'lg' | 'xl'
 }
@@ -18,7 +21,7 @@ const ACCENTS: Record<NonNullable<StatCardProps['accent']>, string> = {
   green: 'bg-green-50 text-accent-green dark:bg-green-500/15 dark:text-accent-green',
 }
 
-export function StatCard({ label, value, icon: Icon, hint, accent = 'navy', size = 'md' }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, hint, footer, accent = 'navy', size = 'md' }: StatCardProps) {
   const lg = size === 'lg'
 
   // Hero: a tall, vertical KPI card whose huge number fills its (stretched) cell.
@@ -34,6 +37,7 @@ export function StatCard({ label, value, icon: Icon, hint, accent = 'navy', size
         <div className="flex min-w-0 flex-1 flex-col justify-center">
           <p className="text-[clamp(3.5rem,7vw,8.5rem)] font-bold leading-none text-rmit-navy dark:text-ink">{value}</p>
           {hint && <p className="mt-3 truncate text-base text-muted">{hint}</p>}
+          {footer && <div className="mt-3">{footer}</div>}
         </div>
       </div>
     )

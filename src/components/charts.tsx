@@ -46,7 +46,7 @@ const AXIS_STRONG = { fontSize: 12, fill: 'var(--chart-axis-strong)' }
 const CURSOR = { fill: 'var(--chart-cursor)' }
 
 /** Shown when there isn't enough data to render a meaningful chart. */
-export function NotEnough({ message, height = 200 }: { message?: string; height?: number }) {
+export function NotEnough({ message, height = 200 }: { message?: string; height?: number | string }) {
   return (
     <div
       className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-line text-center"
@@ -133,12 +133,15 @@ export function HBarChart({
   emptyMessage,
 }: {
   data: NamedCount[]
-  height?: number
+  height?: number | string
   minPoints?: number
   emptyMessage?: string
 }) {
   const colors = useChartColors()
   if (data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
+  // Size the label gutter to the longest name so it hugs short names but never clips long ones.
+  const longest = data.reduce((m, d) => Math.max(m, d.name.length), 0)
+  const yWidth = Math.min(140, Math.max(36, longest * 7 + 12))
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
@@ -146,7 +149,7 @@ export function HBarChart({
         <YAxis
           type="category"
           dataKey="name"
-          width={120}
+          width={yWidth}
           tick={AXIS_STRONG}
           axisLine={false}
           tickLine={false}
@@ -164,6 +167,44 @@ export function HBarChart({
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+  )
+}
+
+/**
+ * A ranked list of proportional progress bars — a lighter, axis-free alternative
+ * to the recharts bar charts (each row shows the label, a filled track, and the value).
+ */
+export function RankedBars({
+  data,
+  minPoints = 2,
+  emptyMessage,
+}: {
+  data: NamedCount[]
+  minPoints?: number
+  emptyMessage?: string
+}) {
+  const colors = useChartColors()
+  if (data.length < minPoints) return <NotEnough message={emptyMessage} height={180} />
+  const max = data.reduce((m, d) => Math.max(m, d.value), 0) || 1
+  return (
+    <div className="flex flex-col gap-2.5">
+      {data.map((d, i) => (
+        <div key={d.name}>
+          <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+            <span className="truncate text-ink" title={d.name}>
+              {d.name}
+            </span>
+            <span className="shrink-0 font-semibold text-muted">{d.value}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-subtle">
+            <div
+              className="h-full rounded-full transition-[width]"
+              style={{ width: `${(d.value / max) * 100}%`, background: colors[i % colors.length] }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -316,7 +357,7 @@ export function AreaTrendChart({
   nowMonth,
 }: {
   data: NamedCount[]
-  height?: number
+  height?: number | string
   minMonths?: number
   emptyMessage?: string
   /** Index (0–11) of the current month to mark with a "Now" line; null to hide. */

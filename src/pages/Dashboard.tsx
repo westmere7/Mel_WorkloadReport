@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ClipboardList, Eye, EyeOff, Images, Layers, Megaphone } from 'lucide-react'
+import { ClipboardList, Eye, EyeOff, Images, Megaphone } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
-import { AreaTrendChart, DonutChart, HBarChart, StackedBarChart, VBarChart } from '../components/charts'
+import { AreaTrendChart, DonutChart, HBarChart, RankedBars, StackedBarChart, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
 import {
   assetsByCampaign,
@@ -49,6 +49,7 @@ export function Dashboard() {
   )
 
   const summary = useMemo(() => summarize(filtered), [filtered])
+  const bySquad = useMemo(() => countByField(filtered, 'squad'), [filtered])
   const byCampaign = useMemo(() => countByField(filtered, 'campaign'), [filtered])
   const assetCampaign = useMemo(() => assetsByCampaign(filtered), [filtered])
   const dropCommon = (rows: { name: string; value: number }[]) =>
@@ -148,7 +149,7 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4">
-      {/* Header stats: three big hero cards + a stacked secondary column */}
+      {/* Header stats: three hero cards + a Tasks-by-squad card */}
       <div className="grid items-stretch gap-3 lg:grid-cols-4">
         <StatCard
           label="Total assets"
@@ -158,55 +159,54 @@ export function Dashboard() {
           size="xl"
           hint={`${summary.totalAssets} deliverables`}
         />
-        <StatCard label="Total tasks" value={summary.totalTasks} icon={ClipboardList} accent="red" size="xl" />
-        <StatCard label="Total campaigns" value={summary.totalCampaigns} icon={Megaphone} accent="orange" size="xl" />
-
-        <div className="grid content-start gap-3">
-          <StatCard
-            label="Top request type"
-            value={summary.topRequestType?.name ?? '—'}
-            icon={Layers}
-            accent="teal"
-            size="md"
-            hint={summary.topRequestType ? `${summary.topRequestType.count} tasks` : undefined}
-          />
-          <Card>
-            <CardHeader title="Tasks by size" subtitle="Effort distribution (XS → XL)" />
-            <div className="grid grid-cols-5 gap-1.5">
+        <StatCard
+          label="Total tasks"
+          value={summary.totalTasks}
+          icon={ClipboardList}
+          accent="red"
+          size="xl"
+          footer={
+            <div className="flex flex-wrap gap-x-2.5 gap-y-1 text-sm">
               {bySize.map((s) => (
-                <div
-                  key={s.name}
-                  className="flex flex-col items-center gap-1 rounded-xl border border-line px-1 py-2.5"
-                >
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ background: SIZE_COLORS[s.name as Size] }}
-                  />
-                  <span className="text-xl font-bold leading-none text-ink">{s.value}</span>
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">{s.name}</span>
-                </div>
+                <span key={s.name} className="whitespace-nowrap">
+                  <span className="font-bold" style={{ color: SIZE_COLORS[s.name as Size] }}>
+                    {s.name}
+                  </span>
+                  <span className="text-muted">:{s.value}</span>
+                </span>
               ))}
             </div>
-          </Card>
-        </div>
+          }
+        />
+        <StatCard label="Total campaigns" value={summary.totalCampaigns} icon={Megaphone} accent="orange" size="xl" />
+
+        <Card className="flex flex-col">
+          <CardHeader title="Tasks by squad" subtitle="Requests by stakeholder team" />
+          <RankedBars data={bySquad} emptyMessage="Add tasks for at least 2 squads." />
+        </Card>
       </div>
 
-      {/* Workload trend + asset mix + tasks by person */}
-      <div className="grid items-start gap-4 lg:grid-cols-3">
-        <Card>
+      {/* Workload trend + asset mix + tasks by person — equal heights; the two bar/area
+          charts fill their cards to match the (legend-driven) height of Asset mix. */}
+      <div className="grid items-stretch gap-4 lg:grid-cols-3">
+        <Card className="flex flex-col">
           <CardHeader
             title="Workload across the year"
             subtitle={`Assets booked per month in ${activeYear}`}
           />
-          <AreaTrendChart data={byMonth} height={200} nowMonth={nowMonth} />
+          <div className="min-h-[180px] flex-1">
+            <AreaTrendChart data={byMonth} height="100%" nowMonth={nowMonth} />
+          </div>
         </Card>
         <Card>
           <CardHeader title="Asset mix" subtitle="Deliverables by type" />
           <DonutChart data={assetMix} height={200} emptyMessage="Add tasks with asset counts to see the mix." />
         </Card>
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader title="Tasks by person" subtitle="Tasks assigned per team member" />
-          <HBarChart data={byPerson} height={200} emptyMessage="Assign people to at least 2 tasks." />
+          <div className="min-h-[180px] flex-1">
+            <HBarChart data={byPerson} height="100%" emptyMessage="Assign people to at least 2 tasks." />
+          </div>
         </Card>
       </div>
 
