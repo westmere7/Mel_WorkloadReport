@@ -195,11 +195,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     }
   }
 
-  // Everything is required except the end date; total assets must be positive.
+  // Code and end date are optional; a code, if given, must still be valid & unique.
+  // Everything else is required and total assets must be positive.
   const validate = (): string[] => {
     const errs: string[] = []
-    if (!code.trim()) errs.push('Task code is required.')
-    else if (codeError) errs.push(codeError)
+    if (codeError) errs.push(codeError)
     if (!name.trim()) errs.push('Task name is required.')
     if (!squad) errs.push('Squad is required.')
     if (!campaign) errs.push('Campaign is required.')

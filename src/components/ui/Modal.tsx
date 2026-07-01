@@ -9,9 +9,11 @@ interface ModalProps {
   children: ReactNode
   footer?: ReactNode
   wide?: boolean
+  /** Close when clicking the backdrop. Default true; set false to require explicit dismiss. */
+  closeOnBackdrop?: boolean
 }
 
-export function Modal({ open, onClose, title, children, footer, wide }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, wide, closeOnBackdrop = true }: ModalProps) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -24,7 +26,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: ModalPro
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-900/70 p-4 backdrop-blur-sm sm:p-8"
-      onClick={onClose}
+      onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
         className={`card my-auto w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} p-0`}

@@ -34,7 +34,7 @@ export function NewTaskProvider({ children }: { children: ReactNode }) {
   return (
     <NewTaskContext.Provider value={value}>
       {children}
-      <Modal open={open} onClose={() => setOpen(false)} title="New task" wide>
+      <Modal open={open} onClose={() => setOpen(false)} title="New task" wide closeOnBackdrop={false}>
         <TaskForm submitLabel="Register task" onSubmit={handleSubmit} onCancel={() => setOpen(false)} />
       </Modal>
     </NewTaskContext.Provider>
