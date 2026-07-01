@@ -228,7 +228,7 @@ export function VBarChart({
           itemStyle={tooltipItemStyle}
           labelStyle={tooltipLabelStyle}
         />
-        <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={26}>
+        <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={64}>
           {data.map((_, i) => (
             <Cell key={i} fill={palette[i % palette.length]} />
           ))}
