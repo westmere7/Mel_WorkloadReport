@@ -9,6 +9,7 @@ import {
   Legend,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -312,15 +313,20 @@ export function AreaTrendChart({
   height = 260,
   minMonths = 2,
   emptyMessage,
+  nowMonth,
 }: {
   data: NamedCount[]
   height?: number
   minMonths?: number
   emptyMessage?: string
+  /** Index (0–11) of the current month to mark with a "Now" line; null to hide. */
+  nowMonth?: number | null
 }) {
   const monthsWithData = data.filter((d) => d.value > 0).length
   if (monthsWithData < minMonths)
     return <NotEnough message={emptyMessage ?? 'Add tasks with start dates in different months.'} height={height} />
+
+  const showNow = nowMonth != null && nowMonth >= 0 && nowMonth < data.length
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -352,6 +358,21 @@ export function AreaTrendChart({
           dot={{ r: 2.5, fill: 'var(--card)', stroke: '#E61E2A', strokeWidth: 1.5 }}
           activeDot={{ r: 5 }}
         />
+        {showNow && (
+          <ReferenceLine
+            x={data[nowMonth as number].name}
+            stroke="var(--chart-axis-strong)"
+            strokeWidth={1.5}
+            strokeDasharray="4 4"
+            label={{
+              value: 'Now',
+              position: 'insideTopRight',
+              fontSize: 10,
+              fontWeight: 600,
+              fill: 'var(--chart-axis-strong)',
+            }}
+          />
+        )}
       </AreaChart>
     </ResponsiveContainer>
   )

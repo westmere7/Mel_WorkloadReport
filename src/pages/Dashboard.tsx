@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
-import { ClipboardList, Images, Layers, Megaphone } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ClipboardList, Eye, EyeOff, Images, Layers, Megaphone } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
+import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
 import { AreaTrendChart, DonutChart, HBarChart, StackedBarChart, VBarChart } from '../components/charts'
@@ -25,6 +26,9 @@ import type { Half, Size } from '../types'
 
 type DemandDim = 'type' | 'asset'
 
+// Ongoing / catch-all campaigns that can be toggled out of the campaign charts.
+const COMMON_CAMPAIGNS = ['BAU', 'Always On', 'Others']
+
 export function Dashboard() {
   const { tasks, live, settings } = useStore()
   const { openNewTask } = useNewTask()
@@ -32,6 +36,7 @@ export function Dashboard() {
   const [year, setYear] = useState<number | null>(null)
   const [half, setHalf] = useState<Half>('H1')
   const [demandDim, setDemandDim] = useState<DemandDim>('type')
+  const [hideCommonCampaigns, setHideCommonCampaigns] = useState(false)
 
   const years = useMemo(() => taskYears(tasks), [tasks])
 
@@ -46,6 +51,10 @@ export function Dashboard() {
   const summary = useMemo(() => summarize(filtered), [filtered])
   const byCampaign = useMemo(() => countByField(filtered, 'campaign'), [filtered])
   const assetCampaign = useMemo(() => assetsByCampaign(filtered), [filtered])
+  const dropCommon = (rows: { name: string; value: number }[]) =>
+    hideCommonCampaigns ? rows.filter((r) => !COMMON_CAMPAIGNS.includes(r.name)) : rows
+  const byCampaignShown = useMemo(() => dropCommon(byCampaign), [byCampaign, hideCommonCampaigns])
+  const assetCampaignShown = useMemo(() => dropCommon(assetCampaign), [assetCampaign, hideCommonCampaigns])
   const demand = useMemo(
     () =>
       demandDim === 'asset'
@@ -64,7 +73,48 @@ export function Dashboard() {
     () => assetsByMonth(tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === activeYear)),
     [tasks, activeYear],
   )
+  // Mark "now" on the workload chart only when viewing the current calendar year.
+  const nowMonth = useMemo(() => {
+    const now = new Date()
+    return activeYear === now.getFullYear() ? now.getMonth() : null
+  }, [activeYear])
   const bySize = useMemo(() => countBySize(filtered), [filtered])
+
+  // Render the Live badge (left) and span selector (right) into the top header bar.
+  const setHeaderSlots = useHeaderSlots()
+  useEffect(() => {
+    setHeaderSlots({
+      left: (
+        <span
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted"
+          title={live ? 'Dashboard updates automatically when tasks change' : 'Live updates unavailable'}
+        >
+          <span className={cx('relative flex h-2 w-2', !live && 'opacity-40')}>
+            {live && (
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-green opacity-75" />
+            )}
+            <span className={cx('relative inline-flex h-2 w-2 rounded-full', live ? 'bg-accent-green' : 'bg-faint')} />
+          </span>
+          {live ? 'Live' : 'Offline'}
+        </span>
+      ),
+      right: (
+        <div className="flex flex-wrap items-center gap-2">
+          <SpanFilter
+            mode={span}
+            year={activeYear}
+            half={half}
+            years={years}
+            onMode={setSpan}
+            onYear={setYear}
+            onHalf={setHalf}
+          />
+          <span className="text-xs font-semibold text-muted">{filtered.length} tasks</span>
+        </div>
+      ),
+    })
+    return () => setHeaderSlots({})
+  }, [setHeaderSlots, live, span, activeYear, half, years, filtered.length])
 
   if (tasks.length === 0) {
     return (
@@ -81,37 +131,23 @@ export function Dashboard() {
     )
   }
 
+  const campaignToggle = (
+    <button
+      type="button"
+      onClick={() => setHideCommonCampaigns((h) => !h)}
+      title="Hide the BAU, Always On and Others campaigns"
+      className={cx(
+        'inline-flex shrink-0 items-center gap-1 text-[11px] font-medium transition hover:text-ink',
+        hideCommonCampaigns ? 'text-muted' : 'text-faint',
+      )}
+    >
+      {hideCommonCampaigns ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+      Hide Always On / BAU / Others
+    </button>
+  )
+
   return (
     <div className="space-y-4">
-      {/* Live status + time-span selector */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span
-          className="inline-flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 text-xs font-semibold text-muted shadow-soft"
-          title={live ? 'Dashboard updates automatically when tasks change' : 'Live updates unavailable'}
-        >
-          <span className={cx('relative flex h-2 w-2', !live && 'opacity-40')}>
-            {live && (
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-green opacity-75" />
-            )}
-            <span className={cx('relative inline-flex h-2 w-2 rounded-full', live ? 'bg-accent-green' : 'bg-faint')} />
-          </span>
-          {live ? 'Live' : 'Offline'}
-        </span>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <SpanFilter
-            mode={span}
-            year={activeYear}
-            half={half}
-            years={years}
-            onMode={setSpan}
-            onYear={setYear}
-            onHalf={setHalf}
-          />
-          <span className="text-xs font-semibold text-muted">{filtered.length} tasks</span>
-        </div>
-      </div>
-
       {/* Header stats: three big hero cards + a stacked secondary column */}
       <div className="grid items-stretch gap-3 lg:grid-cols-4">
         <StatCard
@@ -155,21 +191,21 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Workload trend + asset mix + workload by person */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-3">
+      {/* Workload trend + asset mix + tasks by person */}
+      <div className="grid items-start gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader
             title="Workload across the year"
             subtitle={`Assets booked per month in ${activeYear}`}
           />
-          <AreaTrendChart data={byMonth} height={200} />
+          <AreaTrendChart data={byMonth} height={200} nowMonth={nowMonth} />
         </Card>
         <Card>
           <CardHeader title="Asset mix" subtitle="Deliverables by type" />
           <DonutChart data={assetMix} height={200} emptyMessage="Add tasks with asset counts to see the mix." />
         </Card>
         <Card>
-          <CardHeader title="Workload by person" subtitle="Tasks assigned per team member" />
+          <CardHeader title="Tasks by person" subtitle="Tasks assigned per team member" />
           <HBarChart data={byPerson} height={200} emptyMessage="Assign people to at least 2 tasks." />
         </Card>
       </div>
@@ -178,13 +214,21 @@ export function Dashboard() {
       <div className="grid items-stretch gap-4 lg:grid-cols-2">
         <div className="grid content-start gap-4">
           <Card>
-            <CardHeader title="Tasks by campaign" subtitle="Work distribution across campaigns" />
-            <VBarChart data={byCampaign} height={220} emptyMessage="Add tasks across at least 2 campaigns." />
+            <CardHeader
+              title="Tasks by campaign"
+              subtitle="Work distribution across campaigns"
+              action={campaignToggle}
+            />
+            <VBarChart data={byCampaignShown} height={220} emptyMessage="Add tasks across at least 2 campaigns." />
           </Card>
           <Card>
-            <CardHeader title="Asset count by campaign" subtitle="Total deliverables produced per campaign" />
+            <CardHeader
+              title="Asset count by campaign"
+              subtitle="Total deliverables produced per campaign"
+              action={campaignToggle}
+            />
             <VBarChart
-              data={assetCampaign}
+              data={assetCampaignShown}
               height={220}
               emptyMessage="Add tasks with asset counts across at least 2 campaigns."
             />

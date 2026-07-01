@@ -123,7 +123,11 @@ happens** (see §6).
   x-axis labels onto multiple lines instead of angling them).
 - **Layout/Sidebar** (`src/components/Layout.tsx`, `Sidebar.tsx`): sidebar holds brand
   + nav + the **New Task** button (under a subtle separator); header holds the page
-  title, backend chip, and theme toggle.
+  title, a current-year box, and the theme toggle. The header also exposes a
+  **header-slot context** (`useHeaderSlots()`): a page can inject `left`/`right` nodes
+  into the header via an effect (clearing on unmount). The Dashboard uses it to render
+  the **Live badge** (left) and the **span selector + task count** (right) in the header
+  bar instead of a body row.
 
 ---
 
