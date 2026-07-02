@@ -108,7 +108,7 @@ function ChevronEscalator({ up }: { up: boolean }) {
   const anim = up ? 'animate-chevron-rise' : 'animate-chevron-fall'
   return (
     <span className="relative flex h-9 w-7 items-center justify-center overflow-hidden mb-1" aria-hidden="true">
-      {[0, 0.4, 0.8].map((delay) => (
+      {[0, -0.4, -0.8].map((delay) => (
         <Icon
           key={delay}
           className={cx('absolute h-6 w-6', anim)}
