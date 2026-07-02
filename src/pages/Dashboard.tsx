@@ -22,7 +22,7 @@ import {
   summarize,
 } from '../lib/analytics'
 import { SIZE_TONE, SIZE_DESCRIPTIONS, withFallback } from '../constants'
-import { cx } from '../lib/format'
+import { cx, todayISO, formatDate } from '../lib/format'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
@@ -39,6 +39,8 @@ export function Dashboard() {
   // Comparison mode: measure the target year against a source (baseline) year.
   const [compare, setCompare] = useState(false)
   const [sourceYear, setSourceYear] = useState<number | null>(null)
+  const [ytd, setYtd] = useState(true)
+  const todayMD = useMemo(() => todayISO().slice(5), [])
   // Chart display preferences — edited in Settings → Dashboard.
   const { demandDim, hideCommonCampaigns, showTasksByPerson } = useDashboardPrefs()
 
@@ -62,14 +64,22 @@ export function Dashboard() {
   }, [years, activeYear])
 
   // In comparison mode the span filter is replaced by whole-year target vs source.
-  const filtered = useMemo(
-    () => filterBySpan(tasks, compare ? 'year' : span, activeYear, half),
-    [tasks, span, activeYear, half, compare],
-  )
-  const sourceTasks = useMemo(
-    () => (compare ? filterBySpan(tasks, 'year', srcYear, half) : []),
-    [tasks, compare, srcYear, half],
-  )
+  const filtered = useMemo(() => {
+    const base = filterBySpan(tasks, compare ? 'year' : span, activeYear, half)
+    if (compare && ytd) {
+      return base.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
+    }
+    return base
+  }, [tasks, span, activeYear, half, compare, ytd, todayMD])
+
+  const sourceTasks = useMemo(() => {
+    if (!compare) return []
+    const base = filterBySpan(tasks, 'year', srcYear, half)
+    if (ytd) {
+      return base.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
+    }
+    return base
+  }, [tasks, compare, srcYear, half, ytd, todayMD])
 
   const summary = useMemo(() => summarize(filtered), [filtered])
   const bySquad = useMemo(() => countByField(filtered, 'squad'), [filtered])
@@ -94,10 +104,13 @@ export function Dashboard() {
   const workTypeMix = useMemo(() => countByMulti(filtered, 'types'), [filtered])
   // "Across the year" ignores the half sub-filter — it always shows the full 12
   // months of the active year (the latest year by default, or the selected one).
-  const byMonth = useMemo(
-    () => assetsByMonth(tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === chartYear)),
-    [tasks, chartYear],
-  )
+  const byMonth = useMemo(() => {
+    let list = tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === chartYear)
+    if (compare && ytd) {
+      list = list.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
+    }
+    return assetsByMonth(list)
+  }, [tasks, chartYear, compare, ytd, todayMD])
   // Mark "now" on the workload chart only when viewing the current calendar year.
   const nowMonth = useMemo(() => {
     const now = new Date()
@@ -127,10 +140,13 @@ export function Dashboard() {
     [sourceTasks, settings.assetTypes],
   )
   const srcWorkTypeMix = useMemo(() => countByMulti(sourceTasks, 'types'), [sourceTasks])
-  const srcByMonth = useMemo(
-    () => assetsByMonth(tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === srcYear)),
-    [tasks, srcYear],
-  )
+  const srcByMonth = useMemo(() => {
+    let list = tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === srcYear)
+    if (ytd) {
+      list = list.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
+    }
+    return assetsByMonth(list)
+  }, [tasks, srcYear, ytd, todayMD])
 
   // Render the Live badge (left) and span selector (right) into the top header bar.
   const setHeaderSlots = useHeaderSlots()
@@ -151,7 +167,7 @@ export function Dashboard() {
         </span>
       ),
       right: (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           {compare ? (
             <div className="flex items-center gap-1.5" title="Comparing the target year over the baseline year">
               <select
@@ -193,18 +209,49 @@ export function Dashboard() {
           )}
           <button
             type="button"
-            onClick={() => setCompare((c) => !c)}
+            onClick={() => {
+              const nextCompare = !compare
+              setCompare(nextCompare)
+              if (nextCompare) {
+                setYtd(true)
+              }
+            }}
             title={compare ? 'Exit comparison mode' : 'Compare two years'}
             className={cx(
-              'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold shadow-soft transition',
-              compare ? 'bg-rmit-navy text-white dark:bg-navy-300' : 'bg-card text-muted hover:text-ink',
+              'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold shadow-soft transition border',
+              compare 
+                ? 'bg-rmit-navy text-white border-transparent dark:bg-navy-300' 
+                : 'bg-card border-line text-muted hover:text-ink hover:border-faint',
             )}
           >
             <ArrowLeftRight className="h-3.5 w-3.5" /> {compare ? 'Exit compare mode' : 'Compare'}
           </button>
-          <span className="text-xs font-semibold text-muted">
-            {compare ? `${filtered.length} vs ${sourceTasks.length} tasks` : `${filtered.length} tasks`}
-          </span>
+
+          {compare && (
+            <div
+              className="flex items-center gap-2.5 cursor-pointer select-none border-l border-line pl-3"
+              title={`Only compare tasks up to ${formatDate(todayISO()).split(' ').slice(0, 2).join(' ')} for both years`}
+              onClick={() => setYtd((y) => !y)}
+            >
+              <span className="text-xs font-semibold text-muted">Year-to-date only</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={ytd}
+                className={cx(
+                  'relative inline-flex h-[18px] w-8 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out outline-none border',
+                  ytd ? 'bg-rmit-red border-transparent' : 'bg-subtle dark:bg-surface border-line'
+                )}
+              >
+                <span
+                  className={cx(
+                    'pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-200 ease-in-out absolute top-[1px] left-[1px]',
+                    ytd ? 'translate-x-3.5' : 'translate-x-0'
+                  )}
+                />
+              </button>
+            </div>
+          )}
         </div>
       ),
     })
@@ -221,6 +268,7 @@ export function Dashboard() {
     srcYear,
     sourceYearOptions,
     sourceTasks.length,
+    ytd,
   ])
 
   if (tasks.length === 0) {
@@ -244,7 +292,8 @@ export function Dashboard() {
   // Campaign charts can exclude the ongoing/catch-all campaigns (Settings → Dashboard).
   const campaignSubtitleSuffix = hideCommonCampaigns ? ' — excl. Always On / BAU / Others' : ''
   // Split-column charts fade the source year and only keep categories in both years.
-  const compareSubtitleSuffix = compare ? ` — ${activeYear} over ${srcYear} (${srcYear} faded)` : ''
+  const ytdLabel = ytd ? ` (YTD to ${formatDate(todayISO()).split(' ').slice(0, 2).join(' ')})` : ''
+  const compareSubtitleSuffix = compare ? ` — ${activeYear} over ${srcYear} (${srcYear} faded)${ytdLabel}` : ''
   // Human-readable description of the current (non-compare) span, for stat hints.
   const spanDesc = span === 'total' ? 'all time' : span === 'half' ? `${activeYear} ${half}` : `${activeYear}`
 
@@ -270,7 +319,7 @@ export function Dashboard() {
           }
           hint={
             compare
-              ? `deliverables from ${activeYear} · was ${srcSummary.totalAssets.toLocaleString()} in ${srcYear}`
+              ? `deliverables from ${activeYear}${ytd ? ' YTD' : ''} · was ${srcSummary.totalAssets.toLocaleString()} in ${srcYear}${ytd ? ' YTD' : ''}`
               : `deliverables from ${spanDesc}`
           }
         />
@@ -289,7 +338,11 @@ export function Dashboard() {
               />
             ) : undefined
           }
-          hint={`Across ${summary.totalCampaigns} campaign${summary.totalCampaigns === 1 ? '' : 's'}`}
+          hint={
+            compare
+              ? `tasks from ${activeYear}${ytd ? ' YTD' : ''} · was ${srcSummary.totalTasks.toLocaleString()} in ${srcYear}${ytd ? ' YTD' : ''}`
+              : `Across ${summary.totalCampaigns} campaign${summary.totalCampaigns === 1 ? '' : 's'}`
+          }
         />
 
         {/* Task-size distribution — its own headline card */}
