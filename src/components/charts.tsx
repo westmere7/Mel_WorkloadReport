@@ -555,7 +555,28 @@ export function AreaTrendChart({
           labelStyle={tooltipLabelStyle}
           formatter={(v: number, name: string) => [`${v} assets`, name]}
         />
-        {compare && <Legend wrapperStyle={{ fontSize: 12 }} iconType="plainline" />}
+        {compare && (
+          <Legend
+            content={(props) => {
+              const { payload } = props
+              if (!payload) return null
+              return (
+                <ul className="flex items-center justify-center gap-4 text-xs font-semibold mt-2">
+                  {payload.map((entry: any, index: number) => {
+                    const isTarget = entry.dataKey === 'value'
+                    const color = isTarget ? '#E61E2A' : compareColor
+                    return (
+                      <li key={`item-${index}`} className="flex items-center gap-1.5" style={{ color }}>
+                        <span className="inline-block w-3.5 h-0.5 rounded-full" style={{ backgroundColor: color }} />
+                        <span>{entry.value}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )
+            }}
+          />
+        )}
         {/* Source year — drawn first so the target-year line sits on top of it. */}
         {compare && (
           <Area
