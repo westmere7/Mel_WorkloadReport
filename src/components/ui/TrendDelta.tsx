@@ -35,12 +35,23 @@ export function TrendDelta({
 
   // No baseline — the item only exists in the target year.
   if (previous <= 0) {
+    if (lg) {
+      return (
+        <span
+          className="flex flex-col items-center justify-center font-bold leading-none text-accent-gold"
+          title={title}
+        >
+          <ChevronEscalator up />
+          <span className="text-2xl mt-1">New</span>
+        </span>
+      )
+    }
     return (
       <span
-        className={cx('inline-flex items-center gap-1 font-bold text-accent-green', textCls)}
+        className={cx('inline-flex items-center gap-1 font-bold text-accent-gold', textCls)}
         title={title}
       >
-        {lg ? <ChevronEscalator up /> : <ChevronUp className={cx(iconCls, 'animate-bounce')} strokeWidth={3} />}
+        <ChevronUp className={cx(iconCls, 'animate-bounce')} strokeWidth={3} />
         New
       </span>
     )
@@ -58,13 +69,26 @@ export function TrendDelta({
 
   const up = pct > 0
   const magnitude = Math.abs(pct) < 10 ? Math.abs(pct).toFixed(1) : String(Math.round(Math.abs(pct)))
-  const color = up ? 'text-accent-green' : 'text-rmit-red dark:text-brand-300'
+  const color = up ? 'text-accent-gold' : 'text-accent-green'
+
+  if (lg) {
+    return (
+      <span
+        className={cx('flex flex-col items-center justify-center font-bold leading-none', color)}
+        title={title}
+      >
+        <ChevronEscalator up={up} />
+        <span className="text-2xl mt-1">
+          {up ? '+' : '−'}
+          {magnitude}%
+        </span>
+      </span>
+    )
+  }
 
   return (
     <span className={cx('inline-flex items-center gap-1 font-bold', color, textCls)} title={title}>
-      {lg ? (
-        <ChevronEscalator up={up} />
-      ) : up ? (
+      {up ? (
         <ChevronUp className={cx(iconCls, 'animate-bounce')} strokeWidth={3} />
       ) : (
         <ChevronDown className={cx(iconCls, 'animate-bounce')} strokeWidth={3} />
@@ -83,11 +107,11 @@ function ChevronEscalator({ up }: { up: boolean }) {
   const Icon = up ? ChevronUp : ChevronDown
   const anim = up ? 'animate-chevron-rise' : 'animate-chevron-fall'
   return (
-    <span className="relative flex h-7 w-5 items-center justify-center overflow-hidden" aria-hidden="true">
+    <span className="relative flex h-9 w-7 items-center justify-center overflow-hidden mb-1" aria-hidden="true">
       {[0, 0.4, 0.8].map((delay) => (
         <Icon
           key={delay}
-          className={cx('absolute h-5 w-5', anim)}
+          className={cx('absolute h-6 w-6', anim)}
           strokeWidth={3}
           style={{ animationDelay: `${delay}s` }}
         />

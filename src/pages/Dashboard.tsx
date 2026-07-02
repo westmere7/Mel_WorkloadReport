@@ -41,6 +41,10 @@ export function Dashboard() {
   const [sourceYear, setSourceYear] = useState<number | null>(null)
   const [ytd, setYtd] = useState(true)
   const todayMD = useMemo(() => todayISO().slice(5), [])
+  const todayDM = useMemo(() => {
+    const parts = formatDate(todayISO()).split(' ')
+    return `${parts[0]} ${parts[1]}` // e.g. "2 Jul"
+  }, [])
   // Chart display preferences — edited in Settings → Dashboard.
   const { demandDim, hideCommonCampaigns, showTasksByPerson } = useDashboardPrefs()
 
@@ -292,7 +296,7 @@ export function Dashboard() {
   // Campaign charts can exclude the ongoing/catch-all campaigns (Settings → Dashboard).
   const campaignSubtitleSuffix = hideCommonCampaigns ? ' — excl. Always On / BAU / Others' : ''
   // Split-column charts fade the source year and only keep categories in both years.
-  const ytdLabel = ytd ? ` (YTD to ${formatDate(todayISO()).split(' ').slice(0, 2).join(' ')})` : ''
+  const ytdLabel = ytd ? ` (up to ${todayDM})` : ''
   const compareSubtitleSuffix = compare ? ` — ${activeYear} over ${srcYear} (${srcYear} faded)${ytdLabel}` : ''
   // Human-readable description of the current (non-compare) span, for stat hints.
   const spanDesc = span === 'total' ? 'all time' : span === 'half' ? `${activeYear} ${half}` : `${activeYear}`
@@ -319,7 +323,9 @@ export function Dashboard() {
           }
           hint={
             compare
-              ? `deliverables from ${activeYear}${ytd ? ' YTD' : ''} · was ${srcSummary.totalAssets.toLocaleString()} in ${srcYear}${ytd ? ' YTD' : ''}`
+              ? ytd
+                ? `deliverables up to ${todayDM} · was ${srcSummary.totalAssets.toLocaleString()} in ${srcYear} (same period)`
+                : `deliverables from ${activeYear} · was ${srcSummary.totalAssets.toLocaleString()} in ${srcYear}`
               : `deliverables from ${spanDesc}`
           }
         />
@@ -332,6 +338,7 @@ export function Dashboard() {
           delta={
             compare ? (
               <TrendDelta
+                size="lg"
                 current={summary.totalTasks}
                 previous={srcSummary.totalTasks}
                 title={`${srcYear}: ${srcSummary.totalTasks} → ${activeYear}: ${summary.totalTasks}`}
@@ -340,7 +347,9 @@ export function Dashboard() {
           }
           hint={
             compare
-              ? `tasks from ${activeYear}${ytd ? ' YTD' : ''} · was ${srcSummary.totalTasks.toLocaleString()} in ${srcYear}${ytd ? ' YTD' : ''}`
+              ? ytd
+                ? `tasks up to ${todayDM} · was ${srcSummary.totalTasks.toLocaleString()} in ${srcYear} (same period)`
+                : `tasks from ${activeYear} · was ${srcSummary.totalTasks.toLocaleString()} in ${srcYear}`
               : `Across ${summary.totalCampaigns} campaign${summary.totalCampaigns === 1 ? '' : 's'}`
           }
         />

@@ -186,3 +186,20 @@
     animation: none;
   }
 }
+
+@keyframes gentle-bob {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+.animate-gentle-bob {
+  animation: gentle-bob 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-gentle-bob {
+    animation: none;
+  }
+}
