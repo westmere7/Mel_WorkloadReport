@@ -94,6 +94,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 slots.right ? 'ml-auto sm:ml-0' : 'ml-auto',
               )}
             >
+              {/* Separator to set the page controls apart from the theme/auth toggles */}
+              <span className="h-6 w-px self-center bg-line" aria-hidden="true" />
+
               <button
                 onClick={toggle}
                 className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-card text-muted transition hover:text-ink"
@@ -102,9 +105,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </button>
-
-              {/* Separator to set the auth control apart from the theme toggle */}
-              <span className="h-6 w-px self-center bg-line" aria-hidden="true" />
 
               {user ? (
                 <button

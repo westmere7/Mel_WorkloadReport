@@ -237,7 +237,7 @@ export function Dashboard() {
               title={`Only compare tasks up to ${formatDate(todayISO()).split(' ').slice(0, 2).join(' ')} for both years`}
               onClick={() => setYtd((y) => !y)}
             >
-              <span className="text-xs font-semibold text-muted">Year-to-date only</span>
+              <span className="text-xs font-semibold text-muted">Up to same date only</span>
               <button
                 type="button"
                 role="switch"

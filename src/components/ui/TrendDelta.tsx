@@ -22,7 +22,6 @@ export function TrendDelta({
 }) {
   const lg = size === 'lg'
   const sm = size === 'sm'
-  const iconCls = sm ? 'h-3 w-3' : 'h-4 w-4'
   const textCls = lg ? 'text-2xl' : sm ? 'text-[11px]' : 'text-sm'
 
   if (previous <= 0 && current <= 0) {
@@ -48,10 +47,9 @@ export function TrendDelta({
     }
     return (
       <span
-        className={cx('inline-flex items-center gap-1 font-bold text-accent-gold', textCls)}
+        className={cx('inline-flex items-center font-bold text-accent-gold', textCls)}
         title={title}
       >
-        <ChevronUp className={cx(iconCls, 'animate-bounce')} strokeWidth={3} />
         New
       </span>
     )
@@ -59,9 +57,16 @@ export function TrendDelta({
 
   const pct = ((current - previous) / previous) * 100
   if (Math.abs(pct) < 0.05) {
+    if (lg) {
+      return (
+        <span className={cx('flex flex-col items-center justify-center font-bold leading-none text-muted', textCls)} title={title}>
+          <Minus className="h-8 w-8" strokeWidth={3} />
+          <span className="text-2xl mt-1">0%</span>
+        </span>
+      )
+    }
     return (
-      <span className={cx('inline-flex items-center gap-1 font-bold text-muted', textCls)} title={title}>
-        <Minus className={iconCls} strokeWidth={3} />
+      <span className={cx('inline-flex items-center font-bold text-muted', textCls)} title={title}>
         0%
       </span>
     )
@@ -87,12 +92,7 @@ export function TrendDelta({
   }
 
   return (
-    <span className={cx('inline-flex items-center gap-1 font-bold', color, textCls)} title={title}>
-      {up ? (
-        <ChevronUp className={cx(iconCls, 'animate-bounce')} strokeWidth={3} />
-      ) : (
-        <ChevronDown className={cx(iconCls, 'animate-bounce')} strokeWidth={3} />
-      )}
+    <span className={cx('inline-flex items-center font-bold', color, textCls)} title={title}>
       {up ? '+' : '−'}
       {magnitude}%
     </span>
