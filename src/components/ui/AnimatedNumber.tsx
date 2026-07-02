@@ -51,7 +51,7 @@ export function AnimatedNumber({
         <span
           key={`c${place}`}
           aria-hidden
-          className="inline-flex items-end justify-center text-[0.65em] pb-0 -mx-[0.06em] translate-y-[0.15em]"
+          className="inline-flex items-end justify-center text-[0.65em] pb-0 -mx-[0.04em] translate-y-[0.15em]"
           style={{ height: '1em' }}
         >
           ,
@@ -73,7 +73,7 @@ function Reel({ digit, duration }: { digit: number; duration: number }) {
   return (
     <span
       aria-hidden
-      className="relative inline-block overflow-hidden px-[0.06em] -mx-[0.08em]"
+      className="relative inline-block overflow-hidden px-[0.06em] -mx-[0.06em]"
       style={{ height: '1em', WebkitMaskImage: FADE_MASK, maskImage: FADE_MASK }}
     >
       <span
