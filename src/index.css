@@ -6,7 +6,7 @@
   font-family: 'Museo';
   font-style: normal;
   font-weight: 700;
-  src: local('Museo 700'), local('Museo-700'), url('https://fonts.cdnfonts.com/s/26721/Museo700-Regular.woff') format('woff');
+  src: local('Museo 700'), local('Museo-700'), url('/Museo700-Regular.woff2') format('woff2');
   font-display: swap;
 }
 
