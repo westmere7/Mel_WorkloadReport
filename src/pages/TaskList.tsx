@@ -17,6 +17,7 @@ import { SpanFilter } from '../components/SpanFilter'
 import { ImportBackupModal } from '../components/ImportBackupModal'
 import { TaskForm } from '../components/TaskForm'
 import { useStore } from '../data/store'
+import { useAuth } from '../lib/auth'
 import { SQUADS, SIZES, SIZE_ORDER, SIZE_TONE } from '../constants'
 import { cx, formatDate } from '../lib/format'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
@@ -26,6 +27,7 @@ type SortKey = 'code' | 'name' | 'squad' | 'campaign' | 'assetTotal' | 'startDat
 
 export function TaskList() {
   const { tasks, settings, updateTask, deleteTask } = useStore()
+  const { canEdit } = useAuth()
 
   const [query, setQuery] = useState('')
   const [spanMode, setSpanMode] = useState<SpanMode>('total')
@@ -124,9 +126,11 @@ export function TaskList() {
             onHalf={setSpanHalf}
           />
 
-          <button className="btn-outline ml-auto" onClick={() => setIoOpen(true)}>
-            <DatabaseBackup className="h-4 w-4" /> Import &amp; Backup
-          </button>
+          {canEdit && (
+            <button className="btn-outline ml-auto" onClick={() => setIoOpen(true)}>
+              <DatabaseBackup className="h-4 w-4" /> Import &amp; Backup
+            </button>
+          )}
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -161,7 +165,9 @@ export function TaskList() {
           <span>
             Showing <strong className="text-ink">{filtered.length}</strong> of {tasks.length} tasks
           </span>
-          <span className="hidden sm:inline">Click any row to edit</span>
+          <span className="hidden sm:inline">
+            {canEdit ? 'Click any row to edit' : 'Sign in to edit tasks'}
+          </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1040px] border-collapse text-sm">
@@ -178,16 +184,19 @@ export function TaskList() {
                 <th className="px-3 py-2.5 font-semibold">End</th>
                 <Th label="Half" k="half" sort={sort} onSort={toggleSort} />
                 <Th label="Size" k="size" sort={sort} onSort={toggleSort} />
-                <th className="px-3 py-2.5 text-right font-semibold">Actions</th>
+                {canEdit && <th className="px-3 py-2.5 text-right font-semibold">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {filtered.map((t) => (
                 <tr
                   key={t.id}
-                  className="group cursor-pointer transition-colors hover:bg-subtle"
-                  onClick={() => setEditing(t)}
-                  title="Click to edit"
+                  className={cx(
+                    'group transition-colors hover:bg-subtle',
+                    canEdit && 'cursor-pointer',
+                  )}
+                  onClick={canEdit ? () => setEditing(t) : undefined}
+                  title={canEdit ? 'Click to edit' : undefined}
                 >
                   <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-muted">{t.code || '—'}</td>
                   <td className="px-3 py-3 font-medium text-ink">
@@ -240,6 +249,7 @@ export function TaskList() {
                   <td className="px-3 py-3">
                     <Badge tone={SIZE_TONE[t.size]}>{t.size}</Badge>
                   </td>
+                  {canEdit && (
                   <td className="px-3 py-3">
                     <div className="flex justify-end gap-1 opacity-60 transition group-hover:opacity-100">
                       <button
@@ -264,11 +274,12 @@ export function TaskList() {
                       </button>
                     </div>
                   </td>
+                  )}
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-12 text-center text-sm text-muted">
+                  <td colSpan={canEdit ? 12 : 11} className="px-3 py-12 text-center text-sm text-muted">
                     No tasks match your filters.
                   </td>
                 </tr>

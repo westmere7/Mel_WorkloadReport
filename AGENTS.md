@@ -14,8 +14,10 @@ types, an asset (deliverable) breakdown, assignees, dates, size, and a note. It
 surfaces this as a **Dashboard** of charts, a filterable/sortable **Task List**, and a
 **Settings** page for the editable reference lists.
 
-Single-tenant, no auth. Runs against **Supabase** when configured, otherwise a
-**localStorage** fallback so it works fully offline.
+Single-tenant. Runs against **Supabase** when configured, otherwise a
+**localStorage** fallback so it works fully offline. Browsing is open to anyone
+with the URL; a lightweight **username/password sign-in gates editing only**
+(see §13).
 
 ---
 
@@ -106,8 +108,11 @@ happens** (see §6).
   (Total assets / tasks / campaigns) + a stacked column (Top request type + a
   "Tasks by size" stat-tile card); then Workload-across-the-year area chart + Asset mix
   donut + Workload by person; then Tasks-by-campaign + Asset-count-by-campaign stacked
-  next to a tall **Demand by stakeholders** stacked bar with a **Work type / Asset type**
-  toggle.
+  next to a tall **Demand by stakeholders** stacked bar. The chart display options
+  (demand dimension Work/Asset type; hide Always On/BAU/Others in the campaign charts)
+  are NOT on the dashboard — they live in **Settings → Dashboard**, backed by
+  `src/lib/dashboardPrefs.ts` (localStorage `mwr.dashboardPrefs`, reactive external
+  store). Defaults: **Asset type**, common campaigns **hidden** (stakeholder demand).
 - **Task List** (`src/pages/TaskList.tsx`): prominent search, span selector, four
   **multi-select** filters (squad/campaign/people/size), sortable columns, row → edit
   modal, per-row delete, a note **hover icon**, and the **Import & Backup** button.
@@ -115,19 +120,28 @@ happens** (see §6).
   `NewTaskModal`/`useNewTask`) and Edit (from Task List). Big feature surface — see §8.
 - **Import & Backup** (`src/components/ImportBackupModal.tsx`): CSV import (clean-load vs
   merge) + span-scoped CSV backup.
-- **Settings** (`src/pages/Settings.tsx`): four `ListEditor`s (campaigns/work
-  types/asset types/people) with add/rename/remove + a locked **"Others"** fallback
-  row; fixed squads & sizes; a Developer/danger zone (populate sample data, delete all).
+- **Settings** (`src/pages/Settings.tsx`): a **Dashboard** card (grouped chart-display
+  toggles, see above); four `ListEditor`s (campaigns/work types/asset types/people)
+  with add/rename/remove + a locked **"Others"** fallback row; fixed squads & sizes; a
+  Developer/danger zone (populate sample data, delete all). The whole page requires
+  sign-in (route redirects to `/` otherwise).
 - **Charts** (`src/components/charts.tsx`): `AreaTrendChart, DonutChart, VBarChart,
   HBarChart, StackedBarChart`, `NotEnough`, and the `WrappedTick` helper (wraps long
   x-axis labels onto multiple lines instead of angling them).
 - **Layout/Sidebar** (`src/components/Layout.tsx`, `Sidebar.tsx`): sidebar holds brand
-  + nav + the **New Task** button (under a subtle separator); header holds the page
-  title, a current-year box, and the theme toggle. The header also exposes a
-  **header-slot context** (`useHeaderSlots()`): a page can inject `left`/`right` nodes
-  into the header via an effect (clearing on unmount). The Dashboard uses it to render
-  the **Live badge** (left) and the **span selector + task count** (right) in the header
-  bar instead of a body row.
+  + nav + the **New Task** button (sign-in only, under a subtle separator); header holds
+  the page title, a current-year box, the theme toggle, and the **sign-in/sign-out
+  button**. Sidebar is **responsive**: icon-only 68px rail below `md`, full 240px at
+  `md+` (labels/brand text `hidden md:*` — don't drop these classes; losing them once
+  broke mobile). **Collapse**: a small circular chevron straddles the sidebar's right
+  edge (`ChevronLeft`/`ChevronRight` by state, state lifted into Layout, persisted in
+  localStorage `mwr.sidebar`); collapsed = sidebar width 0, and the header then shows
+  the **logo + app name before the page title** (white logo sits in a `--sidebar`-navy
+  chip so it works in light mode). The header also exposes a **header-slot context**
+  (`useHeaderSlots()`): a page can inject `left`/`right` nodes into the header via an
+  effect (clearing on unmount). The Dashboard uses it to render the **Live badge**
+  (left) and the **span selector + task count** (right) in the header bar instead of a
+  body row.
 
 ---
 
@@ -223,6 +237,9 @@ to run it**, because a write including an unknown column fails:
   create/update retry without `note` if the column is missing (see `isMissingNoteColumn`
   / `stripNote`), so task saves never hard-break pre-migration; the note just doesn't
   persist until the migration runs.
+- `app_users` table — accounts for the sign-in gate (see §13). **Guarded**: signing in
+  before the migration shows a friendly "run schema.sql" message (codes `42P01` /
+  `PGRST205`), everything else keeps working.
 
 `asset_breakdown` is `jsonb`, so changing the breakdown shape needs no schema change.
 
@@ -264,7 +281,26 @@ to run it**, because a write including an unknown column fails:
 
 ---
 
-## 13. Working conventions
+## 13. Sign-in gate (view-for-all, edit-for-users)
+
+`src/lib/auth.tsx` (`AuthProvider` / `useAuth()` → `{ user, canEdit, signIn, signOut }`):
+
+- **Not real security** — the anon key still has full DB access; this is a UX gate for
+  an internal tool. Passwords are SHA-256-hashed client-side (`crypto.subtle`) and
+  matched against the **`app_users`** table (Supabase) or a built-in fallback account
+  (local backend). Default credential either way: **admin / gcmc2026** — change it with
+  the `update … set password_hash = encode(digest('…','sha256'),'hex')` snippet in
+  `schema.sql`.
+- **Session** persists in localStorage `mwr.session` ({ username }) and is restored on
+  load without re-verification.
+- **What `canEdit` gates**: Settings nav item + `/settings` route (redirect to `/`),
+  the sidebar **New Task** button, the dashboard empty-state CTA, task-list row
+  click-to-edit + Actions column + **Import & Backup**. Anonymous visitors can still
+  browse the Dashboard (incl. the span selector) and the Task List (search/filters).
+- The header button after the theme toggle is the entry point: `LogIn` icon →
+  `LoginModal`; when signed in it shows the username + `LogOut` and signs out on click.
+
+## 14. Working conventions
 
 - After edits, run `npx tsc --noEmit`. It catches missing lucide icon exports, prop
   mismatches, etc.

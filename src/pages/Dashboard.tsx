@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ClipboardList, Eye, EyeOff, Images, Megaphone } from 'lucide-react'
+import { ClipboardList, Images, Megaphone } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
@@ -22,21 +22,19 @@ import { SIZE_COLORS, withFallback } from '../constants'
 import { compactNumber, cx } from '../lib/format'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
+import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
+import { useAuth } from '../lib/auth'
 import type { Half, Size } from '../types'
-
-type DemandDim = 'type' | 'asset'
-
-// Ongoing / catch-all campaigns that can be toggled out of the campaign charts.
-const COMMON_CAMPAIGNS = ['BAU', 'Always On', 'Others']
 
 export function Dashboard() {
   const { tasks, live, settings } = useStore()
   const { openNewTask } = useNewTask()
+  const { canEdit } = useAuth()
   const [span, setSpan] = useState<SpanMode>('total')
   const [year, setYear] = useState<number | null>(null)
   const [half, setHalf] = useState<Half>('H1')
-  const [demandDim, setDemandDim] = useState<DemandDim>('type')
-  const [hideCommonCampaigns, setHideCommonCampaigns] = useState(false)
+  // Chart display preferences — edited in Settings → Dashboard.
+  const { demandDim, hideCommonCampaigns } = useDashboardPrefs()
 
   const years = useMemo(() => taskYears(tasks), [tasks])
 
@@ -122,30 +120,21 @@ export function Dashboard() {
       <Card className="flex flex-col items-center justify-center gap-3 py-16 text-center">
         <p className="text-base font-semibold text-ink">No tasks yet</p>
         <p className="max-w-sm text-sm text-muted">
-          Register your first task to start tracking the team’s workload — or populate sample data
-          from Settings → Developer.
+          {canEdit
+            ? 'Register your first task to start tracking the team’s workload — or populate sample data from Settings → Developer.'
+            : 'Nothing has been registered yet. Sign in to start adding tasks.'}
         </p>
-        <button onClick={openNewTask} className="btn-primary mt-2">
-          Create a task
-        </button>
+        {canEdit && (
+          <button onClick={openNewTask} className="btn-primary mt-2">
+            Create a task
+          </button>
+        )}
       </Card>
     )
   }
 
-  const campaignToggle = (
-    <button
-      type="button"
-      onClick={() => setHideCommonCampaigns((h) => !h)}
-      title="Hide the BAU, Always On and Others campaigns"
-      className={cx(
-        'inline-flex shrink-0 items-center gap-1 text-[11px] font-medium transition hover:text-ink',
-        hideCommonCampaigns ? 'text-muted' : 'text-faint',
-      )}
-    >
-      {hideCommonCampaigns ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-      Hide Always On / BAU / Others
-    </button>
-  )
+  // Campaign charts can exclude the ongoing/catch-all campaigns (Settings → Dashboard).
+  const campaignSubtitleSuffix = hideCommonCampaigns ? ' — excl. Always On / BAU / Others' : ''
 
   return (
     <div className="space-y-4">
@@ -216,16 +205,14 @@ export function Dashboard() {
           <Card>
             <CardHeader
               title="Tasks by campaign"
-              subtitle="Work distribution across campaigns"
-              action={campaignToggle}
+              subtitle={`Work distribution across campaigns${campaignSubtitleSuffix}`}
             />
             <VBarChart data={byCampaignShown} height={220} emptyMessage="Add tasks across at least 2 campaigns." />
           </Card>
           <Card>
             <CardHeader
               title="Asset count by campaign"
-              subtitle="Total deliverables produced per campaign"
-              action={campaignToggle}
+              subtitle={`Total deliverables produced per campaign${campaignSubtitleSuffix}`}
             />
             <VBarChart
               data={assetCampaignShown}
@@ -238,27 +225,6 @@ export function Dashboard() {
           <CardHeader
             title="Demand by stakeholders"
             subtitle={`Deliverables per ${demandDim === 'asset' ? 'asset type' : 'work type'}, split by stakeholder group`}
-            action={
-              <div className="flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
-                {(
-                  [
-                    ['type', 'Work type'],
-                    ['asset', 'Asset type'],
-                  ] as [DemandDim, string][]
-                ).map(([d, label]) => (
-                  <button
-                    key={d}
-                    onClick={() => setDemandDim(d)}
-                    className={cx(
-                      'rounded-md px-2.5 py-1 text-xs font-semibold transition',
-                      demandDim === d ? 'bg-rmit-navy text-white dark:bg-navy-300' : 'text-muted hover:text-ink',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            }
           />
           <div className="flex-1">
             <StackedBarChart

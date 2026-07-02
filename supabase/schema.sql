@@ -67,8 +67,33 @@ values (
 )
 on conflict (id) do nothing;
 
+-- ── App users (sign-in that unlocks editing) ────────────────────
+-- Anyone with the URL can browse; signing in unlocks editing. Passwords
+-- are stored as SHA-256 hashes and verified client-side, so this is a
+-- lightweight UX gate, NOT hard security — the anon key still has full
+-- table access (see the RLS note below).
+create table if not exists public.app_users (
+  username      text primary key,
+  password_hash text not null,
+  created_at    timestamptz not null default now()
+);
+
+-- Default account: admin / gcmc2026. Change the password with e.g.
+--   update public.app_users
+--     set password_hash = encode(digest('new-password', 'sha256'), 'hex')
+--     where username = 'admin';
+-- Add more users the same way with an insert.
+insert into public.app_users (username, password_hash)
+values ('admin', '6f054b199406396d5fb19af352c7968a4494a4cfb73f218eae0b7095bd39dfad')
+on conflict (username) do nothing;
+
+alter table public.app_users enable row level security;
+drop policy if exists "anon can read app_users" on public.app_users;
+create policy "anon can read app_users" on public.app_users
+  for select using (true);
+
 -- ── Row Level Security ──────────────────────────────────────────
--- This app currently has NO login (per setup). The policies below grant
+-- The sign-in above is a client-side gate only. The policies below grant
 -- the public anon key full read/write access — fine for an internal tool
 -- behind a private URL, but TIGHTEN THESE (or add Supabase Auth) before
 -- exposing the app publicly.

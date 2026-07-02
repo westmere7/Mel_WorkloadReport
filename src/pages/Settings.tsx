@@ -6,6 +6,12 @@ import { Modal } from '../components/ui/Modal'
 import { useStore } from '../data/store'
 import { SQUADS, SQUAD_DESCRIPTIONS, SIZES, SIZE_DESCRIPTIONS, SIZE_TONE, FALLBACK_ITEM } from '../constants'
 import { cx, toMessage } from '../lib/format'
+import {
+  COMMON_CAMPAIGNS,
+  setDashboardPrefs,
+  useDashboardPrefs,
+  type DemandDim,
+} from '../lib/dashboardPrefs'
 import type { AppSettings } from '../types'
 
 type ListKey = keyof Pick<AppSettings, 'campaigns' | 'types' | 'people' | 'assetTypes'>
@@ -62,6 +68,9 @@ export function SettingsPage() {
           </div>
         )}
       </Card>
+
+      {/* Dashboard display preferences */}
+      <DashboardPrefsCard />
 
       {/* Editable lists */}
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -152,6 +161,106 @@ export function SettingsPage() {
       {/* Developer / danger zone */}
       <DangerZone />
     </div>
+  )
+}
+
+/** Grouped chart-display toggles for the Dashboard (saved in this browser). */
+function DashboardPrefsCard() {
+  const prefs = useDashboardPrefs()
+
+  return (
+    <Card>
+      <CardHeader title="Dashboard" subtitle="How the dashboard charts are displayed" />
+      <div className="divide-y divide-line">
+        <PrefRow
+          title="Demand by stakeholders — dimension"
+          description="Split the demand chart by asset type or work type."
+        >
+          <div className="flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
+            {(
+              [
+                ['asset', 'Asset type'],
+                ['type', 'Work type'],
+              ] as [DemandDim, string][]
+            ).map(([d, label]) => (
+              <button
+                key={d}
+                onClick={() => setDashboardPrefs({ demandDim: d })}
+                className={cx(
+                  'rounded-md px-2.5 py-1 text-xs font-semibold transition',
+                  prefs.demandDim === d
+                    ? 'bg-rmit-navy text-white dark:bg-navy-300'
+                    : 'text-muted hover:text-ink',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </PrefRow>
+        <PrefRow
+          title={`Hide ${COMMON_CAMPAIGNS.join(' / ')} campaigns`}
+          description="Leaves the ongoing and catch-all campaigns out of “Tasks by campaign” and “Asset count by campaign”."
+        >
+          <Switch
+            checked={prefs.hideCommonCampaigns}
+            onChange={(v) => setDashboardPrefs({ hideCommonCampaigns: v })}
+            label={`Hide ${COMMON_CAMPAIGNS.join(' / ')} campaigns`}
+          />
+        </PrefRow>
+      </div>
+    </Card>
+  )
+}
+
+function PrefRow({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <div>
+        <p className="text-sm font-semibold text-ink">{title}</p>
+        <p className="text-xs text-muted">{description}</p>
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  )
+}
+
+function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean
+  onChange: (value: boolean) => void
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={cx(
+        'relative h-6 w-11 rounded-full transition-colors',
+        checked ? 'bg-rmit-navy dark:bg-navy-300' : 'bg-line',
+      )}
+    >
+      <span
+        className={cx(
+          'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-soft transition-all',
+          checked ? 'left-[22px]' : 'left-0.5',
+        )}
+      />
+    </button>
   )
 }
 

@@ -2,12 +2,14 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { NewTaskProvider } from './components/NewTaskModal'
 import { useStore } from './data/store'
+import { useAuth } from './lib/auth'
 import { Dashboard } from './pages/Dashboard'
 import { TaskList } from './pages/TaskList'
 import { SettingsPage } from './pages/Settings'
 
 export default function App() {
   const { loading, error } = useStore()
+  const { canEdit } = useAuth()
 
   return (
     <NewTaskProvider>
@@ -25,7 +27,10 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/tasks" element={<TaskList />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route
+              path="/settings"
+              element={canEdit ? <SettingsPage /> : <Navigate to="/" replace />}
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         )}
