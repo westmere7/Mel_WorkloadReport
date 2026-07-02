@@ -43,6 +43,8 @@ create index if not exists tasks_half_idx        on public.tasks (half);
 -- ── Settings (single row holding the editable lists) ────────────
 create table if not exists public.settings (
   id         text primary key default 'app',
+  squads     text[] not null default
+                array['INTON','DOM','Student Recruitment','BPX','RMIT VN','Alumni','Agent Management'],
   campaigns  text[] not null default '{}',
   types      text[] not null default '{}',
   people     text[] not null default '{}',
@@ -55,6 +57,11 @@ create table if not exists public.settings (
 alter table public.settings
   add column if not exists asset_types text[] not null default
     array['Image','Video','Publication','HTML5 ad','GIF / Motion'];
+
+-- Add the `squads` column to pre-existing tables (idempotent).
+alter table public.settings
+  add column if not exists squads text[] not null default
+    array['INTON','DOM','Student Recruitment','BPX','RMIT VN','Alumni','Agent Management'];
 
 insert into public.settings (id, campaigns, types, people)
 values (

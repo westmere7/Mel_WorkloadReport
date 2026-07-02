@@ -19,7 +19,7 @@ import { TaskForm } from '../components/TaskForm'
 import { TaskDetails } from '../components/TaskDetails'
 import { useStore } from '../data/store'
 import { useAuth } from '../lib/auth'
-import { SQUADS, SIZES, SIZE_ORDER, SIZE_TONE } from '../constants'
+import { SIZES, SIZE_ORDER, SIZE_TONE, withFallback } from '../constants'
 import { cx, formatDate } from '../lib/format'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import type { Half, Task, TaskInput } from '../types'
@@ -135,7 +135,7 @@ export function TaskList() {
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <MultiSelect options={SQUADS} value={squads} onChange={setSquads} placeholder="All squads" overflowCollapse />
+          <MultiSelect options={withFallback(settings.squads)} value={squads} onChange={setSquads} placeholder="All squads" overflowCollapse />
           <MultiSelect
             options={settings.campaigns}
             value={campaigns}

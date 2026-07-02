@@ -1,7 +1,11 @@
 import type { Squad, Size, AppSettings } from './types'
 
-/** Fixed list of squads (stakeholders). This list does NOT change. */
-export const SQUADS: Squad[] = [
+/**
+ * Default squads (stakeholders). Editable in Settings like the other lists — this
+ * just seeds the initial list. "Others" is the virtual fallback (see withFallback),
+ * so it is NOT stored here.
+ */
+export const DEFAULT_SQUADS: string[] = [
   'INTON',
   'DOM',
   'Student Recruitment',
@@ -9,8 +13,10 @@ export const SQUADS: Squad[] = [
   'RMIT VN',
   'Alumni',
   'Agent Management',
-  'Others',
 ]
+
+/** All squads including the "Others" fallback — handy for sample data / CSV defaults. */
+export const SQUADS: Squad[] = [...DEFAULT_SQUADS, 'Others']
 
 /** Friendly descriptions shown as tooltips / helper text. */
 export const SQUAD_DESCRIPTIONS: Record<Squad, string> = {
@@ -85,6 +91,7 @@ export function withFallback(items: string[]): string[] {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  squads: DEFAULT_SQUADS,
   campaigns: DEFAULT_CAMPAIGNS,
   types: DEFAULT_TYPES,
   people: DEFAULT_PEOPLE,

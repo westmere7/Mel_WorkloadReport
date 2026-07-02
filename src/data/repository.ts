@@ -27,7 +27,7 @@ export interface Repository {
    * 'campaign' (scalar) or 'types' / 'people' (arrays).
    */
   renameValue(
-    field: 'campaign' | 'types' | 'people' | 'assetBreakdown',
+    field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown',
     oldValue: string,
     newValue: string,
   ): Promise<void>

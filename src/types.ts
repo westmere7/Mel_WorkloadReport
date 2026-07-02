@@ -1,15 +1,11 @@
 // ── Domain types for the RMIT Workload Report ──────────────────────────
 
-/** Fixed list of requesting teams (stakeholders). Does not change. */
-export type Squad =
-  | 'INTON'
-  | 'DOM'
-  | 'Student Recruitment'
-  | 'BPX'
-  | 'RMIT VN'
-  | 'Alumni'
-  | 'Agent Management'
-  | 'Others'
+/**
+ * Requesting team (stakeholder). Editable in Settings, so it's a free string;
+ * `DEFAULT_SQUADS` seeds the initial list and `stakeholderGroup()` still keys off
+ * the "DOM"/"INTON" names for the demand chart.
+ */
+export type Squad = string
 
 export type Half = 'H1' | 'H2'
 
@@ -55,6 +51,7 @@ export type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt'>
 
 /** User-editable lists + app preferences. */
 export interface AppSettings {
+  squads: string[]
   campaigns: string[]
   types: string[]
   people: string[]

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeftRight, ClipboardList, Images, Megaphone } from 'lucide-react'
+import { ArrowLeftRight, ClipboardList, Images } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
 import { TrendDelta } from '../components/ui/TrendDelta'
+import { Badge } from '../components/ui/Badge'
 import { AreaTrendChart, DonutChart, HBarChart, RankedBars, StackedBarChart, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
 import {
@@ -19,7 +20,7 @@ import {
   STAKEHOLDER_GROUPS,
   summarize,
 } from '../lib/analytics'
-import { SIZE_COLORS, withFallback } from '../constants'
+import { SIZE_TONE, withFallback } from '../constants'
 import { compactNumber, cx } from '../lib/format'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
@@ -151,21 +152,7 @@ export function Dashboard() {
       right: (
         <div className="flex flex-wrap items-center gap-2">
           {compare ? (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted">Base</span>
-              <select
-                value={srcYear}
-                onChange={(e) => setSourceYear(Number(e.target.value))}
-                title="Baseline year to compare against"
-                className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm font-semibold text-ink shadow-soft outline-none focus:border-rmit-red"
-              >
-                {sourceYearOptions.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted">vs</span>
+            <div className="flex items-center gap-1.5" title="Comparing the target year over the baseline year">
               <select
                 value={activeYear}
                 onChange={(e) => setYear(Number(e.target.value))}
@@ -173,6 +160,19 @@ export function Dashboard() {
                 className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm font-semibold text-ink shadow-soft outline-none focus:border-rmit-red"
               >
                 {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted">over</span>
+              <select
+                value={srcYear}
+                onChange={(e) => setSourceYear(Number(e.target.value))}
+                title="Baseline year to compare against"
+                className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm font-semibold text-ink shadow-soft outline-none focus:border-rmit-red"
+              >
+                {sourceYearOptions.map((y) => (
                   <option key={y} value={y}>
                     {y}
                   </option>
@@ -202,7 +202,7 @@ export function Dashboard() {
             <ArrowLeftRight className="h-3.5 w-3.5" /> Compare
           </button>
           <span className="text-xs font-semibold text-muted">
-            {compare ? `${sourceTasks.length} → ${filtered.length} tasks` : `${filtered.length} tasks`}
+            {compare ? `${filtered.length} vs ${sourceTasks.length} tasks` : `${filtered.length} tasks`}
           </span>
         </div>
       ),
@@ -243,14 +243,14 @@ export function Dashboard() {
   // Campaign charts can exclude the ongoing/catch-all campaigns (Settings → Dashboard).
   const campaignSubtitleSuffix = hideCommonCampaigns ? ' — excl. Always On / BAU / Others' : ''
   // Split-column charts fade the source year and only keep categories in both years.
-  const compareSubtitleSuffix = compare ? ` — ${srcYear} (faded) vs ${activeYear}` : ''
+  const compareSubtitleSuffix = compare ? ` — ${activeYear} over ${srcYear} (${srcYear} faded)` : ''
 
   return (
     <div className="space-y-4">
-      {/* Header stats: three hero cards + a Tasks-by-squad card */}
-      <div className="grid items-stretch gap-3 lg:grid-cols-4">
+      {/* Header stats: two hero cards + a Tasks-by-squad card */}
+      <div className="grid items-stretch gap-3 lg:grid-cols-3">
         <StatCard
-          label={compare ? `Assets · ${activeYear}` : 'Total assets'}
+          label={compare ? `Asset count · ${activeYear} over ${srcYear}` : 'Asset count'}
           value={compactNumber(summary.totalAssets)}
           icon={Images}
           accent="navy"
@@ -272,7 +272,7 @@ export function Dashboard() {
           }
         />
         <StatCard
-          label={compare ? `Tasks · ${activeYear}` : 'Total tasks'}
+          label={compare ? `Task count · ${activeYear} over ${srcYear}` : 'Task count'}
           value={summary.totalTasks}
           icon={ClipboardList}
           accent="red"
@@ -288,36 +288,16 @@ export function Dashboard() {
           }
           hint={compare ? `vs ${srcSummary.totalTasks} tasks in ${srcYear}` : undefined}
           footer={
-            <div className="flex flex-wrap gap-x-2.5 gap-y-1 text-sm">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {bySize.map((s) => (
-                <span key={s.name} className="whitespace-nowrap">
-                  <span className="font-bold" style={{ color: SIZE_COLORS[s.name as Size] }}>
-                    {s.name}
-                  </span>
-                  <span className="text-muted">:{s.value}</span>
+                <span key={s.name} className="inline-flex items-center gap-1.5">
+                  <Badge tone={SIZE_TONE[s.name as Size]}>{s.name}</Badge>
+                  <span className="text-sm font-semibold text-ink">{s.value}</span>
                 </span>
               ))}
             </div>
           }
         />
-        <StatCard
-          label={compare ? `Campaigns · ${activeYear}` : 'Total campaigns'}
-          value={summary.totalCampaigns}
-          icon={Megaphone}
-          accent="orange"
-          size="xl"
-          delta={
-            compare ? (
-              <TrendDelta
-                current={summary.totalCampaigns}
-                previous={srcSummary.totalCampaigns}
-                title={`${srcYear}: ${srcSummary.totalCampaigns} → ${activeYear}: ${summary.totalCampaigns}`}
-              />
-            ) : undefined
-          }
-          hint={compare ? `vs ${srcSummary.totalCampaigns} campaigns in ${srcYear}` : undefined}
-        />
-
         <Card className="flex flex-col">
           <CardHeader title="Tasks by squad" subtitle="Requests by stakeholder team" />
           <RankedBars data={bySquad} emptyMessage="Add tasks for at least 2 squads." />
@@ -333,7 +313,7 @@ export function Dashboard() {
             subtitle="Assets produced per month"
             action={
               <span className="shrink-0 rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
-                {compare ? `${srcYear} vs ${activeYear}` : chartYear}
+                {compare ? `${activeYear} over ${srcYear}` : chartYear}
               </span>
             }
           />
@@ -353,7 +333,7 @@ export function Dashboard() {
         <Card>
           <CardHeader
             title="Asset mix"
-            subtitle={compare ? `Deliverables by type — % vs ${srcYear}` : 'Deliverables by type'}
+            subtitle={compare ? `Deliverables by type — ${activeYear} over ${srcYear}` : 'Deliverables by type'}
           />
           <DonutChart
             data={assetMix}
@@ -365,7 +345,7 @@ export function Dashboard() {
         <Card>
           <CardHeader
             title="Work type mix"
-            subtitle={compare ? `Tasks by work type — % vs ${srcYear}` : 'Tasks by work type'}
+            subtitle={compare ? `Tasks by work type — ${activeYear} over ${srcYear}` : 'Tasks by work type'}
           />
           <DonutChart
             data={workTypeMix}

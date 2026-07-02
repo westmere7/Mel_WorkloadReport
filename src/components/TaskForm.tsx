@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock, Sparkles, Trash2 } from 'lucide-react'
 import type { AssetBreakdown, Half, Size, Squad, Task, TaskInput } from '../types'
 import {
-  SQUADS,
   SQUAD_DESCRIPTIONS,
   SIZES,
   SIZE_DESCRIPTIONS,
@@ -175,12 +174,13 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   const { settings, tasks } = useStore()
 
   // Editable lists always include the reserved "Others" fallback as an option.
+  const squadOptions = withFallback(settings.squads)
   const campaignOptions = withFallback(settings.campaigns)
   const typeOptions = withFallback(settings.types)
   const peopleOptions = withFallback(settings.people)
   const assetTypeOptions = withFallback(settings.assetTypes)
 
-  const [squad, setSquad] = useState<Squad>(initial?.squad ?? 'INTON')
+  const [squad, setSquad] = useState<Squad>(initial?.squad ?? settings.squads[0] ?? 'Others')
   const [campaign, setCampaign] = useState<string>(initial?.campaign ?? settings.campaigns[0] ?? '')
   const [code, setCode] = useState(initial?.code ?? '')
   const [name, setName] = useState(initial?.name ?? '')
@@ -386,14 +386,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="label">Squad (stakeholder)</label>
-          <select className="input" value={squad} onChange={(e) => setSquad(e.target.value as Squad)}>
-            {SQUADS.map((s) => (
+          <select className="input" value={squad} onChange={(e) => setSquad(e.target.value)}>
+            {!squadOptions.includes(squad) && squad && <option value={squad}>{squad}</option>}
+            {squadOptions.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
           </select>
-          <p className="mt-1.5 text-[11px] text-faint">{SQUAD_DESCRIPTIONS[squad]}</p>
+          {SQUAD_DESCRIPTIONS[squad] && (
+            <p className="mt-1.5 text-[11px] text-faint">{SQUAD_DESCRIPTIONS[squad]}</p>
+          )}
         </div>
         <div>
           <label className="label">Campaign</label>

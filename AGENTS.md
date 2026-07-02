@@ -68,14 +68,21 @@ happens** (see §6).
 - **`Task`** — `id, squad, campaign, code, name, types[], assetTotal, assetBreakdown,
   people[], startDate|null, endDate|null, half, size, note?, createdAt, updatedAt`.
 - **`TaskInput`** = `Task` without system fields (used for create/update).
-- **`AppSettings`** — `{ campaigns[], types[], people[], assetTypes[] }`. The four
-  user-editable reference lists.
+- **`AppSettings`** — `{ squads[], campaigns[], types[], people[], assetTypes[] }`. The
+  five user-editable reference lists. `Squad` is now just `string` (was a fixed union) —
+  squads are editable like the others.
 - **`AssetBreakdown`** = `Record<string, number>` — **keyed by asset-type NAME**
   (e.g. `{ "Image": 3, "Video": 1 }`), not fixed keys. See §6.
 
 `src/constants.ts` holds the fixed/default data and helpers:
 
-- **`SQUADS`** — 8 fixed stakeholder teams (INTON, DOM, …, **Others**). Not editable.
+- **`DEFAULT_SQUADS`** — seeds `settings.squads` (INTON, DOM, Student Recruitment, BPX,
+  RMIT VN, Alumni, Agent Management). **Squads are now user-editable** (add/rename/remove
+  in Settings like the other lists; "Others" is the virtual fallback). `SQUADS` =
+  `DEFAULT_SQUADS + 'Others'` (used by sample data / CSV default). `SQUAD_DESCRIPTIONS`
+  is now just a best-effort tooltip lookup for the default squads (custom ones have none).
+  ⚠️ `stakeholderGroup()` (demand chart) still keys off the literal names **"DOM"/"INTON"**
+  — renaming those squads drops them into "Other Stakeholders".
 - **`SIZES`** — `XS S M L XL`; `SIZE_COLORS` (heat scale), `SIZE_ORDER`, `SIZE_TONE`,
   `SIZE_DESCRIPTIONS`.
 - **`SIZE_DURATION_DAYS` / `SIZE_DURATION_LABEL`** — turnaround per size from the GCMC
@@ -111,9 +118,10 @@ happens** (see §6).
 
 ## 5. Feature map (where things live)
 
-- **Dashboard** (`src/pages/Dashboard.tsx`): span selector; 3 big hero StatCards
-  (Total assets / tasks / campaigns) + a stacked column (Top request type + a
-  "Tasks by size" stat-tile card); then a row (`lg:grid-cols-2 xl:grid-cols-4`):
+- **Dashboard** (`src/pages/Dashboard.tsx`): span selector; a `lg:grid-cols-3` header row
+  = 2 big hero StatCards (**Asset count** / **Task count** — huge `clamp(...,7.5vw,8rem)`
+  numbers; the Task-count card footers a per-size Badge breakdown) + a **Tasks by squad**
+  card. (Total campaigns was removed.) Then a row (`lg:grid-cols-2 xl:grid-cols-4`):
   Workload-across-the-year area chart + **Asset mix** donut + **Work type mix** donut
   (`countByMulti(filtered,'types')`, same `DonutChart` style as Asset mix) + optional
   **Tasks by person** (HBar); then Tasks-by-campaign + Asset-count-by-campaign stacked
@@ -126,9 +134,11 @@ happens** (see §6).
   reactive external store). Defaults: demand **Asset type**, common campaigns **hidden**,
   Tasks-by-person **hidden**.
 - **Dashboard comparison mode**: the header "Compare" toggle swaps the span filter for
-  **Base {select} vs {select}** year pickers (labelled with text, not an arrow; defaults:
-  target = latest data year, source = target − 1; source can never equal target) and the
-  count reads "N → M tasks". Effects: hero StatCards get a `delta` (`ui/TrendDelta.tsx` —
+  **{target select} over {source select}** year pickers (defaults: target = latest data
+  year, source = target − 1; source can never equal target) and the count reads
+  "{target} vs {source} tasks". Everything is phrased **"{target} over {source}"** (e.g.
+  "2026 over 2025") — stat-card labels ("Asset count · 2026 over 2025"), the workload-chart
+  badge, and chart subtitles. Effects: hero StatCards get a `delta` (`ui/TrendDelta.tsx` —
   % vs source; "New" when no baseline). Sizes: `sm`/`md` use a single `animate-bounce`
   chevron; **`lg` is the prominent variant** (used on the Total-assets card) — an infinite
   **chevron escalator** (`animate-chevron-rise`/`-fall` keyframes in `index.css`,
@@ -158,8 +168,11 @@ happens** (see §6).
 - **Import & Backup** (`src/components/ImportBackupModal.tsx`): CSV import (clean-load vs
   merge) + span-scoped CSV backup.
 - **Settings** (`src/pages/Settings.tsx`): a **Dashboard** card (grouped chart-display
-  toggles, see above); four `ListEditor`s (campaigns/work types/asset types/people)
-  with add/rename/remove + a locked **"Others"** fallback row; and fixed squads & sizes.
+  toggles, see above); five `ListEditor`s (**squads**/campaigns/work types/asset
+  types/people) with add/rename/remove + a locked **"Others"** fallback row; and a locked
+  Task-sizes card. (Squads used to be a locked list — now editable like the rest, **except
+  DOM & INTON which are locked** via `ListEditor`'s `locked` prop, since
+  `stakeholderGroup()` keys off those exact names.)
   Each `ListEditor` shows items **sorted alphabetically** (`sortAlpha`) and **warns before
   removing an item that has linked tasks** (a confirm modal shown only when `usage>0`;
   0-task items delete straight away). Sort is **display + consumption only** — stored
@@ -171,8 +184,11 @@ happens** (see §6).
   all) were removed from the UI — `store.populateSampleData`/`deleteAllTasks` still exist
   but are no longer surfaced.
 - **Charts** (`src/components/charts.tsx`): `AreaTrendChart, DonutChart, VBarChart,
-  HBarChart, StackedBarChart`, `NotEnough`, and the `WrappedTick` helper (wraps long
-  x-axis labels onto multiple lines instead of angling them).
+  HBarChart, StackedBarChart`, **`RankedBars`** (axis-free inline list — each row is a
+  single line: label · filled track · value; used for "Tasks by squad"), `NotEnough`, and
+  the `WrappedTick` helper (wraps long x-axis labels onto multiple lines instead of
+  angling them). The hero **StatCard `xl`** number is `text-[clamp(2.75rem,4.5vw,5rem)]`
+  (deliberately kept modest so the top stats row stays short).
 - **Layout/Sidebar** (`src/components/Layout.tsx`, `Sidebar.tsx`): sidebar holds brand
   + nav + the **New Task** button (sign-in only, under a subtle separator); header holds
   the page title, a current-year box, the theme toggle, and the **sign-in / account
@@ -306,6 +322,10 @@ exists`, `add column if not exists`). Two columns were added after the initial s
 to run it**, because a write including an unknown column fails:
 
 - `settings.asset_types text[]` — for editable asset types.
+- `settings.squads text[]` — for editable squads. **Guarded**: `SupabaseRepository.saveSettings`
+  retries the upsert without `squads` if the column is missing (`isMissingSquadsColumn`),
+  so editing the *other* lists never breaks pre-migration; squad edits just don't persist
+  until `schema.sql` runs (reads fall back to `DEFAULT_SQUADS`).
 - `tasks.note text` — for the task note. **Guarded**: `SupabaseRepository`
   create/update retry without `note` if the column is missing (see `isMissingNoteColumn`
   / `stripNote`), so task saves never hard-break pre-migration; the note just doesn't

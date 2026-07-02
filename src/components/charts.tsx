@@ -214,7 +214,7 @@ export function RankedBars({
   return (
     <div className="flex flex-col gap-2">
       {data.map((d, i) => (
-        <div key={d.name} className="flex items-center gap-3 text-xs">
+        <div key={d.name} className="flex items-center gap-2.5 text-xs">
           <span className="w-28 shrink-0 truncate text-ink" title={d.name}>
             {d.name}
           </span>
@@ -224,7 +224,7 @@ export function RankedBars({
               style={{ width: `${(d.value / max) * 100}%`, background: colors[i % colors.length] }}
             />
           </div>
-          <span className="w-8 shrink-0 text-right font-semibold tabular-nums text-muted">{d.value}</span>
+          <span className="w-7 shrink-0 text-right font-semibold tabular-nums text-muted">{d.value}</span>
         </div>
       ))}
     </div>

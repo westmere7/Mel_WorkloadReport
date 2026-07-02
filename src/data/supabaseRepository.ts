@@ -18,6 +18,12 @@ function stripNote<T extends { note?: unknown }>(row: T): Omit<T, 'note'> {
   return rest
 }
 
+/** True if a Supabase error is complaining about a missing `squads` column (pre-migration). */
+function isMissingSquadsColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('squads') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
 /**
  * Supabase-backed repository. Active automatically when VITE_SUPABASE_URL
  * and VITE_SUPABASE_ANON_KEY are set. Expects the schema in supabase/schema.sql.
@@ -89,17 +95,17 @@ export class SupabaseRepository implements Repository {
   }
 
   async renameValue(
-    field: 'campaign' | 'types' | 'people' | 'assetBreakdown',
+    field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown',
     oldValue: string,
     newValue: string,
   ): Promise<void> {
     const sb = getSupabase()
 
-    if (field === 'campaign') {
+    if (field === 'squad' || field === 'campaign') {
       const { error } = await sb
         .from('tasks')
-        .update({ campaign: newValue, updated_at: new Date().toISOString() })
-        .eq('campaign', oldValue)
+        .update({ [field]: newValue, updated_at: new Date().toISOString() })
+        .eq(field, oldValue)
       if (error) throw error
       return
     }
@@ -165,6 +171,7 @@ export class SupabaseRepository implements Repository {
     if (error) throw error
     if (!data) return DEFAULT_SETTINGS
     return {
+      squads: data.squads ?? DEFAULT_SETTINGS.squads,
       campaigns: data.campaigns ?? DEFAULT_SETTINGS.campaigns,
       types: data.types ?? DEFAULT_SETTINGS.types,
       people: data.people ?? DEFAULT_SETTINGS.people,
@@ -173,20 +180,26 @@ export class SupabaseRepository implements Repository {
   }
 
   async saveSettings(settings: AppSettings): Promise<AppSettings> {
-    const { data, error } = await getSupabase()
-      .from('settings')
-      .upsert({
-        id: SETTINGS_ID,
-        campaigns: settings.campaigns,
-        types: settings.types,
-        people: settings.people,
-        asset_types: settings.assetTypes,
-        updated_at: new Date().toISOString(),
-      })
-      .select('*')
-      .single()
+    const base = {
+      id: SETTINGS_ID,
+      campaigns: settings.campaigns,
+      types: settings.types,
+      people: settings.people,
+      asset_types: settings.assetTypes,
+      updated_at: new Date().toISOString(),
+    }
+    const upsert = (payload: Record<string, unknown>) =>
+      getSupabase().from('settings').upsert(payload).select('*').single()
+
+    let { data, error } = await upsert({ ...base, squads: settings.squads })
+    // Retry without `squads` if that column hasn't been migrated yet, so editing
+    // the other lists keeps working (squads just won't persist until schema.sql runs).
+    if (error && isMissingSquadsColumn(error)) {
+      ;({ data, error } = await upsert(base))
+    }
     if (error) throw error
     return {
+      squads: data.squads ?? settings.squads,
       campaigns: data.campaigns,
       types: data.types,
       people: data.people,

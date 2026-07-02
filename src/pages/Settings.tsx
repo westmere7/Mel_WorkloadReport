@@ -4,7 +4,7 @@ import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useStore } from '../data/store'
-import { SQUADS, SQUAD_DESCRIPTIONS, SIZES, SIZE_DESCRIPTIONS, SIZE_TONE, FALLBACK_ITEM, sortAlpha } from '../constants'
+import { SIZES, SIZE_DESCRIPTIONS, SIZE_TONE, FALLBACK_ITEM, sortAlpha } from '../constants'
 import { cx } from '../lib/format'
 import {
   COMMON_CAMPAIGNS,
@@ -14,7 +14,7 @@ import {
 } from '../lib/dashboardPrefs'
 import type { AppSettings } from '../types'
 
-type ListKey = keyof Pick<AppSettings, 'campaigns' | 'types' | 'people' | 'assetTypes'>
+type ListKey = keyof Pick<AppSettings, 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes'>
 
 export function SettingsPage() {
   const { settings, saveSettings, tasks, renameListItem, removeListItem } = useStore()
@@ -24,6 +24,7 @@ export function SettingsPage() {
   }
 
   const usageCount = (key: ListKey, value: string): number => {
+    if (key === 'squads') return tasks.filter((t) => t.squad === value).length
     if (key === 'campaigns') return tasks.filter((t) => t.campaign === value).length
     if (key === 'types') return tasks.filter((t) => t.types.includes(value)).length
     if (key === 'assetTypes') return tasks.filter((t) => (t.assetBreakdown[value] ?? 0) > 0).length
@@ -36,7 +37,18 @@ export function SettingsPage() {
       <DashboardPrefsCard />
 
       {/* Editable lists */}
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <ListEditor
+          title="Squads"
+          description="Requesting stakeholder teams. DOM & INTON are locked (used by the demand chart)."
+          items={settings.squads}
+          fallback={FALLBACK_ITEM}
+          locked={['DOM', 'INTON']}
+          onAdd={(v) => mutate('squads', [...settings.squads, v])}
+          onRemove={(v) => removeListItem('squads', v)}
+          onRename={(o, n) => renameListItem('squads', o, n)}
+          usage={(v) => usageCount('squads', v)}
+        />
         <ListEditor
           title="Campaigns"
           description="Specific campaigns or groups. Used in the task form."
@@ -78,27 +90,6 @@ export function SettingsPage() {
           usage={(v) => usageCount('people', v)}
         />
       </div>
-
-      {/* Fixed squads */}
-      <Card>
-        <CardHeader
-          title="Squads (stakeholders)"
-          subtitle="Fixed list — these don’t change"
-          action={
-            <span className="inline-flex items-center gap-1 text-xs text-muted">
-              <Lock className="h-3.5 w-3.5" /> Locked
-            </span>
-          }
-        />
-        <div className="flex flex-wrap gap-2">
-          {SQUADS.map((s) => (
-            <span key={s} className="chip bg-subtle text-ink" title={SQUAD_DESCRIPTIONS[s]}>
-              <span className="font-semibold">{s}</span>
-              <span className="text-muted">· {SQUAD_DESCRIPTIONS[s]}</span>
-            </span>
-          ))}
-        </div>
-      </Card>
 
       {/* Fixed task sizes */}
       <Card>
@@ -243,6 +234,7 @@ function ListEditor({
   onRename,
   usage,
   fallback,
+  locked,
 }: {
   title: string
   description: string
@@ -252,6 +244,8 @@ function ListEditor({
   onRename: (oldValue: string, newValue: string) => void | Promise<void>
   usage: (value: string) => number
   fallback?: string
+  /** Item names that can't be renamed or removed (shown with a lock, like the fallback). */
+  locked?: string[]
 }) {
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
@@ -315,13 +309,30 @@ function ListEditor({
       <ul className="space-y-1.5">
         {sortedItems.map((item) => {
           const count = usage(item)
-          const isEditing = editing === item
+          const isLocked = !!locked?.includes(item)
+          const isEditing = editing === item && !isLocked
           return (
             <li
               key={item}
               className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2"
             >
-              {isEditing ? (
+              {isLocked ? (
+                <>
+                  <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-rmit-red" />
+                    <span className="truncate text-ink">{item}</span>
+                    <Lock className="h-3 w-3 shrink-0 text-faint" />
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {count > 0 && (
+                      <span className="text-[11px] text-muted">
+                        {count} task{count === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    <span className="text-[11px] uppercase tracking-wide text-faint">locked</span>
+                  </span>
+                </>
+              ) : isEditing ? (
                 <>
                   <input
                     className="input h-8 flex-1 px-2 py-1 text-sm"

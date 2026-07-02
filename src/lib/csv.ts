@@ -1,5 +1,5 @@
 import type { Half, Size, Squad, Task, TaskInput } from '../types'
-import { SIZES, SQUADS } from '../constants'
+import { SIZES } from '../constants'
 import { deriveHalf } from './taskCode'
 
 // Required columns; every column outside NON_ASSET_HEADERS is treated as an asset type.
@@ -152,8 +152,8 @@ export function parseTasksCsv(text: string): TaskInput[] {
     const half: Half = halfRaw === 'H1' || halfRaw === 'H2' ? halfRaw : deriveHalf(startDate)
     const sizeRaw = get('Size')
     const size: Size = (SIZES as string[]).includes(sizeRaw) ? (sizeRaw as Size) : 'M'
-    const squadRaw = get('Squad')
-    const squad: Squad = (SQUADS as string[]).includes(squadRaw) ? (squadRaw as Squad) : 'Others'
+    // Squads are user-editable, so accept any value (default blank → the "Others" fallback).
+    const squad: Squad = get('Squad').trim() || 'Others'
 
     return {
       squad,

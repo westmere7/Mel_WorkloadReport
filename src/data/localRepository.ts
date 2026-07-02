@@ -110,12 +110,15 @@ export class LocalRepository implements Repository {
   }
 
   async renameValue(
-    field: 'campaign' | 'types' | 'people' | 'assetBreakdown',
+    field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown',
     oldValue: string,
     newValue: string,
   ): Promise<void> {
     const tasks = await this.listTasks()
     const next = tasks.map((t) => {
+      if (field === 'squad') {
+        return t.squad === oldValue ? { ...t, squad: newValue } : t
+      }
       if (field === 'campaign') {
         return t.campaign === oldValue ? { ...t, campaign: newValue } : t
       }
@@ -139,7 +142,8 @@ export class LocalRepository implements Repository {
   }
 
   async getSettings(): Promise<AppSettings> {
-    return read<AppSettings>(SETTINGS_KEY, DEFAULT_SETTINGS)
+    // Merge over defaults so older stored settings (missing newer keys like `squads`) don't break.
+    return { ...DEFAULT_SETTINGS, ...read<Partial<AppSettings>>(SETTINGS_KEY, {}) }
   }
 
   async saveSettings(settings: AppSettings): Promise<AppSettings> {

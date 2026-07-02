@@ -32,15 +32,15 @@ interface StoreValue {
   importTasks: (inputs: TaskInput[], mode: 'replace' | 'merge') => Promise<{ created: number; updated: number }>
   populateSampleData: (count?: number) => Promise<number>
   saveSettings: (settings: AppSettings) => Promise<void>
-  /** Rename a campaign/type/person/asset-type in Settings and propagate to all tasks. */
+  /** Rename a squad/campaign/type/person/asset-type in Settings and propagate to all tasks. */
   renameListItem: (
-    key: 'campaigns' | 'types' | 'people' | 'assetTypes',
+    key: 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes',
     oldValue: string,
     newValue: string,
   ) => Promise<void>
   /** Remove a list item, reassigning any tasks that use it to the "Others" fallback. */
   removeListItem: (
-    key: 'campaigns' | 'types' | 'people' | 'assetTypes',
+    key: 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes',
     value: string,
   ) => Promise<void>
   /** True while a live (realtime/cross-tab) subscription is active. */
@@ -184,10 +184,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const renameListItem = useCallback(
-    async (key: 'campaigns' | 'types' | 'people' | 'assetTypes', oldValue: string, newValue: string) => {
+    async (key: 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes', oldValue: string, newValue: string) => {
       const trimmed = newValue.trim()
       if (!trimmed || trimmed === oldValue) return
-      const field = key === 'campaigns' ? 'campaign' : key === 'assetTypes' ? 'assetBreakdown' : key
+      const field =
+        key === 'squads' ? 'squad' : key === 'campaigns' ? 'campaign' : key === 'assetTypes' ? 'assetBreakdown' : key
 
       // 1. Propagate the rename to every task that references the old value.
       await repo.renameValue(field, oldValue, trimmed)
@@ -211,9 +212,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const removeListItem = useCallback(
-    async (key: 'campaigns' | 'types' | 'people' | 'assetTypes', value: string) => {
+    async (key: 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes', value: string) => {
       if (value === FALLBACK_ITEM) return // the fallback itself can't be removed
-      const field = key === 'campaigns' ? 'campaign' : key === 'assetTypes' ? 'assetBreakdown' : key
+      const field =
+        key === 'squads' ? 'squad' : key === 'campaigns' ? 'campaign' : key === 'assetTypes' ? 'assetBreakdown' : key
 
       // 1. Reassign any tasks still using this value to the "Others" fallback.
       await repo.renameValue(field, value, FALLBACK_ITEM)
