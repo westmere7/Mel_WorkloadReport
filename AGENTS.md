@@ -129,11 +129,11 @@ happens** (see §6).
   merge) + span-scoped CSV backup.
 - **Settings** (`src/pages/Settings.tsx`): a **Dashboard** card (grouped chart-display
   toggles, see above); four `ListEditor`s (campaigns/work types/asset types/people)
-  with add/rename/remove + a locked **"Others"** fallback row; fixed squads & sizes; a
-  Developer/danger zone (populate sample data, delete all) that is **gated on
-  `import.meta.env.DEV`** — grayed out with a "development mode only" notice in
-  production builds, fully usable while running `npm run dev`. The whole page requires
-  sign-in (route redirects to `/` otherwise).
+  with add/rename/remove + a locked **"Others"** fallback row; and fixed squads & sizes.
+  The whole page requires sign-in (route redirects to `/` otherwise). NOTE: the old
+  **Data backend** card and the **Developer/danger zone** (populate sample data / delete
+  all) were removed from the UI — `store.populateSampleData`/`deleteAllTasks` still exist
+  but are no longer surfaced.
 - **Charts** (`src/components/charts.tsx`): `AreaTrendChart, DonutChart, VBarChart,
   HBarChart, StackedBarChart`, `NotEnough`, and the `WrappedTick` helper (wraps long
   x-axis labels onto multiple lines instead of angling them).
@@ -144,20 +144,27 @@ happens** (see §6).
   icon-only 68px rail below `md`, full 240px at
   `md+` (labels/brand text `hidden md:*` — don't drop these classes; losing them once
   broke mobile). ⚠️ **Tailwind arbitrary-width gotcha**: the aside width toggles between
-  `w-[68px]` and `md:w-60`/`md:w-0`; keep exactly ONE `md:w-*` per branch (see the
-  ternary) — piling `md:w-60` and `md:w-0` into one className lets source-order decide
-  and breaks unpredictably. **Collapse is desktop-only**: a small circular chevron
+  `w-[68px]` and `md:w-60`; keep exactly ONE `md:w-*` per branch (see the ternary) —
+  piling conflicting `md:w-*` into one className lets source-order decide and breaks
+  unpredictably. **Collapse is desktop-only**: a small circular chevron
   (`ChevronLeft`/`ChevronRight`) straddles the sidebar edge, hidden below `md`
   (`hidden md:flex`); on mobile the sidebar is a fixed rail that **can't collapse** (the
   `collapsed` state only applies at `md+`). State lifted into Layout, persisted in
-  localStorage `mwr.sidebar`. Collapsed (desktop) = sidebar width 0, and the header then
-  shows the **logo + app name before the page title** (only at `md+`; the logo is unboxed
-  and swaps by theme —
-  `RMIT_full.svg` on the light header, `RMIT_red.svg` on the dark one, via
-  `dark:hidden`/`hidden dark:block`). **Logo rule**: dark backgrounds use `RMIT_red.svg`
-  (white+red), light backgrounds use `RMIT_full.svg` (red+navy); the sidebar's bg is
-  always dark navy (`--sidebar`) so it always uses `RMIT_red.svg`. (`RMIT_white.svg` is
-  no longer used.) The header also exposes a **header-slot context**
+  localStorage `mwr.sidebar`. **Collapsed (desktop) = the 68px icon rail** (nav icons
+  only, NOT width 0) — `collapsed` forces rail mode at all widths by dropping the `md:`
+  "full panel" classes (the `railOnly()` helper + `hideLabel` in Sidebar). When collapsed
+  the rail **drops its brand row** (logo + name) and the header shows them instead —
+  a `{collapsed && …}` block in Layout renders the logo + "GCMC / Workload Report" before
+  the page title (only at `md+`), so the brand never appears twice. The brand row's space
+  is **reserved (`md:invisible`)** when collapsed so the nav icons don't shift up.
+  **Clicking the sidebar background toggles collapse/expand** (the `<aside>` has
+  `onClick={onToggle}` + `cursor-pointer`); nav links and the New Task button
+  `stopPropagation` so they navigate/open without toggling. **Logo rule**: dark
+  backgrounds → `RMIT_red.svg` (white+red), light backgrounds → `RMIT_full.svg` (red+navy).
+  The sidebar sits on the dark `--sidebar` bg in both themes so it always uses
+  `RMIT_red.svg`; the collapsed **header** brand swaps by theme
+  (`RMIT_full` light / `RMIT_red` dark via `dark:hidden`/`hidden dark:block`).
+  (`RMIT_white.svg` is unused.) The header also exposes a **header-slot context**
   (`useHeaderSlots()`): a page can inject `left`/`right` nodes into the header via an
   effect (clearing on unmount). The Dashboard uses it to render the **Live badge**
   (left) and the **span selector + task count** (right) in the header bar instead of a

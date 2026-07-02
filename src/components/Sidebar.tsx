@@ -3,9 +3,9 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
+  List,
   Plus,
   Settings,
-  Table2,
   type LucideIcon,
 } from 'lucide-react'
 import { cx } from '../lib/format'
@@ -20,7 +20,7 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/tasks', label: 'Task List', icon: Table2 },
+  { to: '/tasks', label: 'Task List', icon: List },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -29,40 +29,50 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const { canEdit } = useAuth()
   const nav = canEdit ? NAV : NAV.filter((item) => item.to !== '/settings')
 
+  // Rail mode = icon-only 68px. Always on mobile; on desktop it's the collapsed
+  // state. Expanded (desktop, not collapsed) shows the full 240px panel.
+  // Each responsive class is dropped when collapsed so the rail holds at md+ too.
+  const railOnly = (expandedMd: string) => (collapsed ? '' : expandedMd)
+  const hideLabel = collapsed ? 'hidden' : 'hidden md:inline'
+
   return (
     <div className="relative shrink-0">
       <aside
+        onClick={onToggle}
         className={cx(
-          'flex h-full flex-col overflow-hidden bg-[var(--sidebar)] transition-[width] duration-200',
-          // Mobile is always the 68px rail; collapse only applies at md+.
-          collapsed
-            ? 'w-[68px] border-r border-line md:w-0 md:border-r-0'
-            : 'w-[68px] border-r border-line md:w-60',
+          'flex h-full cursor-pointer flex-col overflow-hidden border-r border-line bg-[var(--sidebar)] transition-[width] duration-200',
+          collapsed ? 'w-[68px]' : 'w-[68px] md:w-60',
         )}
       >
-        {/* Fixed-width inner column so content doesn't squish mid-transition.
-            Mobile (<md) shows an icon-only rail; md+ shows the full sidebar. */}
-        <div className="flex h-full w-[68px] shrink-0 flex-col items-center gap-1 py-5 md:w-60 md:items-stretch md:px-4">
-          {/* Brand */}
-          <div className="mb-6 flex items-center gap-3 px-1 md:px-2">
+        <div
+          className={cx(
+            'flex h-full shrink-0 flex-col items-center gap-1 py-5',
+            collapsed ? 'w-[68px]' : 'w-[68px] md:w-60 md:items-stretch md:px-4',
+          )}
+        >
+          {/* Brand — kept as reserved (invisible) space when collapsed so the nav icons
+              don't shift up; the logo + name show in the header instead. Still visible on
+              the mobile rail (collapse is desktop-only). */}
+          <div className={cx('mb-6 flex items-center gap-3 px-1 md:px-2', collapsed && 'md:invisible')}>
             <img src="/RMIT_red.svg" alt="RMIT" className="h-5 w-auto shrink-0 md:h-7" />
-            <div className="hidden min-w-0 md:block">
+            <div className="hidden min-w-0 whitespace-nowrap md:block">
               <p className="text-sm font-bold leading-tight text-white">GCMC</p>
               <p className="text-[11px] leading-tight text-navy-100">Workload Report</p>
             </div>
           </div>
 
-          <nav className="flex flex-col gap-1.5 md:items-stretch">
+          <nav className={cx('flex flex-col gap-1.5', railOnly('md:items-stretch'))}>
             {nav.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={to === '/'}
                 title={label}
+                onClick={(e) => e.stopPropagation()}
                 className={({ isActive }) =>
                   cx(
                     'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
-                    'justify-center md:justify-start',
+                    collapsed ? 'justify-center' : 'justify-center md:justify-start',
                     isActive
                       ? 'bg-white/10 text-white shadow-inner'
                       : 'text-navy-100 hover:bg-white/5 hover:text-white',
@@ -75,7 +85,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                       className={cx('h-5 w-5 shrink-0', isActive ? 'text-rmit-red' : '')}
                       strokeWidth={2.2}
                     />
-                    <span className="hidden md:inline">{label}</span>
+                    <span className={hideLabel}>{label}</span>
                   </>
                 )}
               </NavLink>
@@ -87,19 +97,27 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               {/* Subtle separator + primary action */}
               <div className="my-3 w-full border-t border-white/10" />
               <button
-                onClick={openNewTask}
-                className="btn-primary w-full justify-center px-0 md:px-4"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openNewTask()
+                }}
+                className={cx(
+                  // Rail mode: a compact square button (aligned with the nav icons),
+                  // slightly less rounded. Expands to a full labelled button at md+.
+                  'btn-primary h-11 w-11 justify-center !rounded-lg',
+                  !collapsed && 'md:h-auto md:w-full md:!rounded-xl md:px-4',
+                )}
                 title="New Task"
               >
                 <Plus className="h-4 w-4 shrink-0" strokeWidth={2.5} />
-                <span className="hidden md:inline">New Task</span>
+                <span className={hideLabel}>New Task</span>
               </button>
             </>
           )}
 
           <div className="flex-1" />
 
-          <div className="hidden px-2 pb-1 md:block">
+          <div className={cx('px-2 pb-1', collapsed ? 'hidden' : 'hidden md:block')}>
             <p className="text-[11px] leading-relaxed text-navy-200">Melbourne Design Team</p>
           </div>
         </div>
@@ -109,8 +127,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           Hidden on mobile: the sidebar is a fixed rail there and can't be collapsed. */}
       <button
         onClick={onToggle}
-        title={collapsed ? 'Show sidebar' : 'Hide sidebar'}
-        aria-label={collapsed ? 'Show sidebar' : 'Hide sidebar'}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         className="absolute -right-3 top-[26px] z-20 hidden h-6 w-6 items-center justify-center rounded-full border border-line bg-card text-muted shadow-soft transition hover:text-ink md:flex"
       >
         {collapsed ? (
