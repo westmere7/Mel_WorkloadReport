@@ -26,23 +26,23 @@ const ACCENTS: Record<NonNullable<StatCardProps['accent']>, string> = {
 export function StatCard({ label, value, icon: Icon, hint, footer, delta, accent = 'navy', size = 'md' }: StatCardProps) {
   const lg = size === 'lg'
 
-  // Hero: a tall, vertical KPI card whose huge number fills its (stretched) cell.
+  // Hero: a vertical KPI card whose big number fills its (stretched) cell.
   if (size === 'xl') {
     return (
-      <div className="card flex h-full flex-col p-6">
+      <div className="card flex h-full flex-col p-5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold uppercase tracking-wide text-muted">{label}</p>
-          <div className={cx('flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl', ACCENTS[accent])}>
-            <Icon className="h-7 w-7" strokeWidth={2.2} />
+          <div className={cx('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl', ACCENTS[accent])}>
+            <Icon className="h-6 w-6" strokeWidth={2.2} />
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-center">
           <div className="flex min-w-0 flex-wrap items-end gap-x-3 gap-y-1">
-            <p className="text-[clamp(3.5rem,7vw,8.5rem)] font-bold leading-none text-rmit-navy dark:text-ink">{value}</p>
-            {delta && <span className="pb-2">{delta}</span>}
+            <p className="text-[clamp(2.75rem,4.5vw,5rem)] font-bold leading-none text-rmit-navy dark:text-ink">{value}</p>
+            {delta && <span className="pb-1">{delta}</span>}
           </div>
-          {hint && <p className="mt-3 truncate text-base text-muted">{hint}</p>}
-          {footer && <div className="mt-3">{footer}</div>}
+          {hint && <p className="mt-2 truncate text-sm text-muted">{hint}</p>}
+          {footer && <div className="mt-2">{footer}</div>}
         </div>
       </div>
     )

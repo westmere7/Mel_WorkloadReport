@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Check, Lock, Pencil, Plus, X } from 'lucide-react'
+import { AlertTriangle, Check, Lock, Pencil, Plus, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { Modal } from '../components/ui/Modal'
 import { useStore } from '../data/store'
-import { SQUADS, SQUAD_DESCRIPTIONS, SIZES, SIZE_DESCRIPTIONS, SIZE_TONE, FALLBACK_ITEM } from '../constants'
+import { SQUADS, SQUAD_DESCRIPTIONS, SIZES, SIZE_DESCRIPTIONS, SIZE_TONE, FALLBACK_ITEM, sortAlpha } from '../constants'
 import { cx } from '../lib/format'
 import {
   COMMON_CAMPAIGNS,
@@ -167,6 +168,16 @@ function DashboardPrefsCard() {
             label={`Hide ${COMMON_CAMPAIGNS.join(' / ')} campaigns`}
           />
         </PrefRow>
+        <PrefRow
+          title="Show “Tasks by person”"
+          description="Adds the per-person chart to the dashboard. Hidden by default; hiding it gives “Workload across the year” more width."
+        >
+          <Switch
+            checked={prefs.showTasksByPerson}
+            onChange={(v) => setDashboardPrefs({ showTasksByPerson: v })}
+            label="Show Tasks by person"
+          />
+        </PrefRow>
       </div>
     </Card>
   )
@@ -245,6 +256,17 @@ function ListEditor({
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
+  // Item pending a delete confirmation (only shown when it has linked tasks).
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null)
+
+  // Shown alphabetically (matches the task-form order via withFallback).
+  const sortedItems = sortAlpha(items)
+  const singular = title.toLowerCase().replace(/s$/, '')
+
+  const requestRemove = (item: string) => {
+    if (usage(item) > 0) setPendingRemove(item)
+    else onRemove(item)
+  }
 
   const add = () => {
     const v = draft.trim()
@@ -291,7 +313,7 @@ function ListEditor({
         </button>
       </div>
       <ul className="space-y-1.5">
-        {items.map((item) => {
+        {sortedItems.map((item) => {
           const count = usage(item)
           const isEditing = editing === item
           return (
@@ -361,7 +383,7 @@ function ListEditor({
                     </button>
                     <button
                       className="rounded-md p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
-                      onClick={() => onRemove(item)}
+                      onClick={() => requestRemove(item)}
                       title="Remove"
                     >
                       <X className="h-4 w-4" />
@@ -391,6 +413,42 @@ function ListEditor({
         )}
         {items.length === 0 && !fallback && <li className="py-2 text-sm text-muted">Nothing here yet.</li>}
       </ul>
+
+      <Modal
+        open={pendingRemove !== null}
+        onClose={() => setPendingRemove(null)}
+        title={`Remove ${singular}`}
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setPendingRemove(null)}>
+              Cancel
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                if (pendingRemove) onRemove(pendingRemove)
+                setPendingRemove(null)
+              }}
+            >
+              Remove &amp; reassign
+            </button>
+          </>
+        }
+      >
+        {pendingRemove && (
+          <div className="flex gap-3 rounded-xl bg-brand-50 p-3 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <p>
+              <strong>{pendingRemove}</strong> is linked to{' '}
+              <strong>
+                {usage(pendingRemove)} task{usage(pendingRemove) === 1 ? '' : 's'}
+              </strong>
+              . Removing it will reassign {usage(pendingRemove) === 1 ? 'that task' : 'those tasks'} to{' '}
+              <strong>“{fallback ?? FALLBACK_ITEM}”</strong>. This can’t be undone.
+            </p>
+          </div>
+        )}
+      </Modal>
     </Card>
   )
 }

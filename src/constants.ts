@@ -71,9 +71,17 @@ export const DEFAULT_ASSET_TYPES: string[] = ['Image', 'Video', 'Publication', '
  */
 export const FALLBACK_ITEM = 'Others'
 
-/** Append the reserved "Others" fallback to an editable list (deduped, always last). */
+/** Sort a list alphabetically (case-insensitive), leaving the original untouched. */
+export function sortAlpha(items: string[]): string[] {
+  return [...items].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+}
+
+/**
+ * Append the reserved "Others" fallback to an editable list (deduped, always last).
+ * The real items are sorted alphabetically so the task form + charts list them A→Z.
+ */
 export function withFallback(items: string[]): string[] {
-  return [...items.filter((v) => v !== FALLBACK_ITEM), FALLBACK_ITEM]
+  return [...sortAlpha(items.filter((v) => v !== FALLBACK_ITEM)), FALLBACK_ITEM]
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {

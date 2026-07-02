@@ -195,8 +195,9 @@ export function HBarChart({
 }
 
 /**
- * A ranked list of proportional progress bars — a lighter, axis-free alternative
- * to the recharts bar charts (each row shows the label, a filled track, and the value).
+ * A ranked list of proportional bars — a lighter, axis-free alternative to the
+ * recharts bar charts. Each row is a single line: label, a filled track, then the
+ * value, so the list stays compact.
  */
 export function RankedBars({
   data,
@@ -211,21 +212,19 @@ export function RankedBars({
   if (data.length < minPoints) return <NotEnough message={emptyMessage} height={180} />
   const max = data.reduce((m, d) => Math.max(m, d.value), 0) || 1
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2">
       {data.map((d, i) => (
-        <div key={d.name}>
-          <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-            <span className="truncate text-ink" title={d.name}>
-              {d.name}
-            </span>
-            <span className="shrink-0 font-semibold text-muted">{d.value}</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-subtle">
+        <div key={d.name} className="flex items-center gap-3 text-xs">
+          <span className="w-28 shrink-0 truncate text-ink" title={d.name}>
+            {d.name}
+          </span>
+          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-subtle">
             <div
               className="h-full rounded-full transition-[width]"
               style={{ width: `${(d.value / max) * 100}%`, background: colors[i % colors.length] }}
             />
           </div>
+          <span className="w-8 shrink-0 text-right font-semibold tabular-nums text-muted">{d.value}</span>
         </div>
       ))}
     </div>

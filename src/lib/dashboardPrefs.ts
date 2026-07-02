@@ -12,6 +12,8 @@ export interface DashboardPrefs {
   demandDim: DemandDim
   /** Exclude the ongoing/catch-all campaigns from the campaign charts. */
   hideCommonCampaigns: boolean
+  /** Show the "Tasks by person" chart (hidden by default). */
+  showTasksByPerson: boolean
 }
 
 /** Ongoing / catch-all campaigns that can be hidden from the campaign charts. */
@@ -20,6 +22,7 @@ export const COMMON_CAMPAIGNS = ['BAU', 'Always On', 'Others']
 export const DEFAULT_DASHBOARD_PREFS: DashboardPrefs = {
   demandDim: 'asset',
   hideCommonCampaigns: true,
+  showTasksByPerson: false,
 }
 
 const STORAGE_KEY = 'mwr.dashboardPrefs'

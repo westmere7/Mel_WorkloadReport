@@ -38,7 +38,7 @@ export function Dashboard() {
   const [compare, setCompare] = useState(false)
   const [sourceYear, setSourceYear] = useState<number | null>(null)
   // Chart display preferences — edited in Settings → Dashboard.
-  const { demandDim, hideCommonCampaigns } = useDashboardPrefs()
+  const { demandDim, hideCommonCampaigns, showTasksByPerson } = useDashboardPrefs()
 
   const years = useMemo(() => taskYears(tasks), [tasks])
 
@@ -89,6 +89,7 @@ export function Dashboard() {
     () => assetsByType(filtered, withFallback(settings.assetTypes)),
     [filtered, settings.assetTypes],
   )
+  const workTypeMix = useMemo(() => countByMulti(filtered, 'types'), [filtered])
   // "Across the year" ignores the half sub-filter — it always shows the full 12
   // months of the active year (the latest year by default, or the selected one).
   const byMonth = useMemo(
@@ -123,6 +124,7 @@ export function Dashboard() {
     () => assetsByType(sourceTasks, withFallback(settings.assetTypes)),
     [sourceTasks, settings.assetTypes],
   )
+  const srcWorkTypeMix = useMemo(() => countByMulti(sourceTasks, 'types'), [sourceTasks])
   const srcByMonth = useMemo(
     () => assetsByMonth(tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === srcYear)),
     [tasks, srcYear],
@@ -322,10 +324,10 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* Workload trend + asset mix + tasks by person — equal heights; the two bar/area
-          charts fill their cards to match the (legend-driven) height of Asset mix. */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-3">
-        <Card className="flex flex-col">
+      {/* Workload trend + asset mix + work type mix (+ tasks by person, optional) — equal
+          heights. When Tasks-by-person is hidden, Workload gets the extra width. */}
+      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-4">
+        <Card className={cx('flex flex-col', !showTasksByPerson && 'lg:col-span-2 xl:col-span-2')}>
           <CardHeader
             title="Workload across the year"
             subtitle="Assets produced per month"
@@ -360,12 +362,26 @@ export function Dashboard() {
             compare={compare ? srcAssetMix : undefined}
           />
         </Card>
-        <Card className="flex flex-col">
-          <CardHeader title="Tasks by person" subtitle="Tasks assigned per team member" />
-          <div className="min-h-[180px] flex-1">
-            <HBarChart data={byPerson} height="100%" emptyMessage="Assign people to at least 2 tasks." />
-          </div>
+        <Card>
+          <CardHeader
+            title="Work type mix"
+            subtitle={compare ? `Tasks by work type — % vs ${srcYear}` : 'Tasks by work type'}
+          />
+          <DonutChart
+            data={workTypeMix}
+            height={200}
+            emptyMessage="Tag tasks with work types to see the mix."
+            compare={compare ? srcWorkTypeMix : undefined}
+          />
         </Card>
+        {showTasksByPerson && (
+          <Card className="flex flex-col">
+            <CardHeader title="Tasks by person" subtitle="Tasks assigned per team member" />
+            <div className="min-h-[180px] flex-1">
+              <HBarChart data={byPerson} height="100%" emptyMessage="Assign people to at least 2 tasks." />
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Campaign charts stacked; demand by stakeholders takes the full height on the right */}

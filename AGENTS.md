@@ -113,13 +113,18 @@ happens** (see §6).
 
 - **Dashboard** (`src/pages/Dashboard.tsx`): span selector; 3 big hero StatCards
   (Total assets / tasks / campaigns) + a stacked column (Top request type + a
-  "Tasks by size" stat-tile card); then Workload-across-the-year area chart + Asset mix
-  donut + Workload by person; then Tasks-by-campaign + Asset-count-by-campaign stacked
-  next to a tall **Demand by stakeholders** stacked bar. The chart display options
-  (demand dimension Work/Asset type; hide Always On/BAU/Others in the campaign charts)
-  are NOT on the dashboard — they live in **Settings → Dashboard**, backed by
-  `src/lib/dashboardPrefs.ts` (localStorage `mwr.dashboardPrefs`, reactive external
-  store). Defaults: **Asset type**, common campaigns **hidden** (stakeholder demand).
+  "Tasks by size" stat-tile card); then a row (`lg:grid-cols-2 xl:grid-cols-4`):
+  Workload-across-the-year area chart + **Asset mix** donut + **Work type mix** donut
+  (`countByMulti(filtered,'types')`, same `DonutChart` style as Asset mix) + optional
+  **Tasks by person** (HBar); then Tasks-by-campaign + Asset-count-by-campaign stacked
+  next to a tall **Demand by stakeholders** stacked bar. **Tasks by person is hidden by
+  default** (`showTasksByPerson` pref); when hidden, the Workload card takes
+  `lg:col-span-2 xl:col-span-2` so it gets the freed width. The chart display options
+  (demand dimension Work/Asset type; hide Always On/BAU/Others in the campaign charts;
+  show/hide Tasks by person) are NOT on the dashboard — they live in **Settings →
+  Dashboard**, backed by `src/lib/dashboardPrefs.ts` (localStorage `mwr.dashboardPrefs`,
+  reactive external store). Defaults: demand **Asset type**, common campaigns **hidden**,
+  Tasks-by-person **hidden**.
 - **Dashboard comparison mode**: the header "Compare" toggle swaps the span filter for
   **Base {select} vs {select}** year pickers (labelled with text, not an arrow; defaults:
   target = latest data year, source = target − 1; source can never equal target) and the
@@ -155,6 +160,12 @@ happens** (see §6).
 - **Settings** (`src/pages/Settings.tsx`): a **Dashboard** card (grouped chart-display
   toggles, see above); four `ListEditor`s (campaigns/work types/asset types/people)
   with add/rename/remove + a locked **"Others"** fallback row; and fixed squads & sizes.
+  Each `ListEditor` shows items **sorted alphabetically** (`sortAlpha`) and **warns before
+  removing an item that has linked tasks** (a confirm modal shown only when `usage>0`;
+  0-task items delete straight away). Sort is **display + consumption only** — stored
+  arrays keep insertion order; `withFallback()` sorts (Others last) so the **task form
+  and charts list A→Z too** (this is why the sort "affects new task order"). CSV export
+  passes raw `settings.assetTypes` (header/rows share it, import is order-agnostic).
   The whole page requires sign-in (route redirects to `/` otherwise). NOTE: the old
   **Data backend** card and the **Developer/danger zone** (populate sample data / delete
   all) were removed from the UI — `store.populateSampleData`/`deleteAllTasks` still exist
@@ -234,7 +245,8 @@ take the asset-type list as a param; the Dashboard passes `withFallback(settings
 
 Every editable list (campaigns/types/people/assetTypes) has a **reserved, uneditable
 `"Others"`** item (`FALLBACK_ITEM`). It is **not stored in the settings arrays** — it's
-appended virtually by `withFallback()` and rendered as a locked row (no edit/remove) in
+appended virtually by `withFallback()` (which **sorts the real items alphabetically** via
+`sortAlpha` and keeps Others last) and rendered as a locked row (no edit/remove) in
 Settings' `ListEditor`.
 
 Purpose: **nothing gets orphaned on delete.** `store.removeListItem(key, value)`:
