@@ -181,7 +181,7 @@ export function Dashboard() {
         <Card className="flex flex-col">
           <CardHeader
             title="Workload across the year"
-            subtitle={`Assets booked per month in ${activeYear}`}
+            subtitle={`Assets produced per month in ${activeYear}`}
           />
           <div className="min-h-[180px] flex-1">
             <AreaTrendChart data={byMonth} height="100%" nowMonth={nowMonth} />

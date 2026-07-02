@@ -369,6 +369,29 @@ export function AreaTrendChart({
 
   const showNow = nowMonth != null && nowMonth >= 0 && nowMonth < data.length
 
+  // Fraction of the x-axis where "Now" sits — used to switch the line from red
+  // (past/present) to grey (future) at that point via a hard gradient stop.
+  const nowOffset = showNow ? `${((nowMonth as number) / Math.max(1, data.length - 1)) * 100}%` : '0%'
+  const FUTURE_GREY = 'var(--chart-axis-strong)'
+
+  // Colour each dot: red up to and including "Now", grey afterward.
+  const renderDot = (props: { cx?: number; cy?: number; index?: number }) => {
+    const { cx, cy, index = 0 } = props
+    if (cx == null || cy == null) return <g key={`dot-${index}`} />
+    const isFuture = showNow && index > (nowMonth as number)
+    return (
+      <circle
+        key={`dot-${index}`}
+        cx={cx}
+        cy={cy}
+        r={2.5}
+        fill="var(--card)"
+        stroke={isFuture ? FUTURE_GREY : '#E61E2A'}
+        strokeWidth={1.5}
+      />
+    )
+  }
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ left: 0, right: 12, top: 8, bottom: 4 }}>
@@ -379,6 +402,13 @@ export function AreaTrendChart({
             <stop offset="60%" stopColor="#E61E2A" stopOpacity={0.14} />
             <stop offset="100%" stopColor="#E61E2A" stopOpacity={0.02} />
           </linearGradient>
+          {/* Line colour: red before "Now", grey after (hard switch at the offset) */}
+          {showNow && (
+            <linearGradient id="workloadStroke" x1="0" y1="0" x2="1" y2="0">
+              <stop offset={nowOffset} stopColor="#E61E2A" />
+              <stop offset={nowOffset} stopColor={FUTURE_GREY} />
+            </linearGradient>
+          )}
         </defs>
         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
         <XAxis dataKey="name" tick={AXIS} axisLine={false} tickLine={false} />
@@ -393,10 +423,10 @@ export function AreaTrendChart({
         <Area
           type="monotone"
           dataKey="value"
-          stroke="#E61E2A"
+          stroke={showNow ? 'url(#workloadStroke)' : '#E61E2A'}
           strokeWidth={3}
           fill="url(#workloadFill)"
-          dot={{ r: 2.5, fill: 'var(--card)', stroke: '#E61E2A', strokeWidth: 1.5 }}
+          dot={renderDot}
           activeDot={{ r: 5 }}
         />
         {showNow && (

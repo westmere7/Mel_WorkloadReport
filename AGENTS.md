@@ -290,7 +290,11 @@ to run it**, because a write including an unknown column fails:
   querying the DOM (cards render, no error-boundary fallback text).
 - **The "Workload across the year" chart is intentionally decoupled from the span
   filter** — it always shows the full 12 months of the active year (`byMonth` uses the
-  year, not the half). Line is solid RMIT red; fill is a red opacity-fade gradient.
+  year, not the half). Fill is a red opacity-fade gradient. The line is RMIT red up to
+  the **"Now"** month then **grey afterward** (future) — done via a horizontal stroke
+  gradient (`#workloadStroke`) with a hard stop at `nowMonth/(len-1)`, plus a custom
+  `renderDot` colouring future dots grey. Only applies when `nowMonth` is set (i.e. the
+  active year is the current calendar year); otherwise the whole line stays solid red.
 - **Long chart x-axis labels wrap** (via `WrappedTick`) rather than angling.
 
 ---
