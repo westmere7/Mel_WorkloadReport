@@ -353,10 +353,16 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           />
           {codeError ? (
             <p className="mt-1.5 text-xs font-medium text-rmit-red">{codeError}</p>
-          ) : (
-            parsed.valid &&
-            parsed.iso && <p className="mt-1.5 text-xs text-accent-green">Booked {parsed.iso}</p>
-          )}
+          ) : parsed.valid && parsed.iso ? (
+            <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-accent-green">
+              Booked {parsed.iso}
+              {parsed.legacy && (
+                <span className="rounded bg-subtle px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  Legacy format
+                </span>
+              )}
+            </p>
+          ) : null}
         </div>
         <div>
           <label className="label">Task name</label>

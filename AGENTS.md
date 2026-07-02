@@ -93,6 +93,13 @@ happens** (see §6).
 - **Task code**: `YY.MMDD.<seq>`, e.g. `26.0608.A`. `src/lib/taskCode.ts` parses it to
   an ISO date + sequence (`parseTaskCode`), builds it (`formatTaskCode`), and derives
   the **half** (`deriveHalf`: Jan–Jun = H1, else H2).
+- **Legacy task code**: `VN<YY>-<DDMM>-<seq>`, e.g. `VN25-1802-A` → 2025-02-18
+  (⚠️ date is **DD-then-MM**, the reverse of the current MMDD format). `parseTaskCode`
+  detects it (`LEGACY_RE`) and returns `{ iso, seq, valid, legacy: true }`. It is
+  **read-only** — used ONLY to auto-fill the start date (in the task form + paste-to-fill);
+  we never build/rewrite/suggest legacy codes (`formatTaskCode`/`suggestCodeForDate` stay
+  MMDD). When a legacy code is entered, TaskForm shows a small **"Legacy format"** badge
+  under the code input next to "Booked {date}".
 - **Stakeholder groups** (`src/lib/analytics.ts`): every squad maps to one of
   `DOMESTIC` (DOM), `INTON` (INTON), or `Other Stakeholders` (all the rest) via
   `stakeholderGroup()`. Used by the "Demand by stakeholders" chart.

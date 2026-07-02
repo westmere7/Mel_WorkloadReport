@@ -1,27 +1,49 @@
 import type { Half, Task } from '../types'
 
-// Task code format: YY.MMDD.<seq>   e.g. "26.0629.A"  →  2026-06-29, task A
+// Current task code format: YY.MMDD.<seq>   e.g. "26.0629.A"  →  2026-06-29, task A
 const CODE_RE = /^(\d{2})\.(\d{2})(\d{2})\.([A-Za-z]+)$/
+
+// Legacy code format: VN<YY>-<DDMM>-<seq>   e.g. "VN25-1802-A"  →  2025-02-18, task A.
+// Note the date is DAY-then-MONTH here (the opposite of the current MMDD format).
+// We only ever READ these to auto-fill the start date — codes are never rewritten.
+const LEGACY_RE = /^VN(\d{2})-(\d{2})(\d{2})-([A-Za-z]+)$/i
 
 export interface ParsedCode {
   iso: string | null // yyyy-mm-dd
   seq: string | null // e.g. "A"
   valid: boolean
+  /** True when parsed from the legacy "VN25-1802-A" format. */
+  legacy: boolean
 }
 
-/** Parse a task code into an ISO date + sequence letters. */
+/** Parse a task code into an ISO date + sequence letters (current or legacy format). */
 export function parseTaskCode(code: string): ParsedCode {
-  const m = code.trim().match(CODE_RE)
-  if (!m) return { iso: null, seq: null, valid: false }
-  const [, yy, mm, dd, seq] = m
+  const c = code.trim()
+
+  const std = c.match(CODE_RE)
+  if (std) {
+    const [, yy, mm, dd, seq] = std
+    return buildParsed(yy, mm, dd, seq, false)
+  }
+
+  const leg = c.match(LEGACY_RE)
+  if (leg) {
+    const [, yy, dd, mm, seq] = leg // legacy is DD-then-MM
+    return buildParsed(yy, mm, dd, seq, true)
+  }
+
+  return { iso: null, seq: null, valid: false, legacy: false }
+}
+
+function buildParsed(yy: string, mm: string, dd: string, seq: string, legacy: boolean): ParsedCode {
   const year = 2000 + Number(yy)
   const month = Number(mm)
   const day = Number(dd)
   if (month < 1 || month > 12 || day < 1 || day > 31) {
-    return { iso: null, seq: seq.toUpperCase(), valid: false }
+    return { iso: null, seq: seq.toUpperCase(), valid: false, legacy }
   }
   const iso = `${year}-${pad(month)}-${pad(day)}`
-  return { iso, seq: seq.toUpperCase(), valid: true }
+  return { iso, seq: seq.toUpperCase(), valid: true, legacy }
 }
 
 /** Build a task code from an ISO date + sequence, e.g. (2026-06-29,"A") → "26.0629.A". */
