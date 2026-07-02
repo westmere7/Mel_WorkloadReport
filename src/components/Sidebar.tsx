@@ -42,7 +42,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         <div className="flex h-full w-[68px] shrink-0 flex-col items-center gap-1 py-5 md:w-60 md:items-stretch md:px-4">
           {/* Brand */}
           <div className="mb-6 flex items-center gap-3 px-1 md:px-2">
-            <img src="/RMIT_white.svg" alt="RMIT" className="h-5 w-auto shrink-0 md:h-7" />
+            <img src="/RMIT_red.svg" alt="RMIT" className="h-5 w-auto shrink-0 md:h-7" />
             <div className="hidden min-w-0 md:block">
               <p className="text-sm font-bold leading-tight text-white">GCMC</p>
               <p className="text-[11px] leading-tight text-navy-100">Workload Report</p>

@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
-import { LogIn, LogOut, Moon, Sun } from 'lucide-react'
+import { LogIn, Moon, Sun, UserCog } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { LoginModal } from './LoginModal'
+import { AccountModal } from './AccountModal'
 import { useTheme } from '../lib/theme'
 import { useAuth } from '../lib/auth'
 
@@ -23,10 +24,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation()
   const meta = TITLES[pathname] ?? { title: 'Workload Report', subtitle: '' }
   const { theme, toggle } = useTheme()
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const currentYear = new Date().getFullYear()
 
   const [loginOpen, setLoginOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_KEY) === 'collapsed'
@@ -58,9 +60,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex items-stretch gap-3">
               {collapsed && (
                 <div className="flex items-center gap-2.5" title="GCMC Workload Report">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--sidebar)]">
-                    <img src="/RMIT_white.svg" alt="RMIT" className="h-4 w-auto" />
-                  </span>
+                  {/* Full-colour logo on the light header; red/white on the dark header */}
+                  <img src="/RMIT_full.svg" alt="RMIT" className="h-8 w-auto shrink-0 dark:hidden" />
+                  <img src="/RMIT_red.svg" alt="RMIT" className="hidden h-8 w-auto shrink-0 dark:block" />
                   <div className="hidden sm:block">
                     <p className="text-sm font-bold leading-tight text-ink">GCMC</p>
                     <p className="text-[11px] leading-tight text-muted">Workload Report</p>
@@ -92,12 +94,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </button>
               {user ? (
                 <button
-                  onClick={signOut}
+                  onClick={() => setAccountOpen(true)}
                   className="flex h-9 items-center gap-2 rounded-xl border border-line bg-card px-3 text-xs font-semibold text-muted transition hover:text-ink"
-                  title={`Signed in as ${user} — click to sign out`}
+                  title={`Signed in as ${user} — account settings`}
                 >
+                  <UserCog className="h-4 w-4" />
                   <span className="hidden max-w-[120px] truncate sm:inline">{user}</span>
-                  <LogOut className="h-4 w-4" />
                 </button>
               ) : (
                 <button
@@ -116,6 +118,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <AccountModal open={accountOpen} onClose={() => setAccountOpen(false)} />
     </HeaderSlotContext.Provider>
   )
 }

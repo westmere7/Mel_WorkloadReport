@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, Check, Database, HardDrive, Lock, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Check, Database, HardDrive, Info, Lock, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -270,6 +270,8 @@ const SAMPLE_COUNT = 60
 
 function DangerZone() {
   const { tasks, backend, deleteAllTasks, populateSampleData } = useStore()
+  // These maintenance tools are only usable while running the dev server.
+  const devMode = import.meta.env.DEV
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -325,7 +327,16 @@ function DangerZone() {
           </span>
         }
       />
-      <div className="space-y-3">
+      {!devMode && (
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-line bg-subtle p-3 text-xs text-muted">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-faint" />
+          <span>
+            These maintenance tools are <strong className="text-ink">disabled here</strong> and
+            available in <strong className="text-ink">development mode only</strong>.
+          </span>
+        </div>
+      )}
+      <div className={cx('space-y-3', !devMode && 'pointer-events-none select-none opacity-50')}>
         {/* Populate sample data */}
         <div className="flex flex-col gap-4 rounded-xl border border-line bg-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -335,7 +346,7 @@ function DangerZone() {
               spread across the year to the {backend} database — handy for testing.
             </p>
           </div>
-          <button className="btn-navy shrink-0" onClick={populate} disabled={populating}>
+          <button className="btn-navy shrink-0" onClick={populate} disabled={populating || !devMode}>
             <Sparkles className="h-4 w-4" /> {populating ? 'Adding…' : 'Populate with sample data'}
           </button>
         </div>
@@ -353,7 +364,7 @@ function DangerZone() {
           <button
             className="btn shrink-0 bg-rmit-red text-white hover:bg-brand-600 focus:ring-brand-200"
             onClick={() => setOpen(true)}
-            disabled={tasks.length === 0}
+            disabled={tasks.length === 0 || !devMode}
           >
             <Trash2 className="h-4 w-4" /> Delete all tasks
           </button>

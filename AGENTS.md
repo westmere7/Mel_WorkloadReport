@@ -116,6 +116,13 @@ happens** (see §6).
 - **Task List** (`src/pages/TaskList.tsx`): prominent search, span selector, four
   **multi-select** filters (squad/campaign/people/size), sortable columns, row → edit
   modal, per-row delete, a note **hover icon**, and the **Import & Backup** button.
+  Signed out, rows still open — but as a **read-only `TaskDetails`** view
+  (`src/components/TaskDetails.tsx`, modal titled "Task details"), not the editable form;
+  the Actions column and Import & Backup are hidden. `TaskDetails` is a clean scannable
+  layout (NOT a mirror of the form): identity header with heat-coloured size + squad +
+  half badges, a subtle-boxed meta grid (campaign/start/end, plus a computed **Duration**
+  cell when an end date is set), then divider-separated sections for work types, asset
+  breakdown (chips + total pill), people, and the **note (only when present)**. See §13.
 - **Task form** (`src/components/TaskForm.tsx`): shared by New Task (via
   `NewTaskModal`/`useNewTask`) and Edit (from Task List). Big feature surface — see §8.
 - **Import & Backup** (`src/components/ImportBackupModal.tsx`): CSV import (clean-load vs
@@ -123,21 +130,28 @@ happens** (see §6).
 - **Settings** (`src/pages/Settings.tsx`): a **Dashboard** card (grouped chart-display
   toggles, see above); four `ListEditor`s (campaigns/work types/asset types/people)
   with add/rename/remove + a locked **"Others"** fallback row; fixed squads & sizes; a
-  Developer/danger zone (populate sample data, delete all). The whole page requires
+  Developer/danger zone (populate sample data, delete all) that is **gated on
+  `import.meta.env.DEV`** — grayed out with a "development mode only" notice in
+  production builds, fully usable while running `npm run dev`. The whole page requires
   sign-in (route redirects to `/` otherwise).
 - **Charts** (`src/components/charts.tsx`): `AreaTrendChart, DonutChart, VBarChart,
   HBarChart, StackedBarChart`, `NotEnough`, and the `WrappedTick` helper (wraps long
   x-axis labels onto multiple lines instead of angling them).
 - **Layout/Sidebar** (`src/components/Layout.tsx`, `Sidebar.tsx`): sidebar holds brand
   + nav + the **New Task** button (sign-in only, under a subtle separator); header holds
-  the page title, a current-year box, the theme toggle, and the **sign-in/sign-out
-  button**. Sidebar is **responsive**: icon-only 68px rail below `md`, full 240px at
+  the page title, a current-year box, the theme toggle, and the **sign-in / account
+  button** (signed in → opens the Account panel, see §13). Sidebar is **responsive**:
+  icon-only 68px rail below `md`, full 240px at
   `md+` (labels/brand text `hidden md:*` — don't drop these classes; losing them once
   broke mobile). **Collapse**: a small circular chevron straddles the sidebar's right
   edge (`ChevronLeft`/`ChevronRight` by state, state lifted into Layout, persisted in
   localStorage `mwr.sidebar`); collapsed = sidebar width 0, and the header then shows
-  the **logo + app name before the page title** (white logo sits in a `--sidebar`-navy
-  chip so it works in light mode). The header also exposes a **header-slot context**
+  the **logo + app name before the page title** (the logo is unboxed and swaps by theme —
+  `RMIT_full.svg` on the light header, `RMIT_red.svg` on the dark one, via
+  `dark:hidden`/`hidden dark:block`). **Logo rule**: dark backgrounds use `RMIT_red.svg`
+  (white+red), light backgrounds use `RMIT_full.svg` (red+navy); the sidebar's bg is
+  always dark navy (`--sidebar`) so it always uses `RMIT_red.svg`. (`RMIT_white.svg` is
+  no longer used.) The header also exposes a **header-slot context**
   (`useHeaderSlots()`): a page can inject `left`/`right` nodes into the header via an
   effect (clearing on unmount). The Dashboard uses it to render the **Live badge**
   (left) and the **span selector + task count** (right) in the header bar instead of a
@@ -283,22 +297,36 @@ to run it**, because a write including an unknown column fails:
 
 ## 13. Sign-in gate (view-for-all, edit-for-users)
 
-`src/lib/auth.tsx` (`AuthProvider` / `useAuth()` → `{ user, canEdit, signIn, signOut }`):
+`src/lib/auth.tsx` (`AuthProvider` / `useAuth()` → `{ user, canEdit, signIn, signOut,
+updateAccount }`):
 
 - **Not real security** — the anon key still has full DB access; this is a UX gate for
   an internal tool. Passwords are SHA-256-hashed client-side (`crypto.subtle`) and
-  matched against the **`app_users`** table (Supabase) or a built-in fallback account
-  (local backend). Default credential either way: **admin / gcmc2026** — change it with
-  the `update … set password_hash = encode(digest('…','sha256'),'hex')` snippet in
-  `schema.sql`.
+  matched against the **`app_users`** table (Supabase) or a **local fallback account**
+  (localStorage `mwr.localAccount`, defaulting to the built-in one). Default credential
+  either way: **admin / gcmc2026**.
 - **Session** persists in localStorage `mwr.session` ({ username }) and is restored on
   load without re-verification.
+- **Self-service account change** (`updateAccount`, surfaced in the **Account panel** —
+  `src/components/AccountModal.tsx`, opened from the header account button, NOT on the
+  Settings page): verifies the current password, then updates the username and/or
+  password — in `app_users` (Supabase) or `mwr.localAccount` (local). It re-writes the
+  session so you stay signed in. ⚠️ The Supabase update uses
+  `.update(patch).eq(...).select()` and **throws if 0 rows come back**, because an
+  RLS-blocked update returns no error but changes nothing — without the `.select()`
+  check it would falsely report success. Requires the **`for update` RLS policy** on
+  `app_users` (added to `schema.sql`); until the user re-runs it, the panel shows
+  "account changes are blocked — re-run schema.sql".
 - **What `canEdit` gates**: Settings nav item + `/settings` route (redirect to `/`),
-  the sidebar **New Task** button, the dashboard empty-state CTA, task-list row
-  click-to-edit + Actions column + **Import & Backup**. Anonymous visitors can still
-  browse the Dashboard (incl. the span selector) and the Task List (search/filters).
-- The header button after the theme toggle is the entry point: `LogIn` icon →
-  `LoginModal`; when signed in it shows the username + `LogOut` and signs out on click.
+  the sidebar **New Task** button, the dashboard empty-state CTA, the task-list Actions
+  column + **Import & Backup**, and the task modal's mode (editable `TaskForm` vs
+  read-only `TaskDetails`). Anonymous visitors can still browse the Dashboard (incl. the
+  span selector) and the Task List (search/filters), and **open a task row to view its
+  details read-only** — they just can't change anything.
+- The header button after the theme toggle is the entry point: signed out → `LogIn`
+  icon opens `LoginModal`; signed in → `UserCog` icon + username opens the **Account
+  panel** (`AccountModal`), which holds the username/password form **and the Sign out
+  button** (there is no separate sign-out button in the header).
 
 ## 14. Working conventions
 

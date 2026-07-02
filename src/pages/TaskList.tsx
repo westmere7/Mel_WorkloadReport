@@ -16,6 +16,7 @@ import { MultiSelect } from '../components/ui/MultiSelect'
 import { SpanFilter } from '../components/SpanFilter'
 import { ImportBackupModal } from '../components/ImportBackupModal'
 import { TaskForm } from '../components/TaskForm'
+import { TaskDetails } from '../components/TaskDetails'
 import { useStore } from '../data/store'
 import { useAuth } from '../lib/auth'
 import { SQUADS, SIZES, SIZE_ORDER, SIZE_TONE } from '../constants'
@@ -166,7 +167,7 @@ export function TaskList() {
             Showing <strong className="text-ink">{filtered.length}</strong> of {tasks.length} tasks
           </span>
           <span className="hidden sm:inline">
-            {canEdit ? 'Click any row to edit' : 'Sign in to edit tasks'}
+            {canEdit ? 'Click any row to edit' : 'Click any row to view · sign in to edit'}
           </span>
         </div>
         <div className="overflow-x-auto">
@@ -191,12 +192,9 @@ export function TaskList() {
               {filtered.map((t) => (
                 <tr
                   key={t.id}
-                  className={cx(
-                    'group transition-colors hover:bg-subtle',
-                    canEdit && 'cursor-pointer',
-                  )}
-                  onClick={canEdit ? () => setEditing(t) : undefined}
-                  title={canEdit ? 'Click to edit' : undefined}
+                  className="group cursor-pointer transition-colors hover:bg-subtle"
+                  onClick={() => setEditing(t)}
+                  title={canEdit ? 'Click to edit' : 'Click to view'}
                 >
                   <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-muted">{t.code || '—'}</td>
                   <td className="px-3 py-3 font-medium text-ink">
@@ -289,17 +287,25 @@ export function TaskList() {
         </div>
       </Card>
 
-      {/* Edit modal */}
-      <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title="Edit task" wide>
-        {editing && (
-          <TaskForm
-            initial={editing}
-            submitLabel="Save changes"
-            onSubmit={handleUpdate}
-            onCancel={() => setEditing(null)}
-            onDelete={() => setDeleting(editing)}
-          />
-        )}
+      {/* Edit modal — read-only details for signed-out viewers, editable form otherwise */}
+      <Modal
+        open={Boolean(editing)}
+        onClose={() => setEditing(null)}
+        title={canEdit ? 'Edit task' : 'Task details'}
+        wide
+      >
+        {editing &&
+          (canEdit ? (
+            <TaskForm
+              initial={editing}
+              submitLabel="Save changes"
+              onSubmit={handleUpdate}
+              onCancel={() => setEditing(null)}
+              onDelete={() => setDeleting(editing)}
+            />
+          ) : (
+            <TaskDetails task={editing} onClose={() => setEditing(null)} />
+          ))}
       </Modal>
 
       {/* Delete confirm */}

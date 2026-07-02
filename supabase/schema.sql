@@ -91,6 +91,11 @@ alter table public.app_users enable row level security;
 drop policy if exists "anon can read app_users" on public.app_users;
 create policy "anon can read app_users" on public.app_users
   for select using (true);
+-- Allows the in-app "Account" settings to change a username/password. The
+-- client verifies the current password first; this is a UX gate, not a wall.
+drop policy if exists "anon can update app_users" on public.app_users;
+create policy "anon can update app_users" on public.app_users
+  for update using (true) with check (true);
 
 -- ── Row Level Security ──────────────────────────────────────────
 -- The sign-in above is a client-side gate only. The policies below grant
