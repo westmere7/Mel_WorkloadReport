@@ -179,7 +179,12 @@ happens** (see §6).
   slots + controls right via `order` + `ml-auto`); when space runs out it wraps the
   `slots.right` cluster (`order-3 w-full sm:order-2 sm:w-auto`) to a second full-width
   row. On mobile the year box and Live badge are hidden (`hidden sm:*`) to keep the top
-  row compact.
+  row compact. The sidebar's bottom-left footer (**expanded only**) shows **"RMIT GCMC
+  Team"** and the app version below it.
+- **App version**: `package.json`'s `version` is the single source of truth; `vite.config.ts`
+  injects it via `define` as the global **`__APP_VERSION__`** (typed in `vite-env.d.ts`),
+  rendered as `v{__APP_VERSION__}` in the sidebar footer. Bump `package.json` to change it
+  (Vite config change → dev server auto-restarts).
 
 ---
 

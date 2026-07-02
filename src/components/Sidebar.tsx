@@ -118,7 +118,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           <div className="flex-1" />
 
           <div className={cx('px-2 pb-1', collapsed ? 'hidden' : 'hidden md:block')}>
-            <p className="text-[11px] leading-relaxed text-navy-200">Melbourne Design Team</p>
+            <p className="text-[11px] leading-relaxed text-navy-200">RMIT GCMC Team</p>
+            <p className="mt-0.5 text-[10px] leading-tight text-navy-300">v{__APP_VERSION__}</p>
           </div>
         </div>
       </aside>
