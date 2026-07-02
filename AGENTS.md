@@ -143,10 +143,16 @@ happens** (see §6).
   button** (signed in → opens the Account panel, see §13). Sidebar is **responsive**:
   icon-only 68px rail below `md`, full 240px at
   `md+` (labels/brand text `hidden md:*` — don't drop these classes; losing them once
-  broke mobile). **Collapse**: a small circular chevron straddles the sidebar's right
-  edge (`ChevronLeft`/`ChevronRight` by state, state lifted into Layout, persisted in
-  localStorage `mwr.sidebar`); collapsed = sidebar width 0, and the header then shows
-  the **logo + app name before the page title** (the logo is unboxed and swaps by theme —
+  broke mobile). ⚠️ **Tailwind arbitrary-width gotcha**: the aside width toggles between
+  `w-[68px]` and `md:w-60`/`md:w-0`; keep exactly ONE `md:w-*` per branch (see the
+  ternary) — piling `md:w-60` and `md:w-0` into one className lets source-order decide
+  and breaks unpredictably. **Collapse is desktop-only**: a small circular chevron
+  (`ChevronLeft`/`ChevronRight`) straddles the sidebar edge, hidden below `md`
+  (`hidden md:flex`); on mobile the sidebar is a fixed rail that **can't collapse** (the
+  `collapsed` state only applies at `md+`). State lifted into Layout, persisted in
+  localStorage `mwr.sidebar`. Collapsed (desktop) = sidebar width 0, and the header then
+  shows the **logo + app name before the page title** (only at `md+`; the logo is unboxed
+  and swaps by theme —
   `RMIT_full.svg` on the light header, `RMIT_red.svg` on the dark one, via
   `dark:hidden`/`hidden dark:block`). **Logo rule**: dark backgrounds use `RMIT_red.svg`
   (white+red), light backgrounds use `RMIT_full.svg` (red+navy); the sidebar's bg is
@@ -155,7 +161,11 @@ happens** (see §6).
   (`useHeaderSlots()`): a page can inject `left`/`right` nodes into the header via an
   effect (clearing on unmount). The Dashboard uses it to render the **Live badge**
   (left) and the **span selector + task count** (right) in the header bar instead of a
-  body row.
+  body row. The header is a **`flex-wrap` bar**: on wide screens it's one row (title left,
+  slots + controls right via `order` + `ml-auto`); when space runs out it wraps the
+  `slots.right` cluster (`order-3 w-full sm:order-2 sm:w-auto`) to a second full-width
+  row. On mobile the year box and Live badge are hidden (`hidden sm:*`) to keep the top
+  row compact.
 
 ---
 

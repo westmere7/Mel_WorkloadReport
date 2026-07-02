@@ -34,7 +34,10 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       <aside
         className={cx(
           'flex h-full flex-col overflow-hidden bg-[var(--sidebar)] transition-[width] duration-200',
-          collapsed ? 'w-0' : 'w-[68px] border-r border-line md:w-60',
+          // Mobile is always the 68px rail; collapse only applies at md+.
+          collapsed
+            ? 'w-[68px] border-r border-line md:w-0 md:border-r-0'
+            : 'w-[68px] border-r border-line md:w-60',
         )}
       >
         {/* Fixed-width inner column so content doesn't squish mid-transition.
@@ -102,12 +105,13 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         </div>
       </aside>
 
-      {/* Edge chevron — straddles the sidebar border; direction follows state. */}
+      {/* Edge chevron — straddles the sidebar border; direction follows state.
+          Hidden on mobile: the sidebar is a fixed rail there and can't be collapsed. */}
       <button
         onClick={onToggle}
         title={collapsed ? 'Show sidebar' : 'Hide sidebar'}
         aria-label={collapsed ? 'Show sidebar' : 'Hide sidebar'}
-        className="absolute -right-3 top-[26px] z-20 flex h-6 w-6 items-center justify-center rounded-full border border-line bg-card text-muted shadow-soft transition hover:text-ink"
+        className="absolute -right-3 top-[26px] z-20 hidden h-6 w-6 items-center justify-center rounded-full border border-line bg-card text-muted shadow-soft transition hover:text-ink md:flex"
       >
         {collapsed ? (
           <ChevronRight className="h-4 w-4" strokeWidth={2.4} />
