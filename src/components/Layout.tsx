@@ -92,6 +92,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </button>
+
+              {/* Separator to set the auth control apart from the theme toggle */}
+              <span className="h-6 w-px self-center bg-line" aria-hidden="true" />
+
               {user ? (
                 <button
                   onClick={() => setAccountOpen(true)}
@@ -104,11 +108,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
               ) : (
                 <button
                   onClick={() => setLoginOpen(true)}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-card text-muted transition hover:text-ink"
+                  className="flex h-9 items-center gap-2 rounded-xl bg-rmit-navy px-3.5 text-sm font-semibold text-white transition hover:bg-navy-700 dark:bg-navy-300 dark:hover:bg-navy-200"
                   title="Sign in to edit"
-                  aria-label="Sign in"
                 >
                   <LogIn className="h-4 w-4" />
+                  Sign in
                 </button>
               )}
             </div>
