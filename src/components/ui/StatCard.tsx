@@ -9,6 +9,8 @@ interface StatCardProps {
   hint?: string
   /** Rich footer under the value (xl only) — e.g. a per-size distribution. */
   footer?: ReactNode
+  /** Comparison indicator rendered beside the value (e.g. <TrendDelta />). */
+  delta?: ReactNode
   accent?: 'red' | 'navy' | 'orange' | 'teal' | 'green'
   size?: 'md' | 'lg' | 'xl'
 }
@@ -21,7 +23,7 @@ const ACCENTS: Record<NonNullable<StatCardProps['accent']>, string> = {
   green: 'bg-green-50 text-accent-green dark:bg-green-500/15 dark:text-accent-green',
 }
 
-export function StatCard({ label, value, icon: Icon, hint, footer, accent = 'navy', size = 'md' }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, hint, footer, delta, accent = 'navy', size = 'md' }: StatCardProps) {
   const lg = size === 'lg'
 
   // Hero: a tall, vertical KPI card whose huge number fills its (stretched) cell.
@@ -35,7 +37,10 @@ export function StatCard({ label, value, icon: Icon, hint, footer, accent = 'nav
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-center">
-          <p className="text-[clamp(3.5rem,7vw,8.5rem)] font-bold leading-none text-rmit-navy dark:text-ink">{value}</p>
+          <div className="flex min-w-0 flex-wrap items-end gap-x-3 gap-y-1">
+            <p className="text-[clamp(3.5rem,7vw,8.5rem)] font-bold leading-none text-rmit-navy dark:text-ink">{value}</p>
+            {delta && <span className="pb-2">{delta}</span>}
+          </div>
           {hint && <p className="mt-3 truncate text-base text-muted">{hint}</p>}
           {footer && <div className="mt-3">{footer}</div>}
         </div>
@@ -56,7 +61,10 @@ export function StatCard({ label, value, icon: Icon, hint, footer, accent = 'nav
       </div>
       <div className="min-w-0">
         <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
-        <p className={cx('font-bold leading-tight text-ink', lg ? 'text-3xl' : 'text-2xl')}>{value}</p>
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <p className={cx('font-bold leading-tight text-ink', lg ? 'text-3xl' : 'text-2xl')}>{value}</p>
+          {delta}
+        </div>
         {hint && <p className="truncate text-xs text-muted">{hint}</p>}
       </div>
     </div>

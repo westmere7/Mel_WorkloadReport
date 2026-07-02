@@ -19,6 +19,16 @@ import { LineChart as LineChartIcon } from 'lucide-react'
 import type { NamedCount } from '../lib/analytics'
 import { CHART_COLORS_DARK, CHART_COLORS_LIGHT } from '../constants'
 import { useTheme } from '../lib/theme'
+import { TrendDelta } from './ui/TrendDelta'
+
+/** A comparison-mode baseline series: the source-year data + labels for both years. */
+export interface CompareSeries {
+  data: NamedCount[]
+  /** Source-year label, e.g. "2025". */
+  label: string
+  /** Target-year label, e.g. "2026". */
+  currentLabel: string
+}
 
 /** Theme-aware categorical palette (re-renders on theme toggle). */
 function useChartColors() {
@@ -67,14 +77,18 @@ export function DonutChart({
   height = 240,
   minPoints = 1,
   emptyMessage,
+  compare,
 }: {
   data: NamedCount[]
   height?: number
   minPoints?: number
   emptyMessage?: string
+  /** Comparison baseline — legend rows get an up/down % vs this series. */
+  compare?: NamedCount[]
 }) {
   const colors = useChartColors()
   const total = data.reduce((a, b) => a + b.value, 0)
+  const prevByName = compare ? new Map(compare.map((d) => [d.name, d.value])) : null
   if (total === 0 || data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
 
   return (
@@ -117,7 +131,17 @@ export function DonutChart({
               />
               <span className="truncate text-muted">{d.name}</span>
             </span>
-            <span className="font-semibold text-ink">{d.value}</span>
+            <span className="flex shrink-0 items-center gap-2">
+              {prevByName && (
+                <TrendDelta
+                  size="sm"
+                  current={d.value}
+                  previous={prevByName.get(d.name) ?? 0}
+                  title={`${prevByName.get(d.name) ?? 0} → ${d.value}`}
+                />
+              )}
+              <span className="font-semibold text-ink">{d.value}</span>
+            </span>
           </li>
         ))}
       </ul>
@@ -235,23 +259,70 @@ function WrappedTick(props: { x?: number; y?: number; payload?: { value?: string
   )
 }
 
-/** Vertical bar chart — good for campaigns / sizes. Long labels wrap onto multiple lines. */
+/**
+ * Vertical bar chart — good for campaigns / sizes. Long labels wrap onto multiple lines.
+ * With `compare`, each category splits into two half-columns — source year (faded)
+ * left of target year — and categories missing from either year are hidden.
+ */
 export function VBarChart({
   data,
   height = 260,
   minPoints = 2,
   emptyMessage,
   colors,
+  compare,
 }: {
   data: NamedCount[]
   height?: number
   minPoints?: number
   emptyMessage?: string
   colors?: string[]
+  compare?: CompareSeries
 }) {
   const themed = useChartColors()
-  if (data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
   const palette = colors ?? themed
+
+  if (compare) {
+    const prev = new Map(compare.data.map((d) => [d.name, d.value]))
+    // Only categories that exist (non-zero) in BOTH years are comparable.
+    const rows = data
+      .filter((d) => d.value > 0 && (prev.get(d.name) ?? 0) > 0)
+      .map((d) => ({ name: d.name, value: d.value, prev: prev.get(d.name) as number }))
+    if (rows.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
+    return (
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={rows} margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
+          <XAxis
+            dataKey="name"
+            tick={<WrappedTick />}
+            axisLine={false}
+            tickLine={false}
+            interval={0}
+            height={48}
+          />
+          <YAxis allowDecimals={false} tick={AXIS} axisLine={false} tickLine={false} width={28} />
+          <Tooltip
+            cursor={CURSOR}
+            contentStyle={tooltipStyle}
+            itemStyle={tooltipItemStyle}
+            labelStyle={tooltipLabelStyle}
+          />
+          <Bar dataKey="prev" name={compare.label} radius={[4, 4, 0, 0]} maxBarSize={32} fillOpacity={0.45}>
+            {rows.map((_, i) => (
+              <Cell key={i} fill={palette[i % palette.length]} />
+            ))}
+          </Bar>
+          <Bar dataKey="value" name={compare.currentLabel} radius={[4, 4, 0, 0]} maxBarSize={32}>
+            {rows.map((_, i) => (
+              <Cell key={i} fill={palette[i % palette.length]} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    )
+  }
+
+  if (data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
@@ -293,6 +364,7 @@ export function StackedBarChart({
   height = 300,
   minPoints = 1,
   emptyMessage,
+  compare,
 }: {
   data: Array<Record<string, string | number>>
   keys: string[]
@@ -301,13 +373,35 @@ export function StackedBarChart({
   height?: number
   minPoints?: number
   emptyMessage?: string
+  /** Comparison baseline rows (same key shape) — splits each column into two
+      half-columns, source year (faded) beside target year; categories missing
+      from either year are hidden. */
+  compare?: { data: Array<Record<string, string | number>>; label: string; currentLabel: string }
 }) {
   const themed = useChartColors()
-  if (data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
   const colorAt = (i: number) => themed[(paletteIndices?.[i] ?? i) % themed.length]
+
+  // In compare mode, inner-join rows on name and stash the baseline under prev_* keys.
+  let rows = data
+  if (compare) {
+    const src = new Map(compare.data.map((r) => [String(r.name), r]))
+    rows = data
+      .filter((r) => src.has(String(r.name)))
+      .map((r) => {
+        const s = src.get(String(r.name))!
+        const merged: Record<string, string | number> = { name: r.name }
+        for (const k of keys) {
+          merged[k] = Number(r[k]) || 0
+          merged[`prev_${k}`] = Number(s[k]) || 0
+        }
+        return merged
+      })
+  }
+  if (rows.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
+
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} stackOffset="expand" margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
+      <BarChart data={rows} stackOffset="expand" margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
         <XAxis
           dataKey="name"
@@ -330,15 +424,46 @@ export function StackedBarChart({
           itemStyle={tooltipItemStyle}
           labelStyle={tooltipLabelStyle}
         />
-        <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} iconType="circle" />
+        <Legend
+          wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+          iconType="circle"
+          // In compare mode both years share the same key colours — collapse the
+          // legend to one entry per key instead of listing each year twice.
+          payload={
+            compare
+              ? keys.map((k, i) => ({ value: k, type: 'circle' as const, color: colorAt(i), id: k }))
+              : undefined
+          }
+        />
+        {/* Source-year half-columns (faded, left) — labelled per-key in the tooltip only. */}
+        {compare &&
+          keys.map((k, i) => (
+            <Bar
+              key={`prev_${k}`}
+              dataKey={`prev_${k}`}
+              name={`${k} (${compare.label})`}
+              stackId="prev"
+              fill={colorAt(i)}
+              fillOpacity={0.45}
+              legendType="none"
+              maxBarSize={40}
+            />
+          ))}
         {keys.map((k, i) => (
-          <Bar key={k} dataKey={k} stackId="stack" fill={colorAt(i)} maxBarSize={64}>
+          <Bar
+            key={k}
+            dataKey={k}
+            name={compare ? `${k} (${compare.currentLabel})` : k}
+            stackId={compare ? 'cur' : 'stack'}
+            fill={colorAt(i)}
+            maxBarSize={compare ? 40 : 64}
+          >
             <LabelList
               dataKey={k}
               position="center"
               formatter={(v: number | string) => (v ? `${v}` : '')}
               fill={labelColors?.[i] ?? '#ffffff'}
-              fontSize={11}
+              fontSize={compare ? 10 : 11}
               fontWeight={700}
             />
           </Bar>
@@ -355,6 +480,7 @@ export function AreaTrendChart({
   minMonths = 2,
   emptyMessage,
   nowMonth,
+  compare,
 }: {
   data: NamedCount[]
   height?: number | string
@@ -362,10 +488,20 @@ export function AreaTrendChart({
   emptyMessage?: string
   /** Index (0–11) of the current month to mark with a "Now" line; null to hide. */
   nowMonth?: number | null
+  /** Comparison baseline — draws the source year as a second overlapping line. */
+  compare?: CompareSeries
 }) {
+  const colors = useChartColors()
   const monthsWithData = data.filter((d) => d.value > 0).length
-  if (monthsWithData < minMonths)
+  const compareMonths = compare ? compare.data.filter((d) => d.value > 0).length : 0
+  if (Math.max(monthsWithData, compareMonths) < minMonths)
     return <NotEnough message={emptyMessage ?? 'Add tasks with start dates in different months.'} height={height} />
+
+  // Merge the baseline series in by month index so both lines share the x-axis.
+  const rows = compare
+    ? data.map((d, i) => ({ ...d, prev: compare.data[i]?.value ?? 0 }))
+    : data
+  const compareColor = colors[1]
 
   const showNow = nowMonth != null && nowMonth >= 0 && nowMonth < data.length
 
@@ -394,7 +530,7 @@ export function AreaTrendChart({
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ left: 0, right: 12, top: 8, bottom: 4 }}>
+      <AreaChart data={rows} margin={{ left: 0, right: 12, top: 8, bottom: 4 }}>
         <defs>
           {/* RMIT red fill fading out toward the baseline */}
           <linearGradient id="workloadFill" x1="0" y1="0" x2="0" y2="1">
@@ -418,11 +554,27 @@ export function AreaTrendChart({
           contentStyle={tooltipStyle}
           itemStyle={tooltipItemStyle}
           labelStyle={tooltipLabelStyle}
-          formatter={(v: number) => [`${v} assets`, 'Workload']}
+          formatter={(v: number, name: string) => [`${v} assets`, name]}
         />
+        {compare && <Legend wrapperStyle={{ fontSize: 12 }} iconType="plainline" />}
+        {/* Source year — drawn first so the target-year line sits on top of it. */}
+        {compare && (
+          <Area
+            type="monotone"
+            dataKey="prev"
+            name={compare.label}
+            stroke={compareColor}
+            strokeWidth={2}
+            fill={compareColor}
+            fillOpacity={0.06}
+            dot={{ r: 2, fill: 'var(--card)', stroke: compareColor, strokeWidth: 1.5 }}
+            activeDot={{ r: 4 }}
+          />
+        )}
         <Area
           type="monotone"
           dataKey="value"
+          name={compare ? compare.currentLabel : 'Workload'}
           stroke={showNow ? 'url(#workloadStroke)' : '#E61E2A'}
           strokeWidth={3}
           fill="url(#workloadFill)"

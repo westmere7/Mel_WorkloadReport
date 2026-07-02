@@ -120,6 +120,24 @@ happens** (see §6).
   are NOT on the dashboard — they live in **Settings → Dashboard**, backed by
   `src/lib/dashboardPrefs.ts` (localStorage `mwr.dashboardPrefs`, reactive external
   store). Defaults: **Asset type**, common campaigns **hidden** (stakeholder demand).
+- **Dashboard comparison mode**: the header "Compare" toggle swaps the span filter for
+  **Base {select} vs {select}** year pickers (labelled with text, not an arrow; defaults:
+  target = latest data year, source = target − 1; source can never equal target) and the
+  count reads "N → M tasks". Effects: hero StatCards get a `delta` (`ui/TrendDelta.tsx` —
+  % vs source; "New" when no baseline). Sizes: `sm`/`md` use a single `animate-bounce`
+  chevron; **`lg` is the prominent variant** (used on the Total-assets card) — an infinite
+  **chevron escalator** (`animate-chevron-rise`/`-fall` keyframes in `index.css`,
+  reduced-motion-guarded) that moves up for an increase / down for a decrease, with a
+  24px % — while the card's `hint` keeps the full "{cur} vs {src} deliverables in {year}"
+  numbers. Labels change to "Assets · {year}" etc.;
+  the workload chart overlays the source year as a second line (themed navy, legend
+  labels both years — `compare` prop on `AreaTrendChart`); the Asset-mix donut legend
+  gets per-type deltas (`compare` prop); Tasks-by-person/squad intentionally unchanged;
+  the two campaign VBarCharts and the demand StackedBarChart render **split columns**
+  (source faded at 0.45 opacity, left of target) and **hide categories that don't have
+  data in both years** (inner join by name). ⚠️ Recharts gotcha: `legendType="none"` on
+  the faded bars did NOT keep them out of the Legend — the stacked chart passes an
+  explicit `payload` to `<Legend>` in compare mode instead.
 - **Task List** (`src/pages/TaskList.tsx`): prominent search, span selector, four
   **multi-select** filters (squad/campaign/people/size), sortable columns, row → edit
   modal, per-row delete, a note **hover icon**, and the **Import & Backup** button.
@@ -318,8 +336,12 @@ to run it**, because a write including an unknown column fails:
   artifacts** — check the module-hash timestamp, and confirm health by reloading and
   querying the DOM (cards render, no error-boundary fallback text).
 - **The "Workload across the year" chart is intentionally decoupled from the span
-  filter** — it always shows the full 12 months of the active year (`byMonth` uses the
-  year, not the half). Fill is a red opacity-fade gradient. The line is RMIT red up to
+  filter** — it always shows a full 12 months of ONE year, driven by `chartYear` (NOT
+  `activeYear`): in **Total** mode `chartYear` = the latest data year (`years[0]`), so a
+  year left sticky in `year` state from a prior "By year" pick doesn't leak in; in
+  year/half/compare it follows the selected/target year. A header badge shows that year
+  (or `{srcYear} vs {activeYear}` in compare mode). Fill is a red opacity-fade gradient.
+  The line is RMIT red up to
   the **"Now"** month then **grey afterward** (future) — done via a horizontal stroke
   gradient (`#workloadStroke`) with a hard stop at `nowMonth/(len-1)`, plus a custom
   `renderDot` colouring future dots grey. Only applies when `nowMonth` is set (i.e. the

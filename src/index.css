@@ -135,3 +135,46 @@
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
   }
 }
+
+/* Comparison "trending" indicator — an infinite escalator of chevrons that fade in
+   at one edge, travel across, and fade out at the other. Used by <TrendDelta size="lg">. */
+@keyframes chevron-rise {
+  0% {
+    transform: translateY(60%);
+    opacity: 0;
+  }
+  30%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-60%);
+    opacity: 0;
+  }
+}
+@keyframes chevron-fall {
+  0% {
+    transform: translateY(-60%);
+    opacity: 0;
+  }
+  30%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(60%);
+    opacity: 0;
+  }
+}
+.animate-chevron-rise {
+  animation: chevron-rise 1.2s ease-in-out infinite;
+}
+.animate-chevron-fall {
+  animation: chevron-fall 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-chevron-rise,
+  .animate-chevron-fall {
+    animation: none;
+  }
+}
