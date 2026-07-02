@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Museo';
+  font-style: normal;
+  font-weight: 700;
+  src: local('Museo 700'), local('Museo-700'), url('https://fonts.cdnfonts.com/s/26721/Museo700-Regular.woff') format('woff');
+  font-display: swap;
+}
+
 @layer base {
   :root {
     /* Light theme tokens */

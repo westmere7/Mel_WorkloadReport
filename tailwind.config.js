@@ -66,6 +66,10 @@ export default {
           'Arial',
           'sans-serif',
         ],
+        display: [
+          'Museo',
+          'sans-serif',
+        ],
       },
       boxShadow: {
         card: '0 1px 3px rgba(0, 0, 84, 0.06), 0 8px 24px rgba(0, 0, 84, 0.05)',

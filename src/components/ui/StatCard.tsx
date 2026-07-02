@@ -4,7 +4,7 @@ import { cx } from '../../lib/format'
 
 interface StatCardProps {
   label: string
-  value: string | number
+  value: ReactNode
   icon: LucideIcon
   hint?: string
   /** Rich footer under the value (xl only) — e.g. a per-size distribution. */
@@ -38,7 +38,7 @@ export function StatCard({ label, value, icon: Icon, hint, footer, delta, accent
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-center">
           <div className="flex min-w-0 flex-wrap items-end gap-x-3 gap-y-1">
-            <p className="text-[clamp(3.5rem,7.5vw,8rem)] font-bold leading-none text-rmit-navy dark:text-ink">{value}</p>
+            <p className="font-display text-[clamp(3.5rem,12vw,7.5rem)] font-bold leading-none text-rmit-navy dark:text-ink xl:text-[clamp(3.5rem,5.5vw,7.5rem)]">{value}</p>
             {delta && <span className="pb-1">{delta}</span>}
           </div>
           {hint && <p className="mt-2 truncate text-sm text-muted">{hint}</p>}

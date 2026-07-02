@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeftRight, ClipboardList, Images } from 'lucide-react'
+import { ArrowLeftRight, ClipboardList, Images, Shirt } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
 import { TrendDelta } from '../components/ui/TrendDelta'
+import { AnimatedNumber } from '../components/ui/AnimatedNumber'
 import { Badge } from '../components/ui/Badge'
 import { AreaTrendChart, DonutChart, HBarChart, RankedBars, StackedBarChart, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
@@ -20,8 +21,8 @@ import {
   STAKEHOLDER_GROUPS,
   summarize,
 } from '../lib/analytics'
-import { SIZE_TONE, withFallback } from '../constants'
-import { compactNumber, cx } from '../lib/format'
+import { SIZE_TONE, SIZE_DESCRIPTIONS, withFallback } from '../constants'
+import { cx } from '../lib/format'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
@@ -199,7 +200,7 @@ export function Dashboard() {
               compare ? 'bg-rmit-navy text-white dark:bg-navy-300' : 'bg-card text-muted hover:text-ink',
             )}
           >
-            <ArrowLeftRight className="h-3.5 w-3.5" /> Compare
+            <ArrowLeftRight className="h-3.5 w-3.5" /> {compare ? 'Exit compare mode' : 'Compare'}
           </button>
           <span className="text-xs font-semibold text-muted">
             {compare ? `${filtered.length} vs ${sourceTasks.length} tasks` : `${filtered.length} tasks`}
@@ -244,14 +245,16 @@ export function Dashboard() {
   const campaignSubtitleSuffix = hideCommonCampaigns ? ' — excl. Always On / BAU / Others' : ''
   // Split-column charts fade the source year and only keep categories in both years.
   const compareSubtitleSuffix = compare ? ` — ${activeYear} over ${srcYear} (${srcYear} faded)` : ''
+  // Human-readable description of the current (non-compare) span, for stat hints.
+  const spanDesc = span === 'total' ? 'all time' : span === 'half' ? `${activeYear} ${half}` : `${activeYear}`
 
   return (
     <div className="space-y-4">
-      {/* Header stats: two hero cards + a Tasks-by-squad card */}
-      <div className="grid items-stretch gap-3 lg:grid-cols-3">
+      {/* Header stats: three hero cards + a Tasks-by-squad card */}
+      <div className="grid items-stretch gap-3 lg:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label={compare ? `Asset count · ${activeYear} over ${srcYear}` : 'Asset count'}
-          value={compactNumber(summary.totalAssets)}
+          value={<AnimatedNumber value={summary.totalAssets} />}
           icon={Images}
           accent="navy"
           size="xl"
@@ -267,13 +270,13 @@ export function Dashboard() {
           }
           hint={
             compare
-              ? `${summary.totalAssets} vs ${srcSummary.totalAssets} deliverables in ${srcYear}`
-              : `${summary.totalAssets} deliverables`
+              ? `deliverables from ${activeYear} · was ${srcSummary.totalAssets.toLocaleString()} in ${srcYear}`
+              : `deliverables from ${spanDesc}`
           }
         />
         <StatCard
           label={compare ? `Task count · ${activeYear} over ${srcYear}` : 'Task count'}
-          value={summary.totalTasks}
+          value={<AnimatedNumber value={summary.totalTasks} />}
           icon={ClipboardList}
           accent="red"
           size="xl"
@@ -286,18 +289,30 @@ export function Dashboard() {
               />
             ) : undefined
           }
-          hint={compare ? `vs ${srcSummary.totalTasks} tasks in ${srcYear}` : undefined}
-          footer={
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              {bySize.map((s) => (
-                <span key={s.name} className="inline-flex items-center gap-1.5">
-                  <Badge tone={SIZE_TONE[s.name as Size]}>{s.name}</Badge>
-                  <span className="text-sm font-semibold text-ink">{s.value}</span>
-                </span>
-              ))}
-            </div>
-          }
+          hint={`Across ${summary.totalCampaigns} campaign${summary.totalCampaigns === 1 ? '' : 's'}`}
         />
+
+        {/* Task-size distribution — its own headline card */}
+        <div className="card flex h-full flex-col p-5">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold uppercase tracking-wide text-muted">Task sizes</p>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-50 text-accent-teal dark:bg-cyan-500/15">
+              <Shirt className="h-6 w-6" strokeWidth={2.2} />
+            </div>
+          </div>
+          <div className="flex flex-1 flex-col justify-center divide-y divide-line">
+            {bySize.map((s) => (
+              <div key={s.name} className="flex items-center gap-2.5 py-1.5 first:pt-0 last:pb-0">
+                <Badge tone={SIZE_TONE[s.name as Size]}>{s.name}</Badge>
+                <span className="flex-1 truncate text-xs text-muted" title={SIZE_DESCRIPTIONS[s.name as Size]}>
+                  {SIZE_DESCRIPTIONS[s.name as Size]}
+                </span>
+                <span className="text-xl font-bold tabular-nums text-ink">{s.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <Card className="flex flex-col">
           <CardHeader title="Tasks by squad" subtitle="Requests by stakeholder team" />
           <RankedBars data={bySquad} emptyMessage="Add tasks for at least 2 squads." />

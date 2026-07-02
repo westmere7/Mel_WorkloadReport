@@ -118,10 +118,24 @@ happens** (see §6).
 
 ## 5. Feature map (where things live)
 
-- **Dashboard** (`src/pages/Dashboard.tsx`): span selector; a `lg:grid-cols-3` header row
-  = 2 big hero StatCards (**Asset count** / **Task count** — huge `clamp(...,7.5vw,8rem)`
-  numbers; the Task-count card footers a per-size Badge breakdown) + a **Tasks by squad**
-  card. (Total campaigns was removed.) Then a row (`lg:grid-cols-2 xl:grid-cols-4`):
+- **Dashboard** (`src/pages/Dashboard.tsx`): span selector; a `lg:grid-cols-2
+  xl:grid-cols-4` header row (2-up on `lg`, 4-up on `xl`) = 2 big hero StatCards
+  (**Asset count** shows the **full** number via `toLocaleString()` with hint
+  **"deliverables from {span}"** (`spanDesc`: "all time"/"2026"/"2026 H1"); **Task count**
+  hint is a dynamic **"Across N campaigns"** = `summary.totalCampaigns` for the current
+  span). Hero number size is responsive to the layout: `clamp(3rem,11vw,7rem)` at 2-up
+  (`lg`) so it fills the wide cards, `xl:clamp(3rem,5vw,7rem)` at 4-up so full multi-digit
+  numbers still fit the narrow cards. Both hero numbers use **`ui/AnimatedNumber`** — a
+  true **odometer**: each digit is a vertical reel (0–9 stacked) that `translateY`s to the
+  current digit with a **CSS transition**, so a value change rolls the digits vertically
+  (with a top/bottom fade mask); commas render statically; container carries the
+  `aria-label` (reels are `aria-hidden`). CSS transitions apply their end state even when
+  the tab is hidden, so the value is never stale (but the roll is only visible in a
+  visible browser — not in the hidden preview). Honours `prefers-reduced-motion`.
+  Same-length changes roll; a digit-count change remounts the reels (keyed by length). Then a **Task sizes** headline card (`bySize` badges + bold counts +
+  `Shirt` icon) + a **Tasks by squad** card. (Total campaigns was removed;
+  the per-size breakdown moved out of the Task-count card into the Task-sizes card.) Then a
+  row (`lg:grid-cols-2 xl:grid-cols-4`):
   Workload-across-the-year area chart + **Asset mix** donut + **Work type mix** donut
   (`countByMulti(filtered,'types')`, same `DonutChart` style as Asset mix) + optional
   **Tasks by person** (HBar); then Tasks-by-campaign + Asset-count-by-campaign stacked
