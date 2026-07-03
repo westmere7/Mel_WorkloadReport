@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeftRight } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
+import { Modal } from '../components/ui/Modal'
+import { TaskDetails } from '../components/TaskDetails'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
@@ -131,6 +133,9 @@ export function Dashboard() {
   // The task currently under the pointer on the workload chart — shown live in
   // the card's top-right corner in place of the year.
   const [hoverTask, setHoverTask] = useState<Task | null>(null)
+  // Clicking a workload column opens this task's read-only details, without
+  // leaving the dashboard.
+  const [viewTask, setViewTask] = useState<Task | null>(null)
   // Mark "now" on the workload chart only when viewing the current calendar year.
   const nowMonth = useMemo(() => {
     const now = new Date()
@@ -457,7 +462,7 @@ export function Dashboard() {
               height="100%"
               nowMonth={nowMonth}
               tasks={chartYearTasks}
-              onTaskClick={(t) => goTasks([['open', t.id]])}
+              onTaskClick={setViewTask}
               onHoverTask={setHoverTask}
               compare={
                 compare
@@ -586,6 +591,11 @@ export function Dashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Read-only task details, opened by clicking a workload column. */}
+      <Modal open={Boolean(viewTask)} onClose={() => setViewTask(null)} title="Task details" wide>
+        {viewTask && <TaskDetails task={viewTask} onClose={() => setViewTask(null)} />}
+      </Modal>
     </div>
   )
 }
