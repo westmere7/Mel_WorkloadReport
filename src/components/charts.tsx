@@ -373,7 +373,7 @@ export function VBarChart({
   onSelect,
 }: {
   data: NamedCount[]
-  height?: number
+  height?: number | string
   minPoints?: number
   emptyMessage?: string
   colors?: string[]
@@ -485,13 +485,16 @@ export function StackedBarChart({
   emptyMessage,
   compare,
   onSelect,
+  hideLegend,
 }: {
   data: Array<Record<string, string | number>>
   keys: string[]
   paletteIndices?: number[]
-  height?: number
+  height?: number | string
   minPoints?: number
   emptyMessage?: string
+  /** Hide the built-in bottom legend (e.g. when rendering it in a card header). */
+  hideLegend?: boolean
   /** Clicking a segment calls this with the category (x-axis) name and the stacked key (group). */
   onSelect?: (category: string, group: string) => void
   /** Comparison baseline rows (same key shape) — splits each column into two
@@ -545,17 +548,19 @@ export function StackedBarChart({
           itemStyle={tooltipItemStyle}
           labelStyle={tooltipLabelStyle}
         />
-        <Legend
-          wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-          iconType="circle"
-          // In compare mode both years share the same key colours — collapse the
-          // legend to one entry per key instead of listing each year twice.
-          payload={
-            compare
-              ? keys.map((k, i) => ({ value: k, type: 'circle' as const, color: colorAt(i), id: k }))
-              : undefined
-          }
-        />
+        {!hideLegend && (
+          <Legend
+            wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+            iconType="circle"
+            // In compare mode both years share the same key colours — collapse the
+            // legend to one entry per key instead of listing each year twice.
+            payload={
+              compare
+                ? keys.map((k, i) => ({ value: k, type: 'circle' as const, color: colorAt(i), id: k }))
+                : undefined
+            }
+          />
+        )}
         {/* Source-year half-columns (faded, left) — labelled per-key in the tooltip only. */}
         {compare &&
           keys.map((k, i) => (
@@ -589,6 +594,26 @@ export function StackedBarChart({
         ))}
       </BarChart>
     </ResponsiveContainer>
+  )
+}
+
+/**
+ * Standalone legend for StackedBarChart — colours match the chart's themed
+ * palette. Render it outside the plot (e.g. a card header) to save the vertical
+ * space the built-in bottom legend would take.
+ */
+export function StackedLegend({ keys, paletteIndices }: { keys: string[]; paletteIndices?: number[] }) {
+  const themed = useChartColors()
+  const colorAt = (i: number) => themed[(paletteIndices?.[i] ?? i) % themed.length]
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[11px] font-semibold text-muted">
+      {keys.map((k, i) => (
+        <span key={k} className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: colorAt(i) }} />
+          {k}
+        </span>
+      ))}
+    </div>
   )
 }
 

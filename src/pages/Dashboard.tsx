@@ -9,7 +9,7 @@ import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
 import { TrendDelta } from '../components/ui/TrendDelta'
 import { AnimatedNumber } from '../components/ui/AnimatedNumber'
-import { AreaTrendChart, DonutChart, HBarChart, RankedBars, StackedBarChart, VBarChart } from '../components/charts'
+import { AreaTrendChart, DonutChart, HBarChart, RankedBars, StackedBarChart, StackedLegend, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
 import {
   assetsByCampaign,
@@ -93,11 +93,9 @@ export function Dashboard() {
   const summary = useMemo(() => summarize(filtered), [filtered])
   const bySquad = useMemo(() => assetsBySquad(filtered), [filtered])
   const bySquadTasks = useMemo(() => countByField(filtered, 'squad'), [filtered])
-  const byCampaign = useMemo(() => countByField(filtered, 'campaign'), [filtered])
   const assetCampaign = useMemo(() => assetsByCampaign(filtered), [filtered])
   const dropCommon = (rows: { name: string; value: number }[]) =>
     hideCommonCampaigns ? rows.filter((r) => !COMMON_CAMPAIGNS.includes(r.name)) : rows
-  const byCampaignShown = useMemo(() => dropCommon(byCampaign), [byCampaign, hideCommonCampaigns])
   const assetCampaignShown = useMemo(() => dropCommon(assetCampaign), [assetCampaign, hideCommonCampaigns])
   const demand = useMemo(
     () =>
@@ -144,10 +142,6 @@ export function Dashboard() {
 
   // ── Source-year aggregates (comparison mode only) ──────────────────────
   const srcSummary = useMemo(() => summarize(sourceTasks), [sourceTasks])
-  const srcByCampaign = useMemo(
-    () => dropCommon(countByField(sourceTasks, 'campaign')),
-    [sourceTasks, hideCommonCampaigns], // eslint-disable-line react-hooks/exhaustive-deps
-  )
   const srcAssetCampaign = useMemo(
     () => dropCommon(assetsByCampaign(sourceTasks)),
     [sourceTasks, hideCommonCampaigns], // eslint-disable-line react-hooks/exhaustive-deps
@@ -426,170 +420,156 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* Workload trend + asset mix + work type mix (+ tasks by person, optional) — equal
-          heights. When Tasks-by-person is hidden, Workload gets the extra width. */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-4">
-        <Card className={cx('flex flex-col', !showTasksByPerson && 'lg:col-span-2 xl:col-span-2')}>
-          <CardHeader
-            title="Workload & tasks across the year"
-            subtitle="Assets per month · hover or click a bar for task details"
-            action={
-              // Fixed height so the header (and card) doesn't resize as the
-              // hover readout swaps in and out.
-              <div className="flex h-10 flex-col items-end justify-start gap-1">
-                {hoverTask ? (
-                  <>
-                    <span className="inline-block max-w-[24rem] truncate rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
-                      {hoverTask.name}
+      {/* Left: workload (fills height) above the two campaign charts, side by side.
+          Right: the mix donuts above the full-height squads-demand distribution. */}
+      <div className="grid items-stretch gap-4 lg:grid-cols-2">
+        {/* LEFT column */}
+        <div className="flex flex-col gap-4">
+          <Card className="flex flex-col">
+            <CardHeader
+              title="Workload & tasks across the year"
+              subtitle="Assets per month · hover or click a bar for task details"
+              action={
+                // Fixed height so the header (and card) doesn't resize as the
+                // hover readout swaps in and out.
+                <div className="flex h-10 flex-col items-end justify-start gap-1">
+                  {hoverTask ? (
+                    <>
+                      <span className="inline-block max-w-[24rem] truncate rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
+                        {hoverTask.name}
+                      </span>
+                      <span className="text-[10px] font-medium text-muted">
+                        {hoverTask.assetTotal} {hoverTask.assetTotal === 1 ? 'asset' : 'assets'} ·{' '}
+                        {hoverTask.people.length} {hoverTask.people.length === 1 ? 'person' : 'people'} ·{' '}
+                        {hoverTask.squad} · {hoverTask.size} · Start day: {formatDayMonth(hoverTask.startDate)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
+                      {compare ? `${activeYear} over ${srcYear}` : chartYear}
                     </span>
-                    <span className="text-[10px] font-medium text-muted">
-                      {hoverTask.assetTotal} {hoverTask.assetTotal === 1 ? 'asset' : 'assets'} ·{' '}
-                      {hoverTask.people.length} {hoverTask.people.length === 1 ? 'person' : 'people'} ·{' '}
-                      {hoverTask.squad} · {hoverTask.size} · Start day: {formatDayMonth(hoverTask.startDate)}
-                    </span>
-                  </>
-                ) : (
-                  <span className="rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
-                    {compare ? `${activeYear} over ${srcYear}` : chartYear}
-                  </span>
-                )}
-              </div>
-            }
-          />
-          <div className="min-h-[180px] flex-1">
-            <AreaTrendChart
-              data={byMonth}
-              height="100%"
-              nowMonth={nowMonth}
-              tasks={chartYearTasks}
-              onTaskClick={setViewTask}
-              onHoverTask={setHoverTask}
-              compare={
-                compare
-                  ? { data: srcByMonth, label: String(srcYear), currentLabel: String(activeYear) }
-                  : undefined
+                  )}
+                </div>
               }
             />
-          </div>
-        </Card>
-        <Card>
-          <CardHeader
-            title="Asset mix"
-            subtitle={compare ? `Deliverables by type — ${activeYear} over ${srcYear}` : 'Deliverables by type'}
-          />
-          <DonutChart
-            data={assetMix}
-            height={200}
-            emptyMessage="Add tasks with asset counts to see the mix."
-            compare={compare ? srcAssetMix : undefined}
-            onSelect={(name) => goTasks([['asset', name]])}
-            taskCounts={assetMixCounts}
-            prevTaskCounts={compare ? srcAssetMixCounts : undefined}
-            sourceLabel={String(srcYear)}
-          />
-        </Card>
-        <Card>
-          <CardHeader
-            title="Work type mix"
-            subtitle={compare ? `Tasks by work type — ${activeYear} over ${srcYear}` : 'Tasks by work type'}
-          />
-          <DonutChart
-            data={workTypeMix}
-            height={200}
-            emptyMessage="Tag tasks with work types to see the mix."
-            compare={compare ? srcWorkTypeMix : undefined}
-            onSelect={(name) => goTasks([['type', name]])}
-            taskCounts={workTypeCounts}
-            prevTaskCounts={compare ? srcWorkTypeCounts : undefined}
-            sourceLabel={String(srcYear)}
-          />
-        </Card>
-        {showTasksByPerson && (
-          <Card className="flex flex-col">
-            <CardHeader title="Tasks by person" subtitle="Tasks assigned per team member" />
-            <div className="min-h-[180px] flex-1">
-              <HBarChart data={byPerson} height="100%" emptyMessage="Assign people to at least 2 tasks." />
+            <div>
+              <AreaTrendChart
+                data={byMonth}
+                height={440}
+                nowMonth={nowMonth}
+                tasks={chartYearTasks}
+                onTaskClick={setViewTask}
+                onHoverTask={setHoverTask}
+                compare={
+                  compare
+                    ? { data: srcByMonth, label: String(srcYear), currentLabel: String(activeYear) }
+                    : undefined
+                }
+              />
             </div>
           </Card>
-        )}
-      </div>
-
-      {/* Campaign charts stacked; demand by stakeholders takes the full height on the right */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2">
-        <div className="grid content-start gap-4">
-          <Card>
-            <CardHeader
-              title="Tasks by campaign"
-              subtitle={`Work distribution across campaigns${campaignSubtitleSuffix}${compareSubtitleSuffix}`}
-            />
-            <VBarChart
-              data={byCampaignShown}
-              height={220}
-              emptyMessage={
-                compare
-                  ? `No campaigns with tasks in both ${srcYear} and ${activeYear}.`
-                  : 'Add tasks across at least 2 campaigns.'
-              }
-              compare={
-                compare
-                  ? { data: srcByCampaign, label: String(srcYear), currentLabel: String(activeYear) }
-                  : undefined
-              }
-              onSelect={(name) => goTasks([['campaign', name]])}
-            />
-          </Card>
-          <Card>
+          <Card className="flex flex-1 flex-col">
             <CardHeader
               title="Asset count by campaign"
               subtitle={`Total deliverables produced per campaign${campaignSubtitleSuffix}${compareSubtitleSuffix}`}
             />
-            <VBarChart
-              data={assetCampaignShown}
-              height={220}
-              emptyMessage={
-                compare
-                  ? `No campaigns with assets in both ${srcYear} and ${activeYear}.`
-                  : 'Add tasks with asset counts across at least 2 campaigns.'
-              }
-              compare={
-                compare
-                  ? { data: srcAssetCampaign, label: String(srcYear), currentLabel: String(activeYear) }
-                  : undefined
-              }
-              onSelect={(name) => goTasks([['campaign', name]])}
-            />
+            <div className="min-h-[180px] flex-1">
+              <VBarChart
+                data={assetCampaignShown}
+                height="100%"
+                emptyMessage={
+                  compare
+                    ? `No campaigns with assets in both ${srcYear} and ${activeYear}.`
+                    : 'Add tasks with asset counts across at least 2 campaigns.'
+                }
+                compare={
+                  compare
+                    ? { data: srcAssetCampaign, label: String(srcYear), currentLabel: String(activeYear) }
+                    : undefined
+                }
+                onSelect={(name) => goTasks([['campaign', name]])}
+              />
+            </div>
           </Card>
         </div>
-        <Card className="flex flex-col">
-          <CardHeader
-            title="Squads demand distribution"
-            subtitle={`Share of each ${demandDim === 'asset' ? 'asset type' : 'work type'} across stakeholder groups${compareSubtitleSuffix}`}
-          />
-          <div className="flex-1">
-            <StackedBarChart
-              data={demand}
-              keys={[...STAKEHOLDER_GROUPS]}
-              paletteIndices={[0, 1, 2]}
-              height={540}
-              emptyMessage={
-                compare
-                  ? `No ${demandDim === 'asset' ? 'asset types' : 'work types'} with demand in both ${srcYear} and ${activeYear}.`
-                  : 'Add tasks with asset counts to see demand.'
-              }
-              compare={
-                compare
-                  ? { data: srcDemand, label: String(srcYear), currentLabel: String(activeYear) }
-                  : undefined
-              }
-              onSelect={(category, group) =>
-                goTasks([
-                  [demandDim === 'asset' ? 'asset' : 'type', category],
-                  ...squadsInGroup(group).map((s) => ['squad', s] as [string, string]),
-                ])
-              }
-            />
+
+        {/* RIGHT column */}
+        <div className="flex flex-col gap-4">
+          <div className={cx('grid gap-4', showTasksByPerson ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
+            <Card>
+              <CardHeader
+                title="Asset mix"
+                subtitle={compare ? `Deliverables by type — ${activeYear} over ${srcYear}` : 'Deliverables by type'}
+              />
+              <DonutChart
+                data={assetMix}
+                height={200}
+                emptyMessage="Add tasks with asset counts to see the mix."
+                compare={compare ? srcAssetMix : undefined}
+                onSelect={(name) => goTasks([['asset', name]])}
+                taskCounts={assetMixCounts}
+                prevTaskCounts={compare ? srcAssetMixCounts : undefined}
+                sourceLabel={String(srcYear)}
+              />
+            </Card>
+            <Card>
+              <CardHeader
+                title="Work type mix"
+                subtitle={compare ? `Tasks by work type — ${activeYear} over ${srcYear}` : 'Tasks by work type'}
+              />
+              <DonutChart
+                data={workTypeMix}
+                height={200}
+                emptyMessage="Tag tasks with work types to see the mix."
+                compare={compare ? srcWorkTypeMix : undefined}
+                onSelect={(name) => goTasks([['type', name]])}
+                taskCounts={workTypeCounts}
+                prevTaskCounts={compare ? srcWorkTypeCounts : undefined}
+                sourceLabel={String(srcYear)}
+              />
+            </Card>
+            {showTasksByPerson && (
+              <Card className="flex flex-col">
+                <CardHeader title="Tasks by person" subtitle="Tasks assigned per team member" />
+                <div className="min-h-[180px] flex-1">
+                  <HBarChart data={byPerson} height="100%" emptyMessage="Assign people to at least 2 tasks." />
+                </div>
+              </Card>
+            )}
           </div>
-        </Card>
+          <Card className="flex flex-1 flex-col">
+            <CardHeader
+              title="Squads demand distribution"
+              subtitle={`Share of each ${demandDim === 'asset' ? 'asset type' : 'work type'} across stakeholder groups${compareSubtitleSuffix}`}
+              action={<StackedLegend keys={[...STAKEHOLDER_GROUPS]} paletteIndices={[0, 1, 2]} />}
+            />
+            <div className="min-h-[320px] flex-1">
+              <StackedBarChart
+                data={demand}
+                keys={[...STAKEHOLDER_GROUPS]}
+                paletteIndices={[0, 1, 2]}
+                height="100%"
+                hideLegend
+                emptyMessage={
+                  compare
+                    ? `No ${demandDim === 'asset' ? 'asset types' : 'work types'} with demand in both ${srcYear} and ${activeYear}.`
+                    : 'Add tasks with asset counts to see demand.'
+                }
+                compare={
+                  compare
+                    ? { data: srcDemand, label: String(srcYear), currentLabel: String(activeYear) }
+                    : undefined
+                }
+                onSelect={(category, group) =>
+                  goTasks([
+                    [demandDim === 'asset' ? 'asset' : 'type', category],
+                    ...squadsInGroup(group).map((s) => ['squad', s] as [string, string]),
+                  ])
+                }
+              />
+            </div>
+          </Card>
+        </div>
       </div>
 
       {/* Read-only task details, opened by clicking a workload column. */}
