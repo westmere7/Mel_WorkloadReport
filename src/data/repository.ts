@@ -37,4 +37,10 @@ export interface Repository {
    * whenever tasks change externally. Returns an unsubscribe function.
    */
   subscribe(onChange: () => void): () => void
+
+  /**
+   * Subscribe to settings changes from other clients/tabs so the dashboard and
+   * task form stay in sync live. Returns an unsubscribe function.
+   */
+  subscribeSettings(onChange: () => void): () => void
 }

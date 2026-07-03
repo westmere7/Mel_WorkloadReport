@@ -99,10 +99,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }, 250)
     }
     const unsubscribe = repo.subscribe(reload)
+    // Settings edits (lists, size durations) propagate live to the dashboard too.
+    const unsubscribeSettings = repo.subscribeSettings(() => {
+      repo.getSettings().then(setSettings).catch(() => {})
+    })
     setLive(true)
     return () => {
       if (timer) clearTimeout(timer)
       unsubscribe()
+      unsubscribeSettings()
       setLive(false)
     }
   }, [repo])

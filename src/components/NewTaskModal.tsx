@@ -45,7 +45,7 @@ export function NewTaskProvider({ children }: { children: ReactNode }) {
           <span className="flex items-center gap-2.5">
             New task
             <span
-              className="inline-flex items-center rounded-lg bg-rmit-navy px-2 py-0.5 text-xs font-bold text-white dark:bg-navy-300 dark:text-rmit-navy"
+              className="inline-flex items-center rounded-lg border border-line px-2 py-0.5 text-xs font-semibold text-muted"
               title="Its position in the list — re-flows as tasks are added or removed"
             >
               No. {nextNo}

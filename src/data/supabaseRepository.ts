@@ -126,6 +126,16 @@ export class SupabaseRepository implements Repository {
     }
   }
 
+  subscribeSettings(onChange: () => void): () => void {
+    const channel = getSupabase()
+      .channel('public:settings')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => onChange())
+      .subscribe()
+    return () => {
+      void getSupabase().removeChannel(channel)
+    }
+  }
+
   async renameValue(
     field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown',
     oldValue: string,

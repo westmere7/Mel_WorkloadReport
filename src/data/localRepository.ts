@@ -111,6 +111,15 @@ export class LocalRepository implements Repository {
     return () => window.removeEventListener('storage', handler)
   }
 
+  subscribeSettings(onChange: () => void): () => void {
+    // Cross-tab updates: fires when another tab writes the settings key.
+    const handler = (e: StorageEvent) => {
+      if (e.key === SETTINGS_KEY) onChange()
+    }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }
+
   async renameValue(
     field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown',
     oldValue: string,

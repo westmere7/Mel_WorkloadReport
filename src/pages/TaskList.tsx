@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ArrowDownUp,
+  Check,
   ChevronDown,
   ChevronUp,
   DatabaseBackup,
@@ -248,7 +249,7 @@ export function TaskList() {
                   title={canEdit ? 'Click to edit' : 'Click to view'}
                 >
                   <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-faint">{taskNo(t)}</td>
-                  <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-muted">{t.code || '—'}</td>
+                  <CodeCell code={t.code} />
                   <td className="px-3 py-3 font-medium text-ink">
                     <div className="flex max-w-[260px] items-center gap-1.5">
                       <span className="truncate" title={t.name}>
@@ -375,6 +376,54 @@ export function TaskList() {
       {/* Import & backup */}
       <ImportBackupModal open={ioOpen} onClose={() => setIoOpen(false)} />
     </div>
+  )
+}
+
+/** Task-code cell: a chip you can click to copy the code (shows "Copied" briefly). */
+function CodeCell({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout>>()
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+
+  if (!code) {
+    return (
+      <td className="whitespace-nowrap px-3 py-3">
+        <span className="font-mono text-xs text-faint">—</span>
+      </td>
+    )
+  }
+
+  const copy = (e: React.MouseEvent) => {
+    e.stopPropagation() // don't open the row's edit modal
+    void navigator.clipboard?.writeText(code).then(() => {
+      setCopied(true)
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = setTimeout(() => setCopied(false), 1200)
+    })
+  }
+
+  return (
+    <td className="whitespace-nowrap px-3 py-3">
+      <button
+        type="button"
+        onClick={copy}
+        title={copied ? 'Copied!' : 'Click to copy code'}
+        className={cx(
+          'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-xs transition-colors',
+          copied
+            ? 'border-accent-green/50 bg-green-50 text-accent-green dark:bg-green-500/15'
+            : 'border-line bg-subtle text-muted hover:border-faint hover:text-ink',
+        )}
+      >
+        {copied ? (
+          <>
+            <Check className="h-3 w-3" /> Copied
+          </>
+        ) : (
+          code
+        )}
+      </button>
+    </td>
   )
 }
 
