@@ -194,6 +194,26 @@
   }
 }
 
+/* Workload chart: task columns grow up from the baseline (staggered L→R). */
+@keyframes workload-col-rise {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.workload-col {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: workload-col-rise 480ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .workload-col {
+    animation: none;
+  }
+}
+
 @keyframes gentle-bob {
   0%, 100% {
     transform: translateY(0);

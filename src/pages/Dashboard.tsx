@@ -28,7 +28,7 @@ import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
 import { useAuth } from '../lib/auth'
-import type { Half, Squad } from '../types'
+import type { Half, Squad, Task } from '../types'
 
 export function Dashboard() {
   const { tasks, live, settings } = useStore()
@@ -119,6 +119,18 @@ export function Dashboard() {
     }
     return assetsByMonth(list)
   }, [tasks, chartYear, compare, ytd, todayMD])
+  // The same set of tasks the workload chart aggregates — scattered under the
+  // line as individual clickable columns.
+  const chartYearTasks = useMemo(() => {
+    let list = tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === chartYear)
+    if (compare && ytd) {
+      list = list.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
+    }
+    return list
+  }, [tasks, chartYear, compare, ytd, todayMD])
+  // The task currently under the pointer on the workload chart — shown live in
+  // the card's top-right corner in place of the year.
+  const [hoverTask, setHoverTask] = useState<Task | null>(null)
   // Mark "now" on the workload chart only when viewing the current calendar year.
   const nowMonth = useMemo(() => {
     const now = new Date()
@@ -417,9 +429,26 @@ export function Dashboard() {
             title="Workload across the year"
             subtitle="Assets produced per month"
             action={
-              <span className="shrink-0 rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
-                {compare ? `${activeYear} over ${srcYear}` : chartYear}
-              </span>
+              // Fixed height so the header (and card) doesn't resize as the
+              // hover readout swaps in and out.
+              <div className="flex h-10 flex-col items-end justify-start gap-1">
+                {hoverTask ? (
+                  <>
+                    <span className="inline-block max-w-[24rem] truncate rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
+                      {hoverTask.name}
+                    </span>
+                    <span className="text-[10px] font-medium text-muted">
+                      {hoverTask.assetTotal} {hoverTask.assetTotal === 1 ? 'asset' : 'assets'} ·{' '}
+                      {hoverTask.people.length} {hoverTask.people.length === 1 ? 'person' : 'people'} ·{' '}
+                      {hoverTask.squad} · {hoverTask.size}
+                    </span>
+                  </>
+                ) : (
+                  <span className="rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
+                    {compare ? `${activeYear} over ${srcYear}` : chartYear}
+                  </span>
+                )}
+              </div>
             }
           />
           <div className="min-h-[180px] flex-1">
@@ -427,6 +456,9 @@ export function Dashboard() {
               data={byMonth}
               height="100%"
               nowMonth={nowMonth}
+              tasks={chartYearTasks}
+              onTaskClick={(t) => goTasks([['open', t.id]])}
+              onHoverTask={setHoverTask}
               compare={
                 compare
                   ? { data: srcByMonth, label: String(srcYear), currentLabel: String(activeYear) }

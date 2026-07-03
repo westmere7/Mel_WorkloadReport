@@ -52,6 +52,19 @@ export function TaskList() {
   const [deleting, setDeleting] = useState<Task | null>(null)
   const [ioOpen, setIoOpen] = useState(false)
 
+  // Deep link from the dashboard workload chart: /tasks?open=<id> opens that
+  // task's modal once the tasks have loaded (handled a single time per id).
+  const openedId = useRef<string | null>(null)
+  useEffect(() => {
+    const id = searchParams.get('open')
+    if (!id || openedId.current === id) return
+    const t = tasks.find((x) => x.id === id)
+    if (t) {
+      openedId.current = id
+      setEditing(t)
+    }
+  }, [searchParams, tasks])
+
   const years = useMemo(() => taskYears(tasks), [tasks])
   const activeYear = spanYear ?? years[0] ?? 0
 

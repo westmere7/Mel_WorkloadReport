@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Customized,
   Legend,
   Pie,
   PieChart,
@@ -18,6 +19,7 @@ import {
 } from 'recharts'
 import { LineChart as LineChartIcon } from 'lucide-react'
 import type { NamedCount } from '../lib/analytics'
+import type { Task } from '../types'
 import { CHART_COLORS_DARK, CHART_COLORS_LIGHT } from '../constants'
 import { useTheme } from '../lib/theme'
 import { TrendDelta } from './ui/TrendDelta'
@@ -607,6 +609,161 @@ function PeakLabel(props: { viewBox?: any; color?: string; align?: 'start' | 'mi
   )
 }
 
+/**
+ * A "nice" y-axis for a [0, peak] range: rounds the top up to a round tick just
+ * above the peak (peak ~310 → top 400) so gridlines stay uniformly spaced and
+ * the peak sits comfortably below the top edge — no stray line pinned to the
+ * exact peak. Returns the domain top and the full set of uniform ticks.
+ */
+function niceScale(peak: number): { top: number; ticks: number[] } {
+  if (peak <= 0) return { top: 1, ticks: [0] }
+  const rough = peak / 5
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)))
+  const norm = rough / mag
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag
+  let top = Math.ceil(peak / step) * step
+  if (top <= peak) top += step // keep the peak strictly below the top gridline
+  const ticks: number[] = []
+  for (let v = 0; v <= top + step * 1e-6; v += step) ticks.push(v)
+  return { top, ticks }
+}
+
+const COL_W = 6 // task-column width in px
+const COL_STAGGER_MS = 700 // total left→right entry-animation spread
+
+/**
+ * Thin, faint columns — one per task — under the workload line, scaled on the
+ * SAME y-axis as the line (a 300-asset task reaches 300, not an arbitrary
+ * fraction). Rendered via <Customized>, which injects the plot `offset`. A
+ * transparent hit layer follows the pointer and snaps a dashed cursor +
+ * highlight to the nearest column. Columns rise from the baseline left→right
+ * once on mount — this component's type is stable, so hover re-renders update
+ * in place and never replay the animation.
+ */
+function TaskColumnsLayer({
+  offset,
+  tasks = [],
+  maxVal = 0,
+  hoveredId,
+  onHover,
+  onPick,
+}: {
+  offset?: { left: number; top: number; width: number; height: number }
+  tasks?: Task[]
+  maxVal?: number
+  hoveredId?: string | null
+  onHover?: (task: Task | null) => void
+  onPick?: (task: Task) => void
+}) {
+  if (!offset || !tasks.length || maxVal <= 0) return null
+  const { left, top, width, height: plotH } = offset
+  // Ideal centre from the start day, sorted L→R, then a single pass nudges any
+  // that would overlap a bit apart so clustered tasks stay legible.
+  const cols = tasks
+    .map((t) => {
+      const [y, mo, day] = (t.startDate as string).split('-').map(Number)
+      if (!y || !mo) return null
+      const doy = new Date(y, mo - 1, day || 1).getTime() - new Date(y, 0, 1).getTime()
+      const frac = Math.min(1, Math.max(0, doy / 86400000 / 366))
+      return { t, x: left + frac * width }
+    })
+    .filter((c): c is { t: Task; x: number } => c !== null)
+    .sort((a, b) => a.x - b.x)
+  const minX = left + COL_W / 2
+  const maxX = left + width - COL_W / 2
+  // Centre-to-centre spacing: prefer a comfortable gap, but shrink it so every
+  // column fits between the edges. Without this, an over-full year overflows
+  // and the surplus piles onto one edge — where columns can't be told apart.
+  const GAP = Math.min(COL_W + 2, cols.length > 1 ? (maxX - minX) / (cols.length - 1) : COL_W + 2)
+  // Pass 1 (L→R): push any overlapping column to the right of its neighbour.
+  let prev = -Infinity
+  for (const c of cols) {
+    if (c.x < prev + GAP) c.x = prev + GAP
+    prev = c.x
+  }
+  // Pass 2 (R→L): pull columns that overran the right edge back in, dragging
+  // their left neighbours along — so a year-end cluster fans out leftward
+  // instead of piling onto the edge (where only one stays selectable).
+  let next = maxX + GAP
+  for (let i = cols.length - 1; i >= 0; i--) {
+    const cap = Math.min(maxX, next - GAP)
+    if (cols[i].x > cap) cols[i].x = cap
+    next = cols[i].x
+  }
+  const placed = cols.map((c) => ({ t: c.t, cx: Math.max(minX, Math.min(maxX, c.x)) }))
+  const hovered = placed.find((c) => c.t.id === hoveredId) ?? null
+
+  const nearest = (clientX: number, box: DOMRect) => {
+    const mx = left + (clientX - box.left)
+    let best = placed[0]
+    let bestD = Infinity
+    for (const c of placed) {
+      const d = Math.abs(c.cx - mx)
+      if (d < bestD) {
+        bestD = d
+        best = c
+      }
+    }
+    return best
+  }
+
+  return (
+    <g>
+      {placed.map(({ t, cx: center }) => {
+        const h = ((t.assetTotal || 0) / maxVal) * plotH
+        if (h <= 0) return null
+        const isHot = t.id === hoveredId
+        const delay = Math.round(((center - left) / Math.max(1, width)) * COL_STAGGER_MS)
+        return (
+          <rect
+            key={t.id}
+            x={center - COL_W / 2}
+            y={top + plotH - h}
+            width={COL_W}
+            height={h}
+            rx={2}
+            className={cx(
+              'workload-col transition-[fill,opacity]',
+              isHot ? 'fill-[#E61E2A] opacity-90' : 'fill-[var(--chart-axis)] opacity-25',
+            )}
+            style={{ animationDelay: `${delay}ms` }}
+          />
+        )
+      })}
+      {hovered && (
+        <line
+          x1={hovered.cx}
+          x2={hovered.cx}
+          y1={top}
+          y2={top + plotH}
+          stroke="#E61E2A"
+          strokeWidth={1}
+          strokeDasharray="4 4"
+          pointerEvents="none"
+        />
+      )}
+      {/* Transparent hit layer: follows the pointer and snaps to the nearest column. */}
+      <rect
+        x={left}
+        y={top}
+        width={width}
+        height={plotH}
+        fill="transparent"
+        className="cursor-pointer"
+        onMouseMove={(e) => {
+          const c = nearest(e.clientX, e.currentTarget.getBoundingClientRect())
+          if (c && c.t.id !== hoveredId) onHover?.(c.t)
+        }}
+        onMouseLeave={() => onHover?.(null)}
+        onClick={(e) => {
+          const c = nearest(e.clientX, e.currentTarget.getBoundingClientRect())
+          if (c) onPick?.(c.t)
+        }}
+      />
+    </g>
+  )
+}
+
 /** Area chart of a value across the 12 months of the year. */
 export function AreaTrendChart({
   data,
@@ -615,6 +772,9 @@ export function AreaTrendChart({
   emptyMessage,
   nowMonth,
   compare,
+  tasks,
+  onTaskClick,
+  onHoverTask,
 }: {
   data: NamedCount[]
   height?: number | string
@@ -624,8 +784,15 @@ export function AreaTrendChart({
   nowMonth?: number | null
   /** Comparison baseline — draws the source year as a second overlapping line. */
   compare?: CompareSeries
+  /** Individual tasks scattered under the line as thin columns (height ∝ assets). */
+  tasks?: Task[]
+  /** Called when a task column is clicked — opens that task's info. */
+  onTaskClick?: (task: Task) => void
+  /** Called as the pointer moves across the columns — the nearest task, or null on leave. */
+  onHoverTask?: (task: Task | null) => void
 }) {
   const colors = useChartColors()
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
   const monthsWithData = data.filter((d) => d.value > 0).length
   const compareMonths = compare ? compare.data.filter((d) => d.value > 0).length : 0
   if (Math.max(monthsWithData, compareMonths) < minMonths)
@@ -653,6 +820,13 @@ export function AreaTrendChart({
     if (sourcePeak) peaks.push({ ...sourcePeak, color: compareColor })
   }
 
+  // Scale the y-axis to a clean round top just above the tallest point (target
+  // or source peak), so gridlines stay uniform and the peak sits below the top
+  // rather than on a stray top line. `yTop` also scales the task columns so
+  // they line up with the axis.
+  const peakMax = peaks.reduce((m, p) => Math.max(m, p.value), 0)
+  const { top: yTop, ticks: yTicks } = niceScale(peakMax)
+
   const showNow = nowMonth != null && nowMonth >= 0 && nowMonth < data.length
 
   // Fraction of the x-axis where "Now" sits — used to switch the line from red
@@ -678,9 +852,14 @@ export function AreaTrendChart({
     )
   }
 
+  // One column per task, scaled on the line's own y-axis. Disabled in compare
+  // mode — a single-year scatter would clutter two lines. Drawn by the stable
+  // <TaskColumnsLayer> (see above) so its entry animation plays only once.
+  const scatterTasks = compare ? [] : (tasks ?? []).filter((t) => t.startDate && (t.assetTotal || 0) > 0)
+
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={rows} margin={{ left: 0, right: 12, top: 24, bottom: 4 }}>
+      <AreaChart data={rows} margin={{ left: 0, right: 12, top: 28, bottom: 4 }}>
         <defs>
           {/* RMIT red fill fading out toward the baseline */}
           <linearGradient id="workloadFill" x1="0" y1="0" x2="0" y2="1">
@@ -698,13 +877,14 @@ export function AreaTrendChart({
         </defs>
         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
         <XAxis dataKey="name" tick={AXIS} axisLine={false} tickLine={false} />
-        <YAxis allowDecimals={false} tick={AXIS} axisLine={false} tickLine={false} width={32} />
-        <Tooltip
-          cursor={{ stroke: '#E61E2A', strokeWidth: 1, strokeDasharray: '4 4' }}
-          contentStyle={tooltipStyle}
-          itemStyle={tooltipItemStyle}
-          labelStyle={tooltipLabelStyle}
-          formatter={(v: number, name: string) => [`${v} assets`, name]}
+        <YAxis
+          allowDecimals={false}
+          tick={AXIS}
+          axisLine={false}
+          tickLine={false}
+          width={32}
+          domain={peakMax > 0 ? [0, yTop] : undefined}
+          ticks={peakMax > 0 ? yTicks : undefined}
         />
         {compare && (
           <Legend
@@ -752,6 +932,22 @@ export function AreaTrendChart({
           dot={renderDot}
           activeDot={{ r: 5 }}
         />
+        {scatterTasks.length > 0 && (
+          <Customized
+            component={
+              <TaskColumnsLayer
+                tasks={scatterTasks}
+                maxVal={yTop}
+                hoveredId={hoveredId}
+                onHover={(t) => {
+                  setHoveredId(t?.id ?? null)
+                  onHoverTask?.(t)
+                }}
+                onPick={(t) => onTaskClick?.(t)}
+              />
+            }
+          />
+        )}
         {showNow && (
           <ReferenceLine
             x={data[nowMonth as number].name}
@@ -760,7 +956,7 @@ export function AreaTrendChart({
             strokeDasharray="4 4"
             label={{
               value: 'Now',
-              position: 'insideTopRight',
+              position: 'top',
               fontSize: 10,
               fontWeight: 600,
               fill: 'var(--chart-axis-strong)',
