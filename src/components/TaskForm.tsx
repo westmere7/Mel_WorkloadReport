@@ -350,8 +350,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     }
   }
 
-  // Code and end date are optional; a code, if given, must still be valid & unique.
-  // Everything else is required and total assets must be positive.
+  // The code is optional; if given, it must still be valid & unique. Everything
+  // else — including start and end dates — is required, and total assets must be positive.
   const validate = (): string[] => {
     const errs: string[] = []
     if (codeError) errs.push(codeError)
@@ -362,6 +362,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     if (breakdownSum <= 0) errs.push('Total assets must be greater than 0.')
     if (people.length === 0) errs.push('Assign at least one person in charge.')
     if (!startDate) errs.push('Start date is required.')
+    if (!endDate) errs.push('End date is required.')
+    else if (startDate && endDate < startDate) errs.push('End date must be on or after the start date.')
     return errs
   }
 
@@ -600,7 +602,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           )}
         </div>
         <div>
-          <label className="label">End date (optional)</label>
+          <label className="label">End date</label>
           <input
             type="date"
             className="input h-11"
