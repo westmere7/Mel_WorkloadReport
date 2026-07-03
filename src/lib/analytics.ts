@@ -38,6 +38,13 @@ export function assetsByCampaign(tasks: Task[]): NamedCount[] {
   return sortDesc(rec)
 }
 
+/** Total deliverables produced per squad (stakeholder team), sorted desc. */
+export function assetsBySquad(tasks: Task[]): NamedCount[] {
+  const rec: Record<string, number> = {}
+  for (const t of tasks) rec[t.squad] = (rec[t.squad] ?? 0) + (t.assetTotal || 0)
+  return sortDesc(rec)
+}
+
 /** The three stakeholder groups used in the demand chart, in stack order. */
 export const STAKEHOLDER_GROUPS = ['DOMESTIC', 'INTON', 'Other Stakeholders'] as const
 export type StakeholderGroup = (typeof STAKEHOLDER_GROUPS)[number]

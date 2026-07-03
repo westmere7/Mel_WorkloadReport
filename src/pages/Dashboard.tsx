@@ -7,29 +7,28 @@ import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
 import { TrendDelta } from '../components/ui/TrendDelta'
 import { AnimatedNumber } from '../components/ui/AnimatedNumber'
-import { Badge } from '../components/ui/Badge'
 import { AreaTrendChart, DonutChart, HBarChart, RankedBars, StackedBarChart, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
 import {
   assetsByCampaign,
   assetsByMonth,
+  assetsBySquad,
   assetsByType,
   countByField,
   countByMulti,
-  countBySize,
   demandByStakeholder,
   demandByStakeholderAssetType,
   stakeholderGroup,
   STAKEHOLDER_GROUPS,
   summarize,
 } from '../lib/analytics'
-import { SIZE_TONE, SIZE_DESCRIPTIONS, withFallback } from '../constants'
+import { withFallback } from '../constants'
 import { cx, todayISO, formatDate } from '../lib/format'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
 import { useAuth } from '../lib/auth'
-import type { Half, Size, Squad } from '../types'
+import type { Half, Squad } from '../types'
 
 export function Dashboard() {
   const { tasks, live, settings } = useStore()
@@ -90,7 +89,8 @@ export function Dashboard() {
   }, [tasks, compare, srcYear, half, ytd, todayMD])
 
   const summary = useMemo(() => summarize(filtered), [filtered])
-  const bySquad = useMemo(() => countByField(filtered, 'squad'), [filtered])
+  const bySquad = useMemo(() => assetsBySquad(filtered), [filtered])
+  const bySquadTasks = useMemo(() => countByField(filtered, 'squad'), [filtered])
   const byCampaign = useMemo(() => countByField(filtered, 'campaign'), [filtered])
   const assetCampaign = useMemo(() => assetsByCampaign(filtered), [filtered])
   const dropCommon = (rows: { name: string; value: number }[]) =>
@@ -124,7 +124,6 @@ export function Dashboard() {
     const now = new Date()
     return chartYear === now.getFullYear() ? now.getMonth() : null
   }, [chartYear])
-  const bySize = useMemo(() => countBySize(filtered), [filtered])
 
   // ── Source-year aggregates (comparison mode only) ──────────────────────
   const srcSummary = useMemo(() => summarize(sourceTasks), [sourceTasks])
@@ -391,37 +390,17 @@ export function Dashboard() {
           }
         />
 
-        {/* Task-size distribution — its own headline card */}
-        <div className="card flex h-full flex-col p-5">
-          <p className="text-sm font-semibold uppercase tracking-wide text-muted">Task sizes</p>
-          <div className="flex flex-1 flex-col justify-center divide-y divide-line">
-            {bySize.map((s) => (
-              <div
-                key={s.name}
-                role="button"
-                tabIndex={0}
-                onClick={() => goTasks([['size', s.name]])}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    goTasks([['size', s.name]])
-                  }
-                }}
-                title={`View ${s.name} tasks`}
-                className="-mx-1 flex cursor-pointer items-center gap-2.5 rounded-md px-1 py-1.5 transition-colors first:pt-0 last:pb-0 hover:bg-subtle"
-              >
-                <Badge tone={SIZE_TONE[s.name as Size]}>{s.name}</Badge>
-                <span className="flex-1 truncate text-xs text-muted" title={SIZE_DESCRIPTIONS[s.name as Size]}>
-                  {SIZE_DESCRIPTIONS[s.name as Size]}
-                </span>
-                <span className="text-xl font-bold tabular-nums text-ink">{s.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
         <Card className="flex flex-col">
           <CardHeader title="Tasks by squad" subtitle="Requests by stakeholder team" />
+          <RankedBars
+            data={bySquadTasks}
+            emptyMessage="Add tasks for at least 2 squads."
+            onSelect={(name) => goTasks([['squad', name]])}
+          />
+        </Card>
+
+        <Card className="flex flex-col">
+          <CardHeader title="Assets by squad" subtitle="Deliverables by stakeholder team" />
           <RankedBars
             data={bySquad}
             emptyMessage="Add tasks for at least 2 squads."
@@ -546,15 +525,14 @@ export function Dashboard() {
         </div>
         <Card className="flex flex-col">
           <CardHeader
-            title="Demand by stakeholders"
-            subtitle={`Deliverables per ${demandDim === 'asset' ? 'asset type' : 'work type'}, split by stakeholder group${compareSubtitleSuffix}`}
+            title="Squads demand distribution"
+            subtitle={`Share of each ${demandDim === 'asset' ? 'asset type' : 'work type'} across stakeholder groups${compareSubtitleSuffix}`}
           />
           <div className="flex-1">
             <StackedBarChart
               data={demand}
               keys={[...STAKEHOLDER_GROUPS]}
               paletteIndices={[0, 1, 2]}
-              labelColors={['#ffffff', '#ffffff', '#000054']}
               height={540}
               emptyMessage={
                 compare

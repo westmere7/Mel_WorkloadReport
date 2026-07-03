@@ -5,7 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  LabelList,
   Legend,
   Pie,
   PieChart,
@@ -473,14 +472,12 @@ export function VBarChart({
 
 /**
  * 100%-stacked bar chart. Each row is stacked across `keys`, normalised so every
- * bar fills the height; absolute segment totals are labelled inside. Colours come
- * from the themed palette via `paletteIndices` (defaults to sequential).
+ * bar fills the height. Colours come from the themed palette via `paletteIndices`.
  */
 export function StackedBarChart({
   data,
   keys,
   paletteIndices,
-  labelColors,
   height = 300,
   minPoints = 1,
   emptyMessage,
@@ -490,7 +487,6 @@ export function StackedBarChart({
   data: Array<Record<string, string | number>>
   keys: string[]
   paletteIndices?: number[]
-  labelColors?: string[]
   height?: number
   minPoints?: number
   emptyMessage?: string
@@ -570,16 +566,7 @@ export function StackedBarChart({
               fillOpacity={0.45}
               legendType="none"
               maxBarSize={40}
-            >
-              <LabelList
-                dataKey={`prev_${k}`}
-                position="center"
-                formatter={(v: number | string) => (v ? `${v}` : '')}
-                fill={labelColors?.[i] ?? '#ffffff'}
-                fontSize={compare ? 10 : 11}
-                fontWeight={700}
-              />
-            </Bar>
+            />
           ))}
         {keys.map((k, i) => (
           <Bar
@@ -596,16 +583,7 @@ export function StackedBarChart({
                 : undefined
             }
             className={onSelect ? 'cursor-pointer' : undefined}
-          >
-            <LabelList
-              dataKey={k}
-              position="center"
-              formatter={(v: number | string) => (v ? `${v}` : '')}
-              fill={labelColors?.[i] ?? '#ffffff'}
-              fontSize={compare ? 10 : 11}
-              fontWeight={700}
-            />
-          </Bar>
+          />
         ))}
       </BarChart>
     </ResponsiveContainer>
