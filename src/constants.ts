@@ -90,12 +90,23 @@ export function withFallback(items: string[]): string[] {
   return [...sortAlpha(items.filter((v) => v !== FALLBACK_ITEM)), FALLBACK_ITEM]
 }
 
+/** Default turnaround per size (days) — how far the end date auto-fills past the
+ *  start date. Seeds the editable Settings value; existing tasks are never changed. */
+export const DEFAULT_SIZE_DURATIONS: Record<Size, number> = {
+  XS: 7,
+  S: 28,
+  M: 42,
+  L: 56,
+  XL: 182,
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   squads: DEFAULT_SQUADS,
   campaigns: DEFAULT_CAMPAIGNS,
   types: DEFAULT_TYPES,
   people: DEFAULT_PEOPLE,
   assetTypes: DEFAULT_ASSET_TYPES,
+  sizeDurations: { ...DEFAULT_SIZE_DURATIONS },
 }
 
 /** Legacy fixed breakdown keys → their default display names, for migrating old data. */
@@ -136,22 +147,27 @@ export const SIZE_DESCRIPTIONS: Record<Size, string> = {
   XL: 'Very large / major effort',
 }
 
-/** Turnaround per size, from the GCMC T-shirt sizing guide (upper bound), in days. */
-export const SIZE_DURATION_DAYS: Record<Size, number> = {
-  XS: 7, // 1 week
-  S: 28, // 2–4 weeks
-  M: 42, // 6 weeks
-  L: 56, // 8 weeks
-  XL: 182, // 3–6 months
+/** Format a day count into a friendly turnaround label (e.g. 42 → "6 weeks"). */
+export function formatDurationDays(days: number): string {
+  const d = Math.max(0, Math.round(days))
+  if (d === 0) return 'same day'
+  if (d % 7 === 0) {
+    const w = d / 7
+    return `${w} week${w === 1 ? '' : 's'}`
+  }
+  return `${d} day${d === 1 ? '' : 's'}`
 }
 
-/** Human-readable turnaround per size (matches the sizing guide). */
-export const SIZE_DURATION_LABEL: Record<Size, string> = {
-  XS: '1 week',
-  S: '2–4 weeks',
-  M: '6 weeks',
-  L: '8 weeks',
-  XL: '3–6 months',
+/** Coerce a stored size-durations value into a complete numeric map (defaults fill gaps). */
+export function normalizeSizeDurations(raw: unknown): Record<Size, number> {
+  const out: Record<Size, number> = { ...DEFAULT_SIZE_DURATIONS }
+  if (raw && typeof raw === 'object') {
+    for (const s of SIZES) {
+      const v = (raw as Record<string, unknown>)[s]
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out[s] = Math.round(v)
+    }
+  }
+  return out
 }
 
 /** Heat-scale colours for sizes (cool → hot), used in charts. */

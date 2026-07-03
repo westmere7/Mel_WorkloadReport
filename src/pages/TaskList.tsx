@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronUp,
   DatabaseBackup,
-  Pencil,
   Search,
   StickyNote,
   Trash2,
@@ -248,7 +247,7 @@ export function TaskList() {
                   onClick={() => setEditing(t)}
                   title={canEdit ? 'Click to edit' : 'Click to view'}
                 >
-                  <td className="whitespace-nowrap px-3 py-3 text-xs font-semibold tabular-nums text-muted">{taskNo(t)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-faint">{taskNo(t)}</td>
                   <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-muted">{t.code || '—'}</td>
                   <td className="px-3 py-3 font-medium text-ink">
                     <div className="flex max-w-[260px] items-center gap-1.5">
@@ -303,16 +302,6 @@ export function TaskList() {
                   {canEdit && (
                   <td className="px-3 py-3">
                     <div className="flex justify-end gap-1 opacity-60 transition group-hover:opacity-100">
-                      <button
-                        className="rounded-lg p-1.5 text-muted hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-navy-100"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setEditing(t)
-                        }}
-                        title="Edit"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
                       <button
                         className="rounded-lg p-1.5 text-muted hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
                         onClick={(e) => {

@@ -58,6 +58,8 @@ export interface AppSettings {
   types: string[]
   people: string[]
   assetTypes: string[]
+  /** Days each task size adds to the start date when auto-filling the end date. */
+  sizeDurations: Record<Size, number>
 }
 
 /** Empty breakdown helper. */

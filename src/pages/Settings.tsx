@@ -1,10 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, Check, Lock, Pencil, Plus, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useStore } from '../data/store'
-import { SIZES, SIZE_DESCRIPTIONS, SIZE_TONE, FALLBACK_ITEM, sortAlpha } from '../constants'
+import {
+  SIZES,
+  SIZE_DESCRIPTIONS,
+  SIZE_TONE,
+  FALLBACK_ITEM,
+  sortAlpha,
+  formatDurationDays,
+  DEFAULT_SIZE_DURATIONS,
+} from '../constants'
 import { cx } from '../lib/format'
 import {
   COMMON_CAMPAIGNS,
@@ -12,7 +20,7 @@ import {
   useDashboardPrefs,
   type DemandDim,
 } from '../lib/dashboardPrefs'
-import type { AppSettings } from '../types'
+import type { AppSettings, Size } from '../types'
 
 type ListKey = keyof Pick<AppSettings, 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes'>
 
@@ -89,29 +97,111 @@ export function SettingsPage() {
           onRename={(o, n) => renameListItem('people', o, n)}
           usage={(v) => usageCount('people', v)}
         />
+        {/* Editable task-size turnaround durations — sits beside People */}
+        <SizeDurationsCard />
       </div>
-
-      {/* Fixed task sizes */}
-      <Card>
-        <CardHeader
-          title="Task sizes"
-          subtitle="Fixed T-shirt scale — used on the task form and dashboard"
-          action={
-            <span className="inline-flex items-center gap-1 text-xs text-muted">
-              <Lock className="h-3.5 w-3.5" /> Locked
-            </span>
-          }
-        />
-        <div className="flex flex-wrap gap-2">
-          {SIZES.map((s) => (
-            <span key={s} className="inline-flex items-center gap-2" title={SIZE_DESCRIPTIONS[s]}>
-              <Badge tone={SIZE_TONE[s]}>{s}</Badge>
-              <span className="text-xs text-muted">{SIZE_DESCRIPTIONS[s]}</span>
-            </span>
-          ))}
-        </div>
-      </Card>
     </div>
+  )
+}
+
+/** Editable per-size turnaround (days) used to auto-fill a task's end date. */
+function SizeDurationsCard() {
+  const { settings, saveSettings } = useStore()
+  const toDraft = () =>
+    Object.fromEntries(SIZES.map((s) => [s, String(settings.sizeDurations[s])])) as Record<Size, string>
+  const [draft, setDraft] = useState<Record<Size, string>>(toDraft)
+
+  // Re-sync when the stored durations change (after a save or an external update).
+  useEffect(() => {
+    setDraft(toDraft())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.sizeDurations])
+
+  const [saving, setSaving] = useState(false)
+
+  const parsed = (s: Size) => Math.max(0, Math.round(Number(draft[s]) || 0))
+  const dirty = SIZES.some((s) => parsed(s) !== settings.sizeDurations[s])
+  const draftIsDefault = SIZES.every((s) => parsed(s) === DEFAULT_SIZE_DURATIONS[s])
+
+  const save = async () => {
+    if (!dirty) return
+    setSaving(true)
+    try {
+      const next = Object.fromEntries(SIZES.map((s) => [s, parsed(s)])) as Record<Size, number>
+      await saveSettings({ ...settings, sizeDurations: next })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // "Default" fills the inputs with the default durations; the user then clicks Save.
+  const fillDefaults = () =>
+    setDraft(Object.fromEntries(SIZES.map((s) => [s, String(DEFAULT_SIZE_DURATIONS[s])])) as Record<Size, string>)
+
+  return (
+    <Card>
+      <CardHeader
+        title="Task sizes"
+        subtitle="Days added to the start date when auto-filling the end date"
+      />
+      <p className="mb-3 text-xs text-muted">
+        Only affects new tasks and re-auto-fills — existing end dates are left as-is.
+      </p>
+      <ul className="space-y-1.5">
+        {SIZES.map((s) => (
+          <li
+            key={s}
+            className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <Badge tone={SIZE_TONE[s]}>{s}</Badge>
+              <span className="truncate text-xs text-muted" title={SIZE_DESCRIPTIONS[s]}>
+                {SIZE_DESCRIPTIONS[s]}
+              </span>
+            </span>
+            <span
+              className="flex shrink-0 items-center gap-1.5"
+              title={`≈ ${formatDurationDays(parsed(s))}`}
+            >
+              <input
+                type="number"
+                min={0}
+                inputMode="numeric"
+                className="input h-8 w-16 px-2 py-1 text-right text-sm"
+                value={draft[s]}
+                onChange={(e) => setDraft((d) => ({ ...d, [s]: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void save()
+                  }
+                }}
+              />
+              <span className="text-xs text-muted">days</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={fillDefaults}
+          disabled={draftIsDefault}
+          className="btn-outline h-9 px-3 text-sm disabled:cursor-default disabled:opacity-40"
+          title="Fill the inputs with the default durations"
+        >
+          Default
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!dirty || saving}
+          className="btn-primary h-9 px-4 text-sm disabled:cursor-default disabled:opacity-40"
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </Card>
   )
 }
 

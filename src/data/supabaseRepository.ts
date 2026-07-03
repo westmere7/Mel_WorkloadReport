@@ -1,7 +1,7 @@
 import type { AppSettings, Task, TaskInput } from '../types'
 import type { Repository } from './repository'
 import { getSupabase } from '../lib/supabaseClient'
-import { DEFAULT_SETTINGS, canonicalAssetName } from '../constants'
+import { DEFAULT_SETTINGS, canonicalAssetName, normalizeSizeDurations } from '../constants'
 import { rowToTask, taskInputToRow } from './mappers'
 
 const SETTINGS_ID = 'app'
@@ -22,6 +22,12 @@ function stripNote<T extends { note?: unknown }>(row: T): Omit<T, 'note'> {
 function isMissingSquadsColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
   return msg.includes('squads') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** True if a Supabase error is complaining about a missing `size_durations` column (pre-migration). */
+function isMissingSizeDurationsColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('size_durations') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
 /** True if a Supabase error is complaining about a missing `created_by` column (pre-migration). */
@@ -202,6 +208,7 @@ export class SupabaseRepository implements Repository {
       types: data.types ?? DEFAULT_SETTINGS.types,
       people: data.people ?? DEFAULT_SETTINGS.people,
       assetTypes: data.asset_types ?? DEFAULT_SETTINGS.assetTypes,
+      sizeDurations: normalizeSizeDurations(data.size_durations),
     }
   }
 
@@ -217,11 +224,20 @@ export class SupabaseRepository implements Repository {
     const upsert = (payload: Record<string, unknown>) =>
       getSupabase().from('settings').upsert(payload).select('*').single()
 
-    let { data, error } = await upsert({ ...base, squads: settings.squads })
-    // Retry without `squads` if that column hasn't been migrated yet, so editing
-    // the other lists keeps working (squads just won't persist until schema.sql runs).
+    let payload: Record<string, unknown> = {
+      ...base,
+      squads: settings.squads,
+      size_durations: settings.sizeDurations,
+    }
+    let { data, error } = await upsert(payload)
+    // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
+    if (error && isMissingSizeDurationsColumn(error)) {
+      delete payload.size_durations
+      ;({ data, error } = await upsert(payload))
+    }
     if (error && isMissingSquadsColumn(error)) {
-      ;({ data, error } = await upsert(base))
+      delete payload.squads
+      ;({ data, error } = await upsert(payload))
     }
     if (error) throw error
     return {
@@ -230,6 +246,7 @@ export class SupabaseRepository implements Repository {
       types: data.types,
       people: data.people,
       assetTypes: data.asset_types ?? settings.assetTypes,
+      sizeDurations: normalizeSizeDurations(data.size_durations ?? settings.sizeDurations),
     }
   }
 }

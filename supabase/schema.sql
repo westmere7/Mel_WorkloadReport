@@ -56,6 +56,8 @@ create table if not exists public.settings (
   people     text[] not null default '{}',
   asset_types text[] not null default
                 array['Image','Video','Publication','HTML5 ad','GIF / Motion'],
+  size_durations jsonb not null default
+                '{"XS":7,"S":28,"M":42,"L":56,"XL":182}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
@@ -68,6 +70,12 @@ alter table public.settings
 alter table public.settings
   add column if not exists squads text[] not null default
     array['INTON','DOM','Student Recruitment','BPX','RMIT VN','Alumni','Agent Management'];
+
+-- Add the `size_durations` column to pre-existing tables (idempotent). Days each
+-- task size adds to the start date when auto-filling the end date.
+alter table public.settings
+  add column if not exists size_durations jsonb not null default
+    '{"XS":7,"S":28,"M":42,"L":56,"XL":182}'::jsonb;
 
 insert into public.settings (id, campaigns, types, people)
 values (

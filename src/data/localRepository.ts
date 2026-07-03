@@ -1,6 +1,6 @@
 import type { AppSettings, Task, TaskInput } from '../types'
 import type { Repository } from './repository'
-import { DEFAULT_SETTINGS, canonicalAssetName, normalizeBreakdown } from '../constants'
+import { DEFAULT_SETTINGS, canonicalAssetName, normalizeBreakdown, normalizeSizeDurations } from '../constants'
 import { SEED_TASKS } from './seed'
 
 const TASKS_KEY = 'mwr.tasks.v1'
@@ -145,7 +145,8 @@ export class LocalRepository implements Repository {
 
   async getSettings(): Promise<AppSettings> {
     // Merge over defaults so older stored settings (missing newer keys like `squads`) don't break.
-    return { ...DEFAULT_SETTINGS, ...read<Partial<AppSettings>>(SETTINGS_KEY, {}) }
+    const stored = read<Partial<AppSettings>>(SETTINGS_KEY, {})
+    return { ...DEFAULT_SETTINGS, ...stored, sizeDurations: normalizeSizeDurations(stored.sizeDurations) }
   }
 
   async saveSettings(settings: AppSettings): Promise<AppSettings> {

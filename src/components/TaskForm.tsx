@@ -6,8 +6,7 @@ import {
   SIZES,
   SIZE_DESCRIPTIONS,
   SIZE_COLORS,
-  SIZE_DURATION_DAYS,
-  SIZE_DURATION_LABEL,
+  formatDurationDays,
   withFallback,
 } from '../constants'
 import { useStore } from '../data/store'
@@ -213,11 +212,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     return `${date}, ${time}`
   }, [initial])
 
-  // End date estimated from start date + size, per the T-shirt sizing guide.
+  // End date estimated from start date + the (configurable) size duration.
   const suggestedEnd = useMemo(
-    () => (startDate ? addDaysISO(startDate, SIZE_DURATION_DAYS[size]) : ''),
-    [startDate, size],
+    () => (startDate ? addDaysISO(startDate, settings.sizeDurations[size]) : ''),
+    [startDate, size, settings.sizeDurations],
   )
+  const durationLabel = formatDurationDays(settings.sizeDurations[size])
   // Auto-fill the end date from the estimate until the user sets it themselves.
   useEffect(() => {
     if (!endDateTouched && suggestedEnd) setEndDate(suggestedEnd)
@@ -378,7 +378,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           <label className="label">Task name</label>
           <input
             className="input text-base font-semibold"
-            placeholder="Paste “[26.0608.A] ISC Roadshow 2026…” or type a name"
+            placeholder="Paste name with [code] here for code auto-fill."
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
           />
@@ -529,7 +529,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           />
           {endIsAuto && (
             <p className="mt-1.5 text-xs text-accent-green">
-              Auto-set from {size} size ({SIZE_DURATION_LABEL[size]})
+              Auto-set from {size} size ({durationLabel})
             </p>
           )}
           {suggestedEnd && endDate !== suggestedEnd && (
@@ -538,7 +538,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
               onClick={applyEstimatedEnd}
               className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-rmit-red hover:underline"
             >
-              <Sparkles className="h-3.5 w-3.5" /> Auto-set from {size} size ({SIZE_DURATION_LABEL[size]})
+              <Sparkles className="h-3.5 w-3.5" /> Auto-set from {size} size ({durationLabel})
             </button>
           )}
         </div>
