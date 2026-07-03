@@ -423,8 +423,8 @@ export function Dashboard() {
       {/* Left: workload (fills height) above the two campaign charts, side by side.
           Right: the mix donuts above the full-height squads-demand distribution. */}
       <div className="grid flex-1 items-stretch gap-4 lg:grid-cols-2">
-        {/* LEFT column */}
-        <div className="flex flex-col gap-4">
+        {/* LEFT column — two equal-height rows so the workload and campaign cards match. */}
+        <div className="grid grid-rows-2 gap-4">
           <Card className="flex flex-1 flex-col">
             <CardHeader
               title="Workload & tasks across the year"
@@ -468,26 +468,28 @@ export function Dashboard() {
               />
             </div>
           </Card>
-          <Card>
+          <Card className="flex flex-1 flex-col">
             <CardHeader
               title="Asset count by campaign"
               subtitle={`Total deliverables produced per campaign${campaignSubtitleSuffix}${compareSubtitleSuffix}`}
             />
-            <VBarChart
-              data={assetCampaignShown}
-              height={220}
-              emptyMessage={
-                compare
-                  ? `No campaigns with assets in both ${srcYear} and ${activeYear}.`
-                  : 'Add tasks with asset counts across at least 2 campaigns.'
-              }
-              compare={
-                compare
-                  ? { data: srcAssetCampaign, label: String(srcYear), currentLabel: String(activeYear) }
-                  : undefined
-              }
-              onSelect={(name) => goTasks([['campaign', name]])}
-            />
+            <div className="min-h-[220px] flex-1">
+              <VBarChart
+                data={assetCampaignShown}
+                height="100%"
+                emptyMessage={
+                  compare
+                    ? `No campaigns with assets in both ${srcYear} and ${activeYear}.`
+                    : 'Add tasks with asset counts across at least 2 campaigns.'
+                }
+                compare={
+                  compare
+                    ? { data: srcAssetCampaign, label: String(srcYear), currentLabel: String(activeYear) }
+                    : undefined
+                }
+                onSelect={(name) => goTasks([['campaign', name]])}
+              />
+            </div>
           </Card>
         </div>
 
