@@ -431,8 +431,8 @@ export function Dashboard() {
       <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <Card className={cx('flex flex-col', !showTasksByPerson && 'lg:col-span-2 xl:col-span-2')}>
           <CardHeader
-            title="Workload across the year"
-            subtitle="Assets produced per month"
+            title="Workload & tasks across the year"
+            subtitle="Assets per month · hover or click a bar for task details"
             action={
               // Fixed height so the header (and card) doesn't resize as the
               // hover readout swaps in and out.
