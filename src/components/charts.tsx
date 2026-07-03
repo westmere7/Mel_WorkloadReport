@@ -789,6 +789,26 @@ function TaskColumnsLayer({
   )
 }
 
+// The workload chart shares ONE x-scale across the line, the month ticks and the
+// task columns: day-of-year as a 0–1 fraction (matching TaskColumnsLayer's /366).
+// Month labels and each month's aggregate value sit at that month's mid-point, so
+// a task's column lines up with where its start date actually falls in the year.
+const MONTH_MID_FRAC = Array.from({ length: 12 }, (_, m) =>
+  (new Date(2025, m, 15).getTime() - new Date(2025, 0, 1).getTime()) / 86400000 / 366,
+)
+const nearestMonthIndex = (frac: number) => {
+  let best = 0
+  let bestD = Infinity
+  for (let i = 0; i < MONTH_MID_FRAC.length; i++) {
+    const d = Math.abs(MONTH_MID_FRAC[i] - frac)
+    if (d < bestD) {
+      bestD = d
+      best = i
+    }
+  }
+  return best
+}
+
 /** Area chart of a value across the 12 months of the year. */
 export function AreaTrendChart({
   data,
@@ -906,10 +926,22 @@ export function AreaTrendChart({
   if (Math.max(monthsWithData, compareMonths) < minMonths)
     return <NotEnough message={emptyMessage ?? 'Add tasks with start dates in different months.'} height={height} />
 
-  // Merge the baseline series in by month index so both lines share the x-axis.
-  const rows = compare
+  // Merge the baseline series in by month index, and give every point its x on
+  // the shared day-of-year scale (month mid-point) so both lines share the axis.
+  const base = compare
     ? data.map((d, i) => ({ ...d, prev: compare.data[i]?.value ?? 0 }))
     : data
+  const rows = base.map((d, i) => ({ ...d, x: MONTH_MID_FRAC[i] ?? 0, monthIndex: i }))
+  // Flat end-caps at the year's edges (Jan 1 / Dec 31) so the area/line spans the
+  // full plot width even though the monthly points sit at month mid-points. The
+  // caps repeat the first/last month's value and are flagged `anchor` so they
+  // draw no dot. Compare mode inherits them via `prev`.
+  const first = rows[0]
+  const last = rows[rows.length - 1]
+  const areaRows =
+    first && last
+      ? [{ ...first, x: 0, anchor: true }, ...rows, { ...last, x: 1, anchor: true }]
+      : rows
   const compareColor = colors[1]
 
   // Peak of each series — marked with a dot on the curve in the series's own
@@ -918,9 +950,9 @@ export function AreaTrendChart({
     let best = 0
     for (let i = 1; i < rows.length; i++) if (getVal(rows[i]) > getVal(rows[best])) best = i
     const value = getVal(rows[best])
-    return value > 0 ? { month: rows[best].name, value } : null
+    return value > 0 ? { value, x: rows[best].x, idx: best } : null
   }
-  const peaks: Array<{ month: string; value: number; color: string }> = []
+  const peaks: Array<{ value: number; color: string; x: number; idx: number }> = []
   const targetPeak = peakOf((r) => Number(r.value) || 0)
   if (targetPeak) peaks.push({ ...targetPeak, color: WORKLOAD_LINE })
   if (compare) {
@@ -936,17 +968,20 @@ export function AreaTrendChart({
   const { top: yTop, ticks: yTicks } = niceScale(peakMax)
 
   const showNow = nowMonth != null && nowMonth >= 0 && nowMonth < data.length
+  const nowFrac = showNow ? (MONTH_MID_FRAC[nowMonth as number] ?? 0) : 0
 
-  // Fraction of the x-axis where "Now" sits — used to switch the line from red
-  // (past/present) to grey (future) at that point via a hard gradient stop.
-  const nowOffset = showNow ? `${((nowMonth as number) / Math.max(1, data.length - 1)) * 100}%` : '0%'
+  // With the flat end-caps the line spans the full plot width, so the stroke
+  // gradient's 0–1 objectBoundingBox maps directly onto the day-of-year fraction:
+  // the red→grey "Now" switch sits at nowFrac.
+  const nowOffset = showNow ? `${nowFrac * 100}%` : '0%'
   const FUTURE_GREY = 'var(--chart-axis-strong)'
 
   // Colour each dot: red up to and including "Now", grey afterward.
-  const renderDot = (props: { cx?: number; cy?: number; index?: number }) => {
-    const { cx, cy, index = 0 } = props
-    if (cx == null || cy == null) return <g key={`dot-${index}`} />
-    const isFuture = showNow && index > (nowMonth as number)
+  const renderDot = (props: { cx?: number; cy?: number; index?: number; payload?: any }) => {
+    const { cx, cy, index = 0, payload } = props
+    // Skip the flat end-caps — dots only mark real months.
+    if (cx == null || cy == null || payload?.anchor) return <g key={`dot-${index}`} />
+    const isFuture = showNow && Number(payload?.monthIndex) > (nowMonth as number)
     return (
       <circle
         key={`dot-${index}`}
@@ -960,9 +995,18 @@ export function AreaTrendChart({
     )
   }
 
+  // Signature of the current dataset — changes on year / span / compare / ytd
+  // switches but NOT on hover. Keying the areas by it remounts them so recharts
+  // replays its left-to-right reveal, matching the task columns' L→R entrance.
+  const animKey = [
+    compare ? 'cmp' : 'one',
+    rows.map((r) => r.value).join(','),
+    rows.map((r) => (r as { prev?: number }).prev ?? 0).join(','),
+  ].join('|')
+
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={rows} margin={{ left: 0, right: 12, top: 28, bottom: 4 }}>
+      <AreaChart data={areaRows} margin={{ left: 0, right: 12, top: 28, bottom: 4 }}>
         <defs>
           {/* RMIT red fill fading out toward the baseline */}
           <linearGradient id="workloadFill" x1="0" y1="0" x2="0" y2="1">
@@ -979,7 +1023,16 @@ export function AreaTrendChart({
           )}
         </defs>
         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-        <XAxis dataKey="name" tick={AXIS} axisLine={false} tickLine={false} />
+        <XAxis
+          type="number"
+          dataKey="x"
+          domain={[0, 1]}
+          ticks={MONTH_MID_FRAC}
+          tickFormatter={(v) => rows[nearestMonthIndex(v)]?.name ?? ''}
+          tick={AXIS}
+          axisLine={false}
+          tickLine={false}
+        />
         <YAxis
           allowDecimals={false}
           tick={AXIS}
@@ -1014,6 +1067,7 @@ export function AreaTrendChart({
         {/* Source year — drawn first so the target-year line sits on top of it. */}
         {compare && (
           <Area
+            key={`prev-${animKey}`}
             type="monotone"
             dataKey="prev"
             name={compare.label}
@@ -1023,9 +1077,13 @@ export function AreaTrendChart({
             fillOpacity={0.06}
             dot={{ r: 2, fill: 'var(--card)', stroke: compareColor, strokeWidth: 1.5 }}
             activeDot={{ r: 4 }}
+            isAnimationActive
+            animationDuration={900}
+            animationEasing="ease-out"
           />
         )}
         <Area
+          key={`value-${animKey}`}
           type="monotone"
           dataKey="value"
           name={compare ? compare.currentLabel : 'Workload'}
@@ -1034,6 +1092,9 @@ export function AreaTrendChart({
           fill="url(#workloadFill)"
           dot={renderDot}
           activeDot={{ r: 5 }}
+          isAnimationActive
+          animationDuration={900}
+          animationEasing="ease-out"
         />
         {scatterTasks.length > 0 && (
           <Customized
@@ -1050,7 +1111,7 @@ export function AreaTrendChart({
         )}
         {showNow && (
           <ReferenceLine
-            x={data[nowMonth as number].name}
+            x={nowFrac}
             stroke="var(--chart-axis-strong)"
             strokeWidth={1.5}
             strokeDasharray="4 4"
@@ -1064,12 +1125,11 @@ export function AreaTrendChart({
           />
         )}
         {peaks.map((p, idx) => {
-          const monthIdx = rows.findIndex((r) => r.name === p.month)
-          const align = monthIdx === 0 ? 'start' : monthIdx === rows.length - 1 ? 'end' : 'middle'
+          const align = p.idx === 0 ? 'start' : p.idx === rows.length - 1 ? 'end' : 'middle'
           return (
             <ReferenceDot
-              key={`peak-${p.month}-${idx}`}
-              x={p.month}
+              key={`peak-${p.idx}-${idx}`}
+              x={p.x}
               y={p.value}
               r={5}
               fill={p.color}
