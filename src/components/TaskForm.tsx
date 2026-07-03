@@ -203,6 +203,16 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   const parsed = useMemo(() => parseTaskCode(code), [code])
   const breakdownSum = useMemo(() => sumBreakdown(breakdown), [breakdown])
 
+  // "Created" metadata shown beside the delete button when editing an existing task.
+  const createdMeta = useMemo(() => {
+    if (!initial?.createdAt) return null
+    const d = new Date(initial.createdAt)
+    if (Number.isNaN(d.getTime())) return null
+    const date = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    return `${date}, ${time}`
+  }, [initial])
+
   // End date estimated from start date + size, per the T-shirt sizing guide.
   const suggestedEnd = useMemo(
     () => (startDate ? addDaysISO(startDate, SIZE_DURATION_DAYS[size]) : ''),
@@ -568,18 +578,29 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         />
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-2">
-        {onDelete ? (
-          <button
-            type="button"
-            onClick={onDelete}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
-          >
-            <Trash2 className="h-4 w-4" /> Remove task
-          </button>
-        ) : (
-          <span />
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 pt-2">
+        <div className="flex items-center gap-3">
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
+            >
+              <Trash2 className="h-4 w-4" /> Remove task
+            </button>
+          )}
+          {initial && (
+            <div className="flex flex-col leading-tight text-[11px] text-muted">
+              <span>Created {createdMeta ?? '—'}</span>
+              <span
+                className="text-faint"
+                title={initial.createdBy ? `Created by ${initial.createdBy}` : 'Created before creator tracking was added'}
+              >
+                by {initial.createdBy || '—'}
+              </span>
+            </div>
+          )}
+        </div>
         <div className="flex gap-2">
           {onCancel && (
             <button type="button" className="btn-outline" onClick={onCancel}>

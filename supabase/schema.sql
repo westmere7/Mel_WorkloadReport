@@ -22,6 +22,7 @@ create table if not exists public.tasks (
   half            text not null default 'H1' check (half in ('H1', 'H2')),
   size            text not null default 'M' check (size in ('XS', 'S', 'M', 'L', 'XL')),
   note            text not null default '',
+  created_by      text,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
@@ -34,6 +35,11 @@ alter table public.tasks
 -- Add the `note` column to pre-existing tables (idempotent).
 alter table public.tasks
   add column if not exists note text not null default '';
+
+-- Add the `created_by` column to pre-existing tables (idempotent). Nullable —
+-- tasks created before this migration have no recorded creator.
+alter table public.tasks
+  add column if not exists created_by text;
 
 create index if not exists tasks_created_at_idx on public.tasks (created_at desc);
 create index if not exists tasks_squad_idx      on public.tasks (squad);

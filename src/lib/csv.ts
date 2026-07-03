@@ -38,6 +38,11 @@ export function exportTasksCsv(
   filenameSuffix = 'all',
   numbering?: Map<string, number>,
 ): void {
+  // With numbering, order the rows oldest-first so the "No." column reads 1..N.
+  // (It's an informational snapshot of current order, not a stored identity.)
+  const ordered = numbering
+    ? [...tasks].sort((a, b) => (numbering.get(a.id) ?? 0) - (numbering.get(b.id) ?? 0))
+    : tasks
   const headers = [
     ...(numbering ? ['No.'] : []),
     'Code',
@@ -55,7 +60,7 @@ export function exportTasksCsv(
     'Note',
   ]
 
-  const rows = tasks.map((t) => [
+  const rows = ordered.map((t) => [
     ...(numbering ? [numbering.get(t.id) ?? ''] : []),
     t.code,
     t.name,
@@ -153,23 +158,10 @@ export function parseTasksCsv(text: string): TaskInput[] {
   const col = (name: string) => header.indexOf(name)
   const num = (s: string) => Math.max(0, Number(s) || 0)
 
-  // If a "No." column is present, import oldest-first (ascending No.) so the
-  // add-order is re-created in the same sequence. Rows without a valid No. keep
-  // their file order and sort last.
-  const noCol = col('No.')
-  const dataRows =
-    noCol === -1
-      ? rows.slice(1)
-      : rows
-          .slice(1)
-          .map((row, i) => {
-            const n = Number((row[noCol] ?? '').trim())
-            return { row, i, no: Number.isFinite(n) && (row[noCol] ?? '').trim() !== '' ? n : Infinity }
-          })
-          .sort((a, b) => (a.no !== b.no ? a.no - b.no : a.i - b.i))
-          .map((x) => x.row)
-
-  return dataRows.map((row) => {
+  // "No." is display-only ordering, never an identity — its value is ignored on
+  // import (excluded from asset detection above and not stored). Rows import in
+  // file order; the list re-derives each task's No. from its creation order.
+  return rows.slice(1).map((row) => {
     const get = (name: string) => (row[col(name)] ?? '').trim()
 
     const assetBreakdown: Record<string, number> = {}

@@ -16,6 +16,7 @@ import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { DEFAULT_SETTINGS, FALLBACK_ITEM } from '../constants'
 import { generateSampleTasks } from '../lib/sampleData'
 import { toMessage } from '../lib/format'
+import { useAuth } from '../lib/auth'
 
 interface StoreValue {
   backend: 'local' | 'supabase'
@@ -57,6 +58,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const repoRef = useRef<Repository>()
   if (!repoRef.current) repoRef.current = createRepository()
   const repo = repoRef.current
+  // Current signed-in user, stamped as the creator on tasks they add.
+  const { user } = useAuth()
 
   const [tasks, setTasks] = useState<Task[]>([])
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
@@ -106,11 +109,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const createTask = useCallback(
     async (input: TaskInput) => {
-      const task = await repo.createTask(input)
+      const task = await repo.createTask(input, user)
       setTasks((prev) => [task, ...prev])
       return task
     },
-    [repo],
+    [repo, user],
   )
 
   const updateTask = useCallback(
@@ -139,7 +142,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async (inputs: TaskInput[], mode: 'replace' | 'merge') => {
       if (mode === 'replace') {
         await repo.deleteAllTasks()
-        const created = await repo.createManyTasks(inputs)
+        const created = await repo.createManyTasks(inputs, user)
         setTasks(created)
         return { created: created.length, updated: 0 }
       }
@@ -158,21 +161,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           toCreate.push(input)
         }
       }
-      if (toCreate.length) await repo.createManyTasks(toCreate)
+      if (toCreate.length) await repo.createManyTasks(toCreate, user)
       setTasks(await repo.listTasks())
       return { created: toCreate.length, updated }
     },
-    [repo],
+    [repo, user],
   )
 
   const populateSampleData = useCallback(
     async (count = 60) => {
       const inputs = generateSampleTasks(count)
-      const created = await repo.createManyTasks(inputs)
+      const created = await repo.createManyTasks(inputs, user)
       setTasks((prev) => [...created, ...prev])
       return created.length
     },
-    [repo],
+    [repo, user],
   )
 
   const saveSettings = useCallback(

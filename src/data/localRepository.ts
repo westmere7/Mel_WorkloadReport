@@ -48,19 +48,20 @@ export class LocalRepository implements Repository {
     return read<Task[]>(TASKS_KEY, []).map((t) => ({
       ...t,
       size: t.size ?? 'M',
+      createdBy: t.createdBy ?? null,
       assetBreakdown: normalizeBreakdown(t.assetBreakdown),
     }))
   }
 
-  async createTask(input: TaskInput): Promise<Task> {
+  async createTask(input: TaskInput, createdBy: string | null = null): Promise<Task> {
     const tasks = await this.listTasks()
     const now = new Date().toISOString()
-    const task: Task = { ...input, id: uid(), createdAt: now, updatedAt: now }
+    const task: Task = { ...input, id: uid(), createdAt: now, updatedAt: now, createdBy }
     write(TASKS_KEY, [task, ...tasks])
     return task
   }
 
-  async createManyTasks(inputs: TaskInput[]): Promise<Task[]> {
+  async createManyTasks(inputs: TaskInput[], createdBy: string | null = null): Promise<Task[]> {
     const tasks = await this.listTasks()
     const now = new Date().toISOString()
     const created: Task[] = inputs.map((input) => ({
@@ -68,6 +69,7 @@ export class LocalRepository implements Repository {
       id: uid(),
       createdAt: now,
       updatedAt: now,
+      createdBy,
     }))
     write(TASKS_KEY, [...created, ...tasks])
     return created

@@ -44,10 +44,12 @@ export interface Task {
   note?: string
   createdAt: string
   updatedAt: string
+  /** Username that created the task; null for tasks created before this was tracked. */
+  createdBy?: string | null
 }
 
 /** Fields supplied when creating/editing a task (no system fields). */
-export type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt'>
+export type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>
 
 /** User-editable lists + app preferences. */
 export interface AppSettings {

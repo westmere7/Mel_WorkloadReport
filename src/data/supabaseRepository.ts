@@ -24,6 +24,18 @@ function isMissingSquadsColumn(err: unknown): boolean {
   return msg.includes('squads') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
+/** True if a Supabase error is complaining about a missing `created_by` column (pre-migration). */
+function isMissingCreatedByColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('created_by') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** Drop the `created_by` key from a row (used to retry when the column isn't there yet). */
+function stripCreatedBy<T extends { created_by?: unknown }>(row: T): Omit<T, 'created_by'> {
+  const { created_by: _drop, ...rest } = row
+  return rest
+}
+
 /**
  * Supabase-backed repository. Active automatically when VITE_SUPABASE_URL
  * and VITE_SUPABASE_ANON_KEY are set. Expects the schema in supabase/schema.sql.
@@ -40,21 +52,35 @@ export class SupabaseRepository implements Repository {
     return (data ?? []).map(rowToTask)
   }
 
-  async createTask(input: TaskInput): Promise<Task> {
-    const row = taskInputToRow(input)
+  async createTask(input: TaskInput, createdBy: string | null = null): Promise<Task> {
+    let row: Record<string, unknown> =
+      createdBy != null ? { ...taskInputToRow(input), created_by: createdBy } : { ...taskInputToRow(input) }
     let { data, error } = await getSupabase().from('tasks').insert(row).select('*').single()
+    // Retry stripping columns the DB hasn't migrated yet, so creation keeps working.
+    if (error && isMissingCreatedByColumn(error)) {
+      row = stripCreatedBy(row)
+      ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
+    }
     if (error && isMissingNoteColumn(error)) {
-      ;({ data, error } = await getSupabase().from('tasks').insert(stripNote(row)).select('*').single())
+      row = stripNote(row)
+      ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
     }
     if (error) throw error
     return rowToTask(data)
   }
 
-  async createManyTasks(inputs: TaskInput[]): Promise<Task[]> {
-    const rows = inputs.map(taskInputToRow)
+  async createManyTasks(inputs: TaskInput[], createdBy: string | null = null): Promise<Task[]> {
+    let rows: Record<string, unknown>[] = inputs.map((input) =>
+      createdBy != null ? { ...taskInputToRow(input), created_by: createdBy } : { ...taskInputToRow(input) },
+    )
     let { data, error } = await getSupabase().from('tasks').insert(rows).select('*')
+    if (error && isMissingCreatedByColumn(error)) {
+      rows = rows.map(stripCreatedBy)
+      ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
+    }
     if (error && isMissingNoteColumn(error)) {
-      ;({ data, error } = await getSupabase().from('tasks').insert(rows.map(stripNote)).select('*'))
+      rows = rows.map(stripNote)
+      ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
     }
     if (error) throw error
     return (data ?? []).map(rowToTask)

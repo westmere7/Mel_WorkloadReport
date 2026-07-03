@@ -36,7 +36,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const hideLabel = collapsed ? 'hidden' : 'hidden md:inline'
 
   return (
-    <div className="relative shrink-0">
+    <div className="relative hidden shrink-0 md:block">
       <aside
         onClick={onToggle}
         className={cx(
@@ -139,5 +139,48 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         )}
       </button>
     </div>
+  )
+}
+
+/** Bottom tab bar — the page navigation on mobile, where the sidebar is hidden. */
+export function MobileNav() {
+  const { openNewTask } = useNewTask()
+  const { canEdit } = useAuth()
+  const nav = canEdit ? NAV : NAV.filter((item) => item.to !== '/settings')
+
+  return (
+    <nav className="flex shrink-0 items-stretch justify-around border-t border-line bg-card md:hidden">
+      {nav.map(({ to, label, icon: Icon }) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={to === '/'}
+          className={({ isActive }) =>
+            cx(
+              'flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] font-semibold transition',
+              isActive ? 'text-rmit-red' : 'text-muted hover:text-ink',
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <Icon className="h-5 w-5 shrink-0" strokeWidth={2.2} />
+              <span>{label}</span>
+              {isActive && <span className="sr-only">(current)</span>}
+            </>
+          )}
+        </NavLink>
+      ))}
+      {canEdit && (
+        <button
+          type="button"
+          onClick={openNewTask}
+          className="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] font-semibold text-rmit-red transition hover:opacity-80"
+        >
+          <Plus className="h-5 w-5 shrink-0" strokeWidth={2.5} />
+          <span>New</span>
+        </button>
+      )}
+    </nav>
   )
 }

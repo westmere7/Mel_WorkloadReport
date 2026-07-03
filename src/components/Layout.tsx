@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { LogIn, Moon, Sun, UserCog } from 'lucide-react'
-import { Sidebar } from './Sidebar'
+import { Sidebar, MobileNav } from './Sidebar'
 import { LoginModal } from './LoginModal'
 import { AccountModal } from './AccountModal'
 import { useTheme } from '../lib/theme'
@@ -56,10 +56,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <div className="flex h-screen overflow-hidden bg-surface">
         <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Top bar — wraps to two rows on mobile (title/controls, then the page slots) */}
-          <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-card px-3 py-3 sm:gap-x-4 sm:py-4 sm:pl-8 sm:pr-6">
+          {/* Top bar — wraps to two rows on mobile (title/controls, then the page slots).
+              sm:min-h keeps the height identical across pages regardless of subtitle. */}
+          <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-card px-3 py-3 sm:min-h-20 sm:gap-x-4 sm:py-4 sm:pl-8 sm:pr-6">
             {/* Title / brand cluster */}
             <div className="order-1 flex min-w-0 items-center gap-3">
+              {/* Brand mark on mobile, where the sidebar rail is hidden. */}
+              <img src="/RMIT_red.svg" alt="RMIT" className="h-7 w-auto shrink-0 md:hidden" />
               {/* When collapsed, the sidebar rail drops its logo + name — show them here
                   (full-colour on the light header, red/white on the dark one). */}
               {collapsed && (
@@ -135,6 +138,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </header>
 
           <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          {/* Bottom navigation — mobile only (the sidebar is hidden there). */}
+          <MobileNav />
         </div>
       </div>
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />

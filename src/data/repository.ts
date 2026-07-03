@@ -10,9 +10,9 @@ export interface Repository {
   readonly backend: 'local' | 'supabase'
 
   listTasks(): Promise<Task[]>
-  createTask(input: TaskInput): Promise<Task>
-  /** Bulk insert (used by sample-data population). */
-  createManyTasks(inputs: TaskInput[]): Promise<Task[]>
+  createTask(input: TaskInput, createdBy?: string | null): Promise<Task>
+  /** Bulk insert (used by import + sample-data population). `createdBy` stamps the creator. */
+  createManyTasks(inputs: TaskInput[], createdBy?: string | null): Promise<Task[]>
   updateTask(id: string, input: TaskInput): Promise<Task>
   deleteTask(id: string): Promise<void>
   /** Dev/maintenance: remove every task. */

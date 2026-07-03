@@ -19,6 +19,7 @@ export interface TaskRow {
   note: string | null
   created_at: string
   updated_at: string
+  created_by: string | null
 }
 
 /** Convert a DB row into the app's Task model. */
@@ -40,11 +41,12 @@ export function rowToTask(row: TaskRow): Task {
     note: row.note ?? '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    createdBy: row.created_by ?? null,
   }
 }
 
 /** Convert a TaskInput into the DB row shape for insert/update. */
-export function taskInputToRow(input: TaskInput): Omit<TaskRow, 'id' | 'created_at' | 'updated_at'> {
+export function taskInputToRow(input: TaskInput): Omit<TaskRow, 'id' | 'created_at' | 'updated_at' | 'created_by'> {
   return {
     squad: input.squad,
     campaign: input.campaign,
