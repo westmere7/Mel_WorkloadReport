@@ -351,7 +351,7 @@ export function Dashboard() {
   const spanDesc = span === 'total' ? 'all time' : span === 'half' ? `${activeYear} ${half}` : `${activeYear}`
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-full flex-col gap-4">
       {/* Header stats: three hero cards + a Tasks-by-squad card */}
       <div className="grid items-stretch gap-3 lg:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -422,10 +422,10 @@ export function Dashboard() {
 
       {/* Left: workload (fills height) above the two campaign charts, side by side.
           Right: the mix donuts above the full-height squads-demand distribution. */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2">
+      <div className="grid flex-1 items-stretch gap-4 lg:grid-cols-2">
         {/* LEFT column */}
         <div className="flex flex-col gap-4">
-          <Card className="flex flex-col">
+          <Card className="flex flex-1 flex-col">
             <CardHeader
               title="Workload & tasks across the year"
               subtitle="Assets per month · hover or click a bar for task details"
@@ -452,10 +452,10 @@ export function Dashboard() {
                 </div>
               }
             />
-            <div>
+            <div className="min-h-[300px] flex-1">
               <AreaTrendChart
                 data={byMonth}
-                height={440}
+                height="100%"
                 nowMonth={nowMonth}
                 tasks={chartYearTasks}
                 onTaskClick={setViewTask}
@@ -468,28 +468,26 @@ export function Dashboard() {
               />
             </div>
           </Card>
-          <Card className="flex flex-1 flex-col">
+          <Card>
             <CardHeader
               title="Asset count by campaign"
               subtitle={`Total deliverables produced per campaign${campaignSubtitleSuffix}${compareSubtitleSuffix}`}
             />
-            <div className="min-h-[180px] flex-1">
-              <VBarChart
-                data={assetCampaignShown}
-                height="100%"
-                emptyMessage={
-                  compare
-                    ? `No campaigns with assets in both ${srcYear} and ${activeYear}.`
-                    : 'Add tasks with asset counts across at least 2 campaigns.'
-                }
-                compare={
-                  compare
-                    ? { data: srcAssetCampaign, label: String(srcYear), currentLabel: String(activeYear) }
-                    : undefined
-                }
-                onSelect={(name) => goTasks([['campaign', name]])}
-              />
-            </div>
+            <VBarChart
+              data={assetCampaignShown}
+              height={220}
+              emptyMessage={
+                compare
+                  ? `No campaigns with assets in both ${srcYear} and ${activeYear}.`
+                  : 'Add tasks with asset counts across at least 2 campaigns.'
+              }
+              compare={
+                compare
+                  ? { data: srcAssetCampaign, label: String(srcYear), currentLabel: String(activeYear) }
+                  : undefined
+              }
+              onSelect={(name) => goTasks([['campaign', name]])}
+            />
           </Card>
         </div>
 
