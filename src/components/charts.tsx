@@ -24,7 +24,7 @@ import { CHART_COLORS_DARK, CHART_COLORS_LIGHT } from '../constants'
 import { useTheme } from '../lib/theme'
 import { TrendDelta } from './ui/TrendDelta'
 import { cx } from '../lib/format'
-import { useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 
 /** A comparison-mode baseline series: the source-year data + labels for both years. */
 export interface CompareSeries {
@@ -793,6 +793,89 @@ export function AreaTrendChart({
 }) {
   const colors = useChartColors()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+
+  // Act on hover: highlight the column, snap the dashed cursor, update readout.
+  const setHover = (t: Task | null) => {
+    setHoveredId(t?.id ?? null)
+    onHoverTask?.(t)
+  }
+
+  // One column per task (disabled in compare mode); the cycle order is sorted by
+  // start day so the idle tour runs Jan→Dec.
+  const scatterTasks = compare ? [] : (tasks ?? []).filter((t) => t.startDate && (t.assetTotal || 0) > 0)
+  const cycleTasks = useMemo(
+    () =>
+      [...scatterTasks].sort((a, b) =>
+        (a.startDate ?? '') < (b.startDate ?? '') ? -1 : (a.startDate ?? '') > (b.startDate ?? '') ? 1 : 0,
+      ),
+    [scatterTasks], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
+  // Idle auto-tour: after 10s with no input (mouse/keyboard/scroll/touch), walk
+  // the columns Jan→Dec→Jan, ~1.5s each, each step behaving like a hover. Any
+  // input cancels it and restarts the idle countdown. Latest inputs are read via
+  // a ref so the effect can mount once and never tear down mid-cycle.
+  const cycleRef = useRef({ tasks: cycleTasks, enabled: false, setHover })
+  useEffect(() => {
+    cycleRef.current = { tasks: cycleTasks, enabled: !compare && cycleTasks.length > 1, setHover }
+  })
+  useEffect(() => {
+    let idleTimer: number | undefined
+    let stepTimer: number | undefined
+    let cycling = false
+    let idx = 0
+    let dir = 1
+
+    const stopCycle = () => {
+      if (stepTimer) {
+        clearInterval(stepTimer)
+        stepTimer = undefined
+      }
+      if (cycling) {
+        cycling = false
+        cycleRef.current.setHover(null)
+      }
+    }
+    const startCycle = () => {
+      if (!cycleRef.current.enabled) return
+      cycling = true
+      idx = 0
+      dir = 1
+      const step = () => {
+        const { tasks: list, enabled, setHover: hover } = cycleRef.current
+        if (!enabled || list.length === 0) {
+          stopCycle()
+          return
+        }
+        hover(list[Math.min(idx, list.length - 1)])
+        idx += dir
+        if (idx >= list.length - 1) {
+          idx = list.length - 1
+          dir = -1
+        } else if (idx <= 0) {
+          idx = 0
+          dir = 1
+        }
+      }
+      step() // show the first immediately, then advance every 1.5s
+      stepTimer = window.setInterval(step, 1500)
+    }
+    const resetIdle = () => {
+      stopCycle()
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = window.setTimeout(startCycle, 10000)
+    }
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart', 'touchmove', 'scroll']
+    events.forEach((e) => window.addEventListener(e, resetIdle, { passive: true }))
+    resetIdle()
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, resetIdle))
+      if (idleTimer) clearTimeout(idleTimer)
+      if (stepTimer) clearInterval(stepTimer)
+    }
+  }, [])
+
   const monthsWithData = data.filter((d) => d.value > 0).length
   const compareMonths = compare ? compare.data.filter((d) => d.value > 0).length : 0
   if (Math.max(monthsWithData, compareMonths) < minMonths)
@@ -851,11 +934,6 @@ export function AreaTrendChart({
       />
     )
   }
-
-  // One column per task, scaled on the line's own y-axis. Disabled in compare
-  // mode — a single-year scatter would clutter two lines. Drawn by the stable
-  // <TaskColumnsLayer> (see above) so its entry animation plays only once.
-  const scatterTasks = compare ? [] : (tasks ?? []).filter((t) => t.startDate && (t.assetTotal || 0) > 0)
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -939,10 +1017,7 @@ export function AreaTrendChart({
                 tasks={scatterTasks}
                 maxVal={yTop}
                 hoveredId={hoveredId}
-                onHover={(t) => {
-                  setHoveredId(t?.id ?? null)
-                  onHoverTask?.(t)
-                }}
+                onHover={setHover}
                 onPick={(t) => onTaskClick?.(t)}
               />
             }

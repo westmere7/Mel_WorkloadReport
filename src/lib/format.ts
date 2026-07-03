@@ -10,6 +10,18 @@ export function formatDate(iso: string | null): string {
   return `${d} ${months[m - 1]} ${y}`
 }
 
+/** Format an ISO date (yyyy-mm-dd) as "29 Jun" — day + month, no year. */
+export function formatDayMonth(iso: string | null): string {
+  if (!iso) return '—'
+  const [y, m, d] = iso.split('-').map(Number)
+  if (!y || !m || !d) return iso
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ]
+  return `${d} ${months[m - 1]}`
+}
+
 /** Add days to an ISO date (yyyy-mm-dd), returning ISO. Returns input unchanged if unparseable. */
 export function addDaysISO(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number)

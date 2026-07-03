@@ -23,7 +23,7 @@ import {
   summarize,
 } from '../lib/analytics'
 import { withFallback } from '../constants'
-import { cx, todayISO, formatDate } from '../lib/format'
+import { cx, todayISO, formatDate, formatDayMonth } from '../lib/format'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
@@ -440,7 +440,7 @@ export function Dashboard() {
                     <span className="text-[10px] font-medium text-muted">
                       {hoverTask.assetTotal} {hoverTask.assetTotal === 1 ? 'asset' : 'assets'} ·{' '}
                       {hoverTask.people.length} {hoverTask.people.length === 1 ? 'person' : 'people'} ·{' '}
-                      {hoverTask.squad} · {hoverTask.size}
+                      {hoverTask.squad} · {hoverTask.size} · Start day: {formatDayMonth(hoverTask.startDate)}
                     </span>
                   </>
                 ) : (
