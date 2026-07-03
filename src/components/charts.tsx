@@ -446,7 +446,16 @@ export function StackedBarChart({
               fillOpacity={0.45}
               legendType="none"
               maxBarSize={40}
-            />
+            >
+              <LabelList
+                dataKey={`prev_${k}`}
+                position="center"
+                formatter={(v: number | string) => (v ? `${v}` : '')}
+                fill={labelColors?.[i] ?? '#ffffff'}
+                fontSize={compare ? 10 : 11}
+                fontWeight={700}
+              />
+            </Bar>
           ))}
         {keys.map((k, i) => (
           <Bar
