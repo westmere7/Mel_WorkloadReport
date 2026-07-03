@@ -29,11 +29,13 @@ export function StatCard({ label, value, icon: Icon, hint, footer, delta, accent
   // Hero: a vertical KPI card whose big number fills its (stretched) cell.
   if (size === 'xl') {
     return (
-      <div className="card flex h-full flex-col p-5">
+      <div className="card flex h-full flex-col p-5 [container-type:inline-size]">
         <p className="text-sm font-semibold uppercase tracking-wide text-muted">{label}</p>
         <div className="flex min-w-0 flex-1 flex-col justify-center">
           <div className="flex min-w-0 flex-wrap items-end gap-x-3 gap-y-1">
-            <p className="font-display text-[clamp(3.5rem,12vw,7.5rem)] font-bold leading-none text-rmit-navy dark:text-ink xl:text-[clamp(3.5rem,5.5vw,7.5rem)]">{value}</p>
+            {/* Sized to the card via container-query units so the number fills
+                the width consistently regardless of column/sidebar width. */}
+            <p className="font-display text-[clamp(3rem,30cqw,9rem)] font-bold leading-none text-rmit-navy dark:text-ink">{value}</p>
             {delta && <span className="pb-1">{delta}</span>}
           </div>
           {hint && <p className="mt-2 truncate text-sm text-muted">{hint}</p>}

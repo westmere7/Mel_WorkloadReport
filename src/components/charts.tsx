@@ -9,8 +9,10 @@ import {
   Legend,
   Pie,
   PieChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
+  Sector,
   Tooltip,
   XAxis,
   YAxis,
@@ -21,7 +23,7 @@ import { CHART_COLORS_DARK, CHART_COLORS_LIGHT } from '../constants'
 import { useTheme } from '../lib/theme'
 import { TrendDelta } from './ui/TrendDelta'
 import { cx } from '../lib/format'
-import type { KeyboardEvent } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 
 /** A comparison-mode baseline series: the source-year data + labels for both years. */
 export interface CompareSeries {
@@ -56,6 +58,8 @@ const tooltipLabelStyle = { color: 'var(--ink)', fontWeight: 600 }
 const AXIS = { fontSize: 12, fill: 'var(--chart-axis)' }
 const AXIS_STRONG = { fontSize: 12, fill: 'var(--chart-axis-strong)' }
 const CURSOR = { fill: 'var(--chart-cursor)' }
+/** The target-year workload line colour (RMIT red) — its peak matches it. */
+const WORKLOAD_LINE = '#E61E2A'
 
 /** Shown when there isn't enough data to render a meaningful chart. */
 export function NotEnough({ message, height = 200 }: { message?: string; height?: number | string }) {
@@ -101,6 +105,8 @@ export function DonutChart({
   sourceLabel?: string
 }) {
   const colors = useChartColors()
+  // Index of the section currently hovered (via a slice or its legend row).
+  const [active, setActive] = useState<number | null>(null)
   const total = data.reduce((a, b) => a + b.value, 0)
   const prevByName = compare ? new Map(compare.map((d) => [d.name, d.value])) : null
   if (total === 0 || data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
@@ -118,9 +124,27 @@ export function DonutChart({
               outerRadius={84}
               paddingAngle={2}
               stroke="none"
+              activeIndex={active ?? undefined}
+              activeShape={(props: any) => (
+                <Sector
+                  cx={props.cx}
+                  cy={props.cy}
+                  innerRadius={props.innerRadius}
+                  outerRadius={props.outerRadius + 6}
+                  startAngle={props.startAngle}
+                  endAngle={props.endAngle}
+                  fill={props.fill}
+                />
+              )}
+              onMouseEnter={(_, i) => setActive(i)}
+              onMouseLeave={() => setActive(null)}
             >
               {data.map((_, i) => (
-                <Cell key={i} fill={colors[i % colors.length]} />
+                <Cell
+                  key={i}
+                  fill={colors[i % colors.length]}
+                  fillOpacity={active == null || active === i ? 1 : 0.35}
+                />
               ))}
             </Pie>
             <Tooltip
@@ -151,9 +175,12 @@ export function DonutChart({
               <div
                 className={cx(
                   'flex items-center justify-between gap-3 rounded-md -mx-1 px-1 py-0.5 text-sm transition-colors',
-                  clickable && 'cursor-pointer hover:bg-subtle',
+                  clickable && 'cursor-pointer',
+                  active === i && 'bg-subtle',
                 )}
                 title={tip}
+                onMouseEnter={() => setActive(i)}
+                onMouseLeave={() => setActive(null)}
                 {...(clickable
                   ? {
                       role: 'button',
@@ -583,6 +610,23 @@ export function StackedBarChart({
   )
 }
 
+/**
+ * "Peak" caption drawn above a peak dot. Anchors inward at the line's ends
+ * (leftmost month → text extends right, rightmost → extends left) so it never
+ * clips off the chart edge. Handles either recharts viewBox shape.
+ */
+function PeakLabel(props: { viewBox?: any; color?: string; align?: 'start' | 'middle' | 'end' }) {
+  const { viewBox, color, align = 'middle' } = props
+  if (!viewBox) return null
+  const cx = viewBox.cx != null ? viewBox.cx : (viewBox.x ?? 0) + (viewBox.width ?? 0) / 2
+  const dotTop = viewBox.cy != null ? viewBox.cy - (viewBox.r ?? 5) : (viewBox.y ?? 0)
+  return (
+    <text x={cx} y={dotTop - 6} textAnchor={align} fontSize={11} fontWeight={700} fill={color}>
+      Peak
+    </text>
+  )
+}
+
 /** Area chart of a value across the 12 months of the year. */
 export function AreaTrendChart({
   data,
@@ -613,6 +657,22 @@ export function AreaTrendChart({
     : data
   const compareColor = colors[1]
 
+  // Peak of each series — marked with a dot on the curve in the series's own
+  // colour. In compare mode the target and source lines each get their own dot.
+  const peakOf = (getVal: (r: any) => number) => {
+    let best = 0
+    for (let i = 1; i < rows.length; i++) if (getVal(rows[i]) > getVal(rows[best])) best = i
+    const value = getVal(rows[best])
+    return value > 0 ? { month: rows[best].name, value } : null
+  }
+  const peaks: Array<{ month: string; value: number; color: string }> = []
+  const targetPeak = peakOf((r) => Number(r.value) || 0)
+  if (targetPeak) peaks.push({ ...targetPeak, color: WORKLOAD_LINE })
+  if (compare) {
+    const sourcePeak = peakOf((r) => Number(r.prev) || 0)
+    if (sourcePeak) peaks.push({ ...sourcePeak, color: compareColor })
+  }
+
   const showNow = nowMonth != null && nowMonth >= 0 && nowMonth < data.length
 
   // Fraction of the x-axis where "Now" sits — used to switch the line from red
@@ -640,7 +700,7 @@ export function AreaTrendChart({
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={rows} margin={{ left: 0, right: 12, top: 8, bottom: 4 }}>
+      <AreaChart data={rows} margin={{ left: 0, right: 12, top: 24, bottom: 4 }}>
         <defs>
           {/* RMIT red fill fading out toward the baseline */}
           <linearGradient id="workloadFill" x1="0" y1="0" x2="0" y2="1">
@@ -727,6 +787,26 @@ export function AreaTrendChart({
             }}
           />
         )}
+        {peaks.map((p, idx) => {
+          const monthIdx = rows.findIndex((r) => r.name === p.month)
+          const align = monthIdx === 0 ? 'start' : monthIdx === rows.length - 1 ? 'end' : 'middle'
+          return (
+            <ReferenceDot
+              key={`peak-${p.month}-${idx}`}
+              x={p.month}
+              y={p.value}
+              r={5}
+              fill={p.color}
+              stroke="var(--card)"
+              strokeWidth={2}
+              isFront
+              ifOverflow="visible"
+              label={(labelProps: any) => (
+                <PeakLabel viewBox={labelProps?.viewBox} color={p.color} align={align} />
+              )}
+            />
+          )
+        })}
       </AreaChart>
     </ResponsiveContainer>
   )
