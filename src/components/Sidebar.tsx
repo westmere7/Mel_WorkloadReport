@@ -40,7 +40,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       <aside
         onClick={onToggle}
         className={cx(
-          'flex h-full cursor-pointer flex-col overflow-hidden border-r border-line bg-[var(--sidebar)] transition-[width] duration-200',
+          'flex h-full cursor-pointer flex-col overflow-hidden bg-[var(--sidebar)] transition-[width] duration-200',
           collapsed ? 'w-[68px]' : 'w-[68px] md:w-60',
         )}
       >

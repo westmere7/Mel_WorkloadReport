@@ -95,12 +95,10 @@
 }
 
 @layer components {
+  /* Flat panels — distinguished from the page purely by their surface colour,
+     no shadow or outline (kept intentionally minimal in both themes). */
   .card {
-    @apply rounded-2xl bg-card shadow-card;
-  }
-  /* Crisp card edges in dark mode (shadows don't read on dark backgrounds) */
-  .dark .card {
-    border: 1px solid var(--line);
+    @apply rounded-2xl bg-card;
   }
 
   .input {

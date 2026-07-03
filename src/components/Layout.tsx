@@ -58,7 +58,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Top bar — wraps to two rows on mobile (title/controls, then the page slots).
               sm:min-h keeps the height identical across pages regardless of subtitle. */}
-          <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-card px-3 py-3 sm:min-h-20 sm:gap-x-4 sm:py-4 sm:pl-8 sm:pr-6">
+          <header className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-card px-3 py-3 sm:min-h-20 sm:gap-x-4 sm:py-4 sm:pl-8 sm:pr-6">
             {/* Title / brand cluster */}
             <div className="order-1 flex min-w-0 items-center gap-3">
               {/* Brand mark on mobile, where the sidebar rail is hidden. */}
