@@ -17,17 +17,29 @@ const CORE_HEADERS = [
   'Size',
 ]
 
-// Non-asset columns: core + optional extras (Note) that also aren't asset types.
-const NON_ASSET_HEADERS = [...CORE_HEADERS, 'Note']
+// Non-asset columns: core + optional extras (No., Note) that also aren't asset
+// types. "No." is a derived add-order index — kept out of asset detection so a
+// re-imported export doesn't turn it into a bogus asset type.
+const NON_ASSET_HEADERS = [...CORE_HEADERS, 'Note', 'No.']
 
 function esc(value: string | number): string {
   const s = String(value ?? '')
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
-/** Build a CSV string from tasks (with one column per asset type), then download it. */
-export function exportTasksCsv(tasks: Task[], assetTypes: string[], filenameSuffix = 'all'): void {
+/**
+ * Build a CSV string from tasks (with one column per asset type), then download it.
+ * `numbering` maps task id → "No." (the add-order shown in the task list); when
+ * provided, a leading "No." column is included so backups mirror the table.
+ */
+export function exportTasksCsv(
+  tasks: Task[],
+  assetTypes: string[],
+  filenameSuffix = 'all',
+  numbering?: Map<string, number>,
+): void {
   const headers = [
+    ...(numbering ? ['No.'] : []),
     'Code',
     'Task name',
     'Squad',
@@ -44,6 +56,7 @@ export function exportTasksCsv(tasks: Task[], assetTypes: string[], filenameSuff
   ]
 
   const rows = tasks.map((t) => [
+    ...(numbering ? [numbering.get(t.id) ?? ''] : []),
     t.code,
     t.name,
     t.squad,
@@ -140,7 +153,23 @@ export function parseTasksCsv(text: string): TaskInput[] {
   const col = (name: string) => header.indexOf(name)
   const num = (s: string) => Math.max(0, Number(s) || 0)
 
-  return rows.slice(1).map((row) => {
+  // If a "No." column is present, import oldest-first (ascending No.) so the
+  // add-order is re-created in the same sequence. Rows without a valid No. keep
+  // their file order and sort last.
+  const noCol = col('No.')
+  const dataRows =
+    noCol === -1
+      ? rows.slice(1)
+      : rows
+          .slice(1)
+          .map((row, i) => {
+            const n = Number((row[noCol] ?? '').trim())
+            return { row, i, no: Number.isFinite(n) && (row[noCol] ?? '').trim() !== '' ? n : Infinity }
+          })
+          .sort((a, b) => (a.no !== b.no ? a.no - b.no : a.i - b.i))
+          .map((x) => x.row)
+
+  return dataRows.map((row) => {
     const get = (name: string) => (row[col(name)] ?? '').trim()
 
     const assetBreakdown: Record<string, number> = {}

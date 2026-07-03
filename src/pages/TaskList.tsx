@@ -9,6 +9,7 @@ import {
   Search,
   StickyNote,
   Trash2,
+  X,
 } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { Badge, toneForLabel } from '../components/ui/Badge'
@@ -23,9 +24,10 @@ import { useAuth } from '../lib/auth'
 import { SIZES, SIZE_ORDER, SIZE_TONE, withFallback } from '../constants'
 import { cx, formatDate } from '../lib/format'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
+import { addedOrderMap } from '../lib/analytics'
 import type { Half, Task, TaskInput } from '../types'
 
-type SortKey = 'code' | 'name' | 'squad' | 'campaign' | 'assetTotal' | 'startDate' | 'half' | 'size'
+type SortKey = 'no' | 'code' | 'name' | 'squad' | 'campaign' | 'assetTotal' | 'startDate' | 'half' | 'size'
 
 export function TaskList() {
   const { tasks, settings, updateTask, deleteTask } = useStore()
@@ -44,7 +46,7 @@ export function TaskList() {
   const [sizes, setSizes] = useState<string[]>(() => searchParams.getAll('size'))
   const [types, setTypes] = useState<string[]>(() => searchParams.getAll('type'))
   const [assetTypes, setAssetTypes] = useState<string[]>(() => searchParams.getAll('asset'))
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'startDate', dir: 'desc' })
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'no', dir: 'desc' })
 
   const [editing, setEditing] = useState<Task | null>(null)
   const [deleting, setDeleting] = useState<Task | null>(null)
@@ -53,10 +55,17 @@ export function TaskList() {
   const years = useMemo(() => taskYears(tasks), [tasks])
   const activeYear = spanYear ?? years[0] ?? 0
 
+  // "No." = the order a task was added (earliest = 1), stable across filters.
+  const addedOrder = useMemo(() => addedOrderMap(tasks), [tasks])
+  const taskNo = (t: Task) => addedOrder.get(t.id) ?? 0
+
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
+    // Ignore square brackets so a code pasted as "[26.0202.A] …" still matches —
+    // we strip brackets from new tasks, but users paste them from other trackers.
+    const strip = (s: string) => s.replace(/[[\]]/g, '')
+    const q = strip(query.trim().toLowerCase())
     const rows = filterBySpan(tasks, spanMode, activeYear, spanHalf).filter((t) => {
-      if (q && !`${t.code} ${t.name}`.toLowerCase().includes(q)) return false
+      if (q && !strip(`${t.code} ${t.name}`.toLowerCase()).includes(q)) return false
       if (squads.length && !squads.includes(t.squad)) return false
       if (campaigns.length && !campaigns.includes(t.campaign)) return false
       if (sizes.length && !sizes.includes(t.size)) return false
@@ -67,13 +76,14 @@ export function TaskList() {
     })
     const dir = sort.dir === 'asc' ? 1 : -1
     return rows.sort((a, b) => {
+      if (sort.key === 'no') return (taskNo(a) - taskNo(b)) * dir
       if (sort.key === 'assetTotal') return (a.assetTotal - b.assetTotal) * dir
       if (sort.key === 'size') return (SIZE_ORDER[a.size] - SIZE_ORDER[b.size]) * dir
       const av = a[sort.key]
       const bv = b[sort.key]
       return String(av ?? '').localeCompare(String(bv ?? '')) * dir
     })
-  }, [tasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, sort])
+  }, [tasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, sort, addedOrder])
 
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
@@ -122,11 +132,21 @@ export function TaskList() {
           <div className="relative min-w-[260px] flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
             <input
-              className="input h-12 pl-12 text-base shadow-soft placeholder:text-muted focus:shadow-none"
+              className="input h-12 pl-12 pr-11 text-base shadow-soft placeholder:text-muted focus:shadow-none"
               placeholder="Search code or task name…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                title="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted transition-colors hover:bg-subtle hover:text-ink"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
 
           <SpanFilter
@@ -146,44 +166,49 @@ export function TaskList() {
           )}
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <MultiSelect options={withFallback(settings.squads)} value={squads} onChange={setSquads} placeholder="All squads" overflowCollapse />
-          <MultiSelect
-            options={settings.campaigns}
-            value={campaigns}
-            onChange={setCampaigns}
-            placeholder="All campaigns"
-            overflowCollapse
-          />
-          <MultiSelect
-            options={withFallback(settings.types)}
-            value={types}
-            onChange={setTypes}
-            placeholder="All work types"
-            overflowCollapse
-          />
-          <MultiSelect
-            options={withFallback(settings.assetTypes)}
-            value={assetTypes}
-            onChange={setAssetTypes}
-            placeholder="All asset types"
-            overflowCollapse
-          />
-          <MultiSelect
-            options={settings.people}
-            value={people}
-            onChange={setPeople}
-            placeholder="All people"
-            overflowCollapse
-          />
-          <MultiSelect options={SIZES} value={sizes} onChange={setSizes} placeholder="All sizes" overflowCollapse />
+        <div className="flex items-start gap-2">
+          <div className="grid flex-1 gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+            <MultiSelect options={withFallback(settings.squads)} value={squads} onChange={setSquads} placeholder="All squads" overflowCollapse />
+            <MultiSelect
+              options={settings.campaigns}
+              value={campaigns}
+              onChange={setCampaigns}
+              placeholder="All campaigns"
+              overflowCollapse
+            />
+            <MultiSelect
+              options={withFallback(settings.types)}
+              value={types}
+              onChange={setTypes}
+              placeholder="All work types"
+              overflowCollapse
+            />
+            <MultiSelect
+              options={withFallback(settings.assetTypes)}
+              value={assetTypes}
+              onChange={setAssetTypes}
+              placeholder="All asset types"
+              overflowCollapse
+            />
+            <MultiSelect
+              options={settings.people}
+              value={people}
+              onChange={setPeople}
+              placeholder="All people"
+              overflowCollapse
+            />
+            <MultiSelect options={SIZES} value={sizes} onChange={setSizes} placeholder="All sizes" overflowCollapse />
+          </div>
+          {hasFilters ? (
+            <button
+              type="button"
+              className="btn-ghost h-11 shrink-0 self-start whitespace-nowrap"
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+          ) : null}
         </div>
-
-        {hasFilters ? (
-          <button className="btn-ghost self-start" onClick={clearFilters}>
-            Clear filters
-          </button>
-        ) : null}
       </Card>
 
       {/* Table */}
@@ -197,9 +222,10 @@ export function TaskList() {
           </span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] border-collapse text-sm">
+          <table className="w-full min-w-[1080px] border-collapse text-sm">
             <thead>
               <tr className="border-y border-line bg-subtle/60 text-left text-xs uppercase tracking-wide text-muted">
+                <Th label="No." k="no" sort={sort} onSort={toggleSort} />
                 <Th label="Code" k="code" sort={sort} onSort={toggleSort} />
                 <Th label="Task name" k="name" sort={sort} onSort={toggleSort} />
                 <Th label="Squad" k="squad" sort={sort} onSort={toggleSort} />
@@ -222,6 +248,7 @@ export function TaskList() {
                   onClick={() => setEditing(t)}
                   title={canEdit ? 'Click to edit' : 'Click to view'}
                 >
+                  <td className="whitespace-nowrap px-3 py-3 text-xs font-semibold tabular-nums text-muted">{taskNo(t)}</td>
                   <td className="whitespace-nowrap px-3 py-3 font-mono text-xs text-muted">{t.code || '—'}</td>
                   <td className="px-3 py-3 font-medium text-ink">
                     <div className="flex max-w-[260px] items-center gap-1.5">
@@ -303,7 +330,7 @@ export function TaskList() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={canEdit ? 12 : 11} className="px-3 py-12 text-center text-sm text-muted">
+                  <td colSpan={canEdit ? 13 : 12} className="px-3 py-12 text-center text-sm text-muted">
                     No tasks match your filters.
                   </td>
                 </tr>

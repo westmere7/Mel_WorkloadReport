@@ -122,6 +122,27 @@ export function totalAssets(tasks: Task[]): number {
   return tasks.reduce((acc, t) => acc + (t.assetTotal || 0), 0)
 }
 
+/**
+ * Map each task id to its "No." — the order the task was added (earliest = 1).
+ * Ordered by createdAt when present, falling back to start date, with the code
+ * as a final deterministic tiebreak. Used by the task list and CSV export so
+ * both show the same numbering.
+ */
+export function addedOrderMap(tasks: Task[]): Map<string, number> {
+  const sorted = [...tasks].sort((a, b) => {
+    const ca = a.createdAt || ''
+    const cb = b.createdAt || ''
+    if (ca !== cb) return ca < cb ? -1 : 1
+    const sa = a.startDate || ''
+    const sb = b.startDate || ''
+    if (sa !== sb) return sa < sb ? -1 : 1
+    return String(a.code).localeCompare(String(b.code))
+  })
+  const map = new Map<string, number>()
+  sorted.forEach((t, i) => map.set(t.id, i + 1))
+  return map
+}
+
 /** Task counts per T-shirt size, in fixed XS→XL order (zeros included). */
 export function countBySize(tasks: Task[]): NamedCount[] {
   const rec: Record<string, number> = {}

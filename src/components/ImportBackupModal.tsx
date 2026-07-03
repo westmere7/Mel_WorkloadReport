@@ -4,6 +4,7 @@ import { Modal } from './ui/Modal'
 import { SpanFilter } from './SpanFilter'
 import { useStore } from '../data/store'
 import { exportTasksCsv, parseTasksCsv } from '../lib/csv'
+import { addedOrderMap } from '../lib/analytics'
 import { filterBySpan, spanSuffix, taskYears, type SpanMode } from '../lib/span'
 import { toMessage } from '../lib/format'
 import type { Half, TaskInput } from '../types'
@@ -28,6 +29,8 @@ export function ImportBackupModal({ open, onClose }: { open: boolean; onClose: (
     () => filterBySpan(tasks, span, activeYear, half),
     [tasks, span, activeYear, half],
   )
+  // Global add-order (matches the task list's "No.") so the export mirrors it.
+  const numbering = useMemo(() => addedOrderMap(tasks), [tasks])
 
   const readFile = async (file: File) => {
     setError(null)
@@ -147,7 +150,9 @@ export function ImportBackupModal({ open, onClose }: { open: boolean; onClose: (
             type="button"
             className="btn-primary mt-3"
             disabled={backupTasks.length === 0}
-            onClick={() => exportTasksCsv(backupTasks, settings.assetTypes, spanSuffix(span, activeYear, half))}
+            onClick={() =>
+              exportTasksCsv(backupTasks, settings.assetTypes, spanSuffix(span, activeYear, half), numbering)
+            }
           >
             <Download className="h-4 w-4" /> Download backup
           </button>
