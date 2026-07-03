@@ -23,10 +23,12 @@ export function TrendDelta({
   const lg = size === 'lg'
   const sm = size === 'sm'
   const textCls = lg ? 'text-2xl' : sm ? 'text-[11px]' : 'text-sm'
+  // Non-hero deltas use a lighter weight so they don't overpower the count.
+  const weight = lg ? 'font-bold' : 'font-medium'
 
   if (previous <= 0 && current <= 0) {
     return (
-      <span className={cx('font-semibold text-faint', textCls)} title={title}>
+      <span className={cx(weight, 'text-faint', textCls)} title={title}>
         —
       </span>
     )
@@ -47,7 +49,7 @@ export function TrendDelta({
     }
     return (
       <span
-        className={cx('inline-flex items-center font-bold text-accent-gold', textCls)}
+        className={cx('inline-flex items-center text-accent-gold', weight, textCls)}
         title={title}
       >
         New
@@ -66,7 +68,7 @@ export function TrendDelta({
       )
     }
     return (
-      <span className={cx('inline-flex items-center font-bold text-muted', textCls)} title={title}>
+      <span className={cx('inline-flex items-center text-muted', weight, textCls)} title={title}>
         0%
       </span>
     )
@@ -92,7 +94,7 @@ export function TrendDelta({
   }
 
   return (
-    <span className={cx('inline-flex items-center font-bold', color, textCls)} title={title}>
+    <span className={cx('inline-flex items-center', weight, color, textCls)} title={title}>
       {up ? '+' : '−'}
       {magnitude}%
     </span>
