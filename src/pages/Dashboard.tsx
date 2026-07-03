@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeftRight, ClipboardList, Images, Shirt } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowLeftRight } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
@@ -18,6 +19,7 @@ import {
   countBySize,
   demandByStakeholder,
   demandByStakeholderAssetType,
+  stakeholderGroup,
   STAKEHOLDER_GROUPS,
   summarize,
 } from '../lib/analytics'
@@ -27,7 +29,7 @@ import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
 import { useAuth } from '../lib/auth'
-import type { Half, Size } from '../types'
+import type { Half, Size, Squad } from '../types'
 
 export function Dashboard() {
   const { tasks, live, settings } = useStore()
@@ -47,6 +49,7 @@ export function Dashboard() {
   }, [])
   // Chart display preferences — edited in Settings → Dashboard.
   const { demandDim, hideCommonCampaigns, showTasksByPerson } = useDashboardPrefs()
+  const navigate = useNavigate()
 
   const years = useMemo(() => taskYears(tasks), [tasks])
 
@@ -151,6 +154,41 @@ export function Dashboard() {
     }
     return assetsByMonth(list)
   }, [tasks, srcYear, ytd, todayMD])
+
+  // ── Deep-link to the Task List, filtered to a single selection ──────────
+  // Each click passes exactly the chosen filter(s) via the URL query; the Task
+  // List seeds fresh from those params, so any prior filters are dropped.
+  const goTasks = (params: Array<[string, string]>) => {
+    const sp = new URLSearchParams()
+    for (const [k, v] of params) sp.append(k, v)
+    navigate({ pathname: '/tasks', search: `?${sp.toString()}` })
+  }
+  const squadsInGroup = (group: string) =>
+    withFallback(settings.squads).filter((s) => stakeholderGroup(s as Squad) === group)
+
+  // Per-name counts of relevant tasks, for the mix donuts' hover tooltips.
+  // (Work-type counts equal the donut value; asset-type counts don't — a task
+  // with multiple asset types is one task but many assets.)
+  const assetMixCounts = useMemo(() => {
+    const rec: Record<string, number> = {}
+    for (const d of assetMix)
+      rec[d.name] = filtered.filter((t) => (Number(t.assetBreakdown[d.name]) || 0) > 0).length
+    return rec
+  }, [assetMix, filtered])
+  const srcAssetMixCounts = useMemo(() => {
+    const rec: Record<string, number> = {}
+    for (const d of srcAssetMix)
+      rec[d.name] = sourceTasks.filter((t) => (Number(t.assetBreakdown[d.name]) || 0) > 0).length
+    return rec
+  }, [srcAssetMix, sourceTasks])
+  const workTypeCounts = useMemo(
+    () => Object.fromEntries(workTypeMix.map((d) => [d.name, d.value])),
+    [workTypeMix],
+  )
+  const srcWorkTypeCounts = useMemo(
+    () => Object.fromEntries(srcWorkTypeMix.map((d) => [d.name, d.value])),
+    [srcWorkTypeMix],
+  )
 
   // Render the Live badge (left) and span selector (right) into the top header bar.
   const setHeaderSlots = useHeaderSlots()
@@ -308,7 +346,6 @@ export function Dashboard() {
         <StatCard
           label={compare ? `Asset count · ${activeYear} over ${srcYear}` : 'Asset count'}
           value={<AnimatedNumber value={summary.totalAssets} />}
-          icon={Images}
           accent="navy"
           size="xl"
           delta={
@@ -332,7 +369,6 @@ export function Dashboard() {
         <StatCard
           label={compare ? `Task count · ${activeYear} over ${srcYear}` : 'Task count'}
           value={<AnimatedNumber value={summary.totalTasks} />}
-          icon={ClipboardList}
           accent="red"
           size="xl"
           delta={
@@ -356,15 +392,23 @@ export function Dashboard() {
 
         {/* Task-size distribution — its own headline card */}
         <div className="card flex h-full flex-col p-5">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold uppercase tracking-wide text-muted">Task sizes</p>
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-50 text-accent-teal dark:bg-cyan-500/15">
-              <Shirt className="h-6 w-6" strokeWidth={2.2} />
-            </div>
-          </div>
+          <p className="text-sm font-semibold uppercase tracking-wide text-muted">Task sizes</p>
           <div className="flex flex-1 flex-col justify-center divide-y divide-line">
             {bySize.map((s) => (
-              <div key={s.name} className="flex items-center gap-2.5 py-1.5 first:pt-0 last:pb-0">
+              <div
+                key={s.name}
+                role="button"
+                tabIndex={0}
+                onClick={() => goTasks([['size', s.name]])}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    goTasks([['size', s.name]])
+                  }
+                }}
+                title={`View ${s.name} tasks`}
+                className="-mx-1 flex cursor-pointer items-center gap-2.5 rounded-md px-1 py-1.5 transition-colors first:pt-0 last:pb-0 hover:bg-subtle"
+              >
                 <Badge tone={SIZE_TONE[s.name as Size]}>{s.name}</Badge>
                 <span className="flex-1 truncate text-xs text-muted" title={SIZE_DESCRIPTIONS[s.name as Size]}>
                   {SIZE_DESCRIPTIONS[s.name as Size]}
@@ -377,7 +421,11 @@ export function Dashboard() {
 
         <Card className="flex flex-col">
           <CardHeader title="Tasks by squad" subtitle="Requests by stakeholder team" />
-          <RankedBars data={bySquad} emptyMessage="Add tasks for at least 2 squads." />
+          <RankedBars
+            data={bySquad}
+            emptyMessage="Add tasks for at least 2 squads."
+            onSelect={(name) => goTasks([['squad', name]])}
+          />
         </Card>
       </div>
 
@@ -417,6 +465,10 @@ export function Dashboard() {
             height={200}
             emptyMessage="Add tasks with asset counts to see the mix."
             compare={compare ? srcAssetMix : undefined}
+            onSelect={(name) => goTasks([['asset', name]])}
+            taskCounts={assetMixCounts}
+            prevTaskCounts={compare ? srcAssetMixCounts : undefined}
+            sourceLabel={String(srcYear)}
           />
         </Card>
         <Card>
@@ -429,6 +481,10 @@ export function Dashboard() {
             height={200}
             emptyMessage="Tag tasks with work types to see the mix."
             compare={compare ? srcWorkTypeMix : undefined}
+            onSelect={(name) => goTasks([['type', name]])}
+            taskCounts={workTypeCounts}
+            prevTaskCounts={compare ? srcWorkTypeCounts : undefined}
+            sourceLabel={String(srcYear)}
           />
         </Card>
         {showTasksByPerson && (
@@ -462,6 +518,7 @@ export function Dashboard() {
                   ? { data: srcByCampaign, label: String(srcYear), currentLabel: String(activeYear) }
                   : undefined
               }
+              onSelect={(name) => goTasks([['campaign', name]])}
             />
           </Card>
           <Card>
@@ -482,6 +539,7 @@ export function Dashboard() {
                   ? { data: srcAssetCampaign, label: String(srcYear), currentLabel: String(activeYear) }
                   : undefined
               }
+              onSelect={(name) => goTasks([['campaign', name]])}
             />
           </Card>
         </div>
@@ -506,6 +564,12 @@ export function Dashboard() {
                 compare
                   ? { data: srcDemand, label: String(srcYear), currentLabel: String(activeYear) }
                   : undefined
+              }
+              onSelect={(category, group) =>
+                goTasks([
+                  [demandDim === 'asset' ? 'asset' : 'type', category],
+                  ...squadsInGroup(group).map((s) => ['squad', s] as [string, string]),
+                ])
               }
             />
           </div>

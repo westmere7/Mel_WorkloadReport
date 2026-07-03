@@ -74,7 +74,7 @@ export function TrendDelta({
 
   const up = pct > 0
   const magnitude = Math.abs(pct) < 10 ? Math.abs(pct).toFixed(1) : String(Math.round(Math.abs(pct)))
-  const color = up ? 'text-accent-gold' : 'text-accent-green'
+  const color = up ? 'text-accent-gold' : 'text-accent-teal'
 
   if (lg) {
     return (

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   ArrowDownUp,
   ChevronDown,
@@ -30,14 +31,19 @@ export function TaskList() {
   const { tasks, settings, updateTask, deleteTask } = useStore()
   const { canEdit } = useAuth()
 
+  // Filters seed from the URL query so dashboard charts can deep-link here
+  // (e.g. /tasks?squad=DOM&asset=Image). Keys may repeat for multi-value filters.
+  const [searchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [spanMode, setSpanMode] = useState<SpanMode>('total')
   const [spanYear, setSpanYear] = useState<number | null>(null)
   const [spanHalf, setSpanHalf] = useState<Half>('H1')
-  const [squads, setSquads] = useState<string[]>([])
-  const [campaigns, setCampaigns] = useState<string[]>([])
-  const [people, setPeople] = useState<string[]>([])
-  const [sizes, setSizes] = useState<string[]>([])
+  const [squads, setSquads] = useState<string[]>(() => searchParams.getAll('squad'))
+  const [campaigns, setCampaigns] = useState<string[]>(() => searchParams.getAll('campaign'))
+  const [people, setPeople] = useState<string[]>(() => searchParams.getAll('person'))
+  const [sizes, setSizes] = useState<string[]>(() => searchParams.getAll('size'))
+  const [types, setTypes] = useState<string[]>(() => searchParams.getAll('type'))
+  const [assetTypes, setAssetTypes] = useState<string[]>(() => searchParams.getAll('asset'))
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'startDate', dir: 'desc' })
 
   const [editing, setEditing] = useState<Task | null>(null)
@@ -55,6 +61,8 @@ export function TaskList() {
       if (campaigns.length && !campaigns.includes(t.campaign)) return false
       if (sizes.length && !sizes.includes(t.size)) return false
       if (people.length && !t.people.some((p) => people.includes(p))) return false
+      if (types.length && !t.types.some((ty) => types.includes(ty))) return false
+      if (assetTypes.length && !assetTypes.some((a) => (Number(t.assetBreakdown[a]) || 0) > 0)) return false
       return true
     })
     const dir = sort.dir === 'asc' ? 1 : -1
@@ -65,7 +73,7 @@ export function TaskList() {
       const bv = b[sort.key]
       return String(av ?? '').localeCompare(String(bv ?? '')) * dir
     })
-  }, [tasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, sort])
+  }, [tasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, sort])
 
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
@@ -92,6 +100,8 @@ export function TaskList() {
     setCampaigns([])
     setPeople([])
     setSizes([])
+    setTypes([])
+    setAssetTypes([])
   }
 
   const hasFilters =
@@ -100,7 +110,9 @@ export function TaskList() {
     squads.length ||
     campaigns.length ||
     people.length ||
-    sizes.length
+    sizes.length ||
+    types.length ||
+    assetTypes.length
 
   return (
     <div className="space-y-4">
@@ -134,13 +146,27 @@ export function TaskList() {
           )}
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <MultiSelect options={withFallback(settings.squads)} value={squads} onChange={setSquads} placeholder="All squads" overflowCollapse />
           <MultiSelect
             options={settings.campaigns}
             value={campaigns}
             onChange={setCampaigns}
             placeholder="All campaigns"
+            overflowCollapse
+          />
+          <MultiSelect
+            options={withFallback(settings.types)}
+            value={types}
+            onChange={setTypes}
+            placeholder="All work types"
+            overflowCollapse
+          />
+          <MultiSelect
+            options={withFallback(settings.assetTypes)}
+            value={assetTypes}
+            onChange={setAssetTypes}
+            placeholder="All asset types"
             overflowCollapse
           />
           <MultiSelect

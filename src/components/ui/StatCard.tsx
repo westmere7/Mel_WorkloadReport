@@ -5,7 +5,7 @@ import { cx } from '../../lib/format'
 interface StatCardProps {
   label: string
   value: ReactNode
-  icon: LucideIcon
+  icon?: LucideIcon
   hint?: string
   /** Rich footer under the value (xl only) — e.g. a per-size distribution. */
   footer?: ReactNode
@@ -30,12 +30,7 @@ export function StatCard({ label, value, icon: Icon, hint, footer, delta, accent
   if (size === 'xl') {
     return (
       <div className="card flex h-full flex-col p-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold uppercase tracking-wide text-muted">{label}</p>
-          <div className={cx('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl', ACCENTS[accent])}>
-            <Icon className="h-6 w-6" strokeWidth={2.2} />
-          </div>
-        </div>
+        <p className="text-sm font-semibold uppercase tracking-wide text-muted">{label}</p>
         <div className="flex min-w-0 flex-1 flex-col justify-center">
           <div className="flex min-w-0 flex-wrap items-end gap-x-3 gap-y-1">
             <p className="font-display text-[clamp(3.5rem,12vw,7.5rem)] font-bold leading-none text-rmit-navy dark:text-ink xl:text-[clamp(3.5rem,5.5vw,7.5rem)]">{value}</p>
@@ -50,15 +45,17 @@ export function StatCard({ label, value, icon: Icon, hint, footer, delta, accent
 
   return (
     <div className={cx('card flex items-center', lg ? 'gap-4 p-5' : 'gap-3.5 p-4')}>
-      <div
-        className={cx(
-          'flex shrink-0 items-center justify-center rounded-2xl',
-          lg ? 'h-14 w-14' : 'h-11 w-11',
-          ACCENTS[accent],
-        )}
-      >
-        <Icon className={lg ? 'h-7 w-7' : 'h-5 w-5'} strokeWidth={2.2} />
-      </div>
+      {Icon && (
+        <div
+          className={cx(
+            'flex shrink-0 items-center justify-center rounded-2xl',
+            lg ? 'h-14 w-14' : 'h-11 w-11',
+            ACCENTS[accent],
+          )}
+        >
+          <Icon className={lg ? 'h-7 w-7' : 'h-5 w-5'} strokeWidth={2.2} />
+        </div>
+      )}
       <div className="min-w-0">
         <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
         <div className="flex flex-wrap items-baseline gap-x-2">

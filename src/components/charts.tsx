@@ -20,6 +20,8 @@ import type { NamedCount } from '../lib/analytics'
 import { CHART_COLORS_DARK, CHART_COLORS_LIGHT } from '../constants'
 import { useTheme } from '../lib/theme'
 import { TrendDelta } from './ui/TrendDelta'
+import { cx } from '../lib/format'
+import type { KeyboardEvent } from 'react'
 
 /** A comparison-mode baseline series: the source-year data + labels for both years. */
 export interface CompareSeries {
@@ -78,6 +80,10 @@ export function DonutChart({
   minPoints = 1,
   emptyMessage,
   compare,
+  onSelect,
+  taskCounts,
+  prevTaskCounts,
+  sourceLabel,
 }: {
   data: NamedCount[]
   height?: number
@@ -85,6 +91,14 @@ export function DonutChart({
   emptyMessage?: string
   /** Comparison baseline — legend rows get an up/down % vs this series. */
   compare?: NamedCount[]
+  /** Clicking a legend row calls this with the row name (e.g. to open the filtered task list). */
+  onSelect?: (name: string) => void
+  /** Per-name count of relevant tasks — shown in the row's hover tooltip. */
+  taskCounts?: Record<string, number>
+  /** Source-year task counts (compare mode) — appended to the tooltip. */
+  prevTaskCounts?: Record<string, number>
+  /** Label for the source year, used in the compare tooltip. */
+  sourceLabel?: string
 }) {
   const colors = useChartColors()
   const total = data.reduce((a, b) => a + b.value, 0)
@@ -122,28 +136,60 @@ export function DonutChart({
         </div>
       </div>
       <ul className="flex-1 space-y-1.5">
-        {data.map((d, i) => (
-          <li key={d.name} className="flex items-center justify-between gap-3 text-sm">
-            <span className="flex items-center gap-2 truncate">
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ background: colors[i % colors.length] }}
-              />
-              <span className="truncate text-muted">{d.name}</span>
-            </span>
-            <span className="flex shrink-0 items-center gap-2">
-              {prevByName && (
-                <TrendDelta
-                  size="sm"
-                  current={d.value}
-                  previous={prevByName.get(d.name) ?? 0}
-                  title={`${prevByName.get(d.name) ?? 0} → ${d.value}`}
-                />
-              )}
-              <span className="font-semibold text-ink">{d.value}</span>
-            </span>
-          </li>
-        ))}
+        {data.map((d, i) => {
+          const clickable = Boolean(onSelect)
+          const n = taskCounts?.[d.name]
+          const p = prevTaskCounts?.[d.name]
+          const tip =
+            n == null
+              ? undefined
+              : `${n} task${n === 1 ? '' : 's'}${
+                  compare && p != null ? ` · ${p} in ${sourceLabel ?? 'source'}` : ''
+                }`
+          return (
+            <li key={d.name}>
+              <div
+                className={cx(
+                  'flex items-center justify-between gap-3 rounded-md -mx-1 px-1 py-0.5 text-sm transition-colors',
+                  clickable && 'cursor-pointer hover:bg-subtle',
+                )}
+                title={tip}
+                {...(clickable
+                  ? {
+                      role: 'button',
+                      tabIndex: 0,
+                      onClick: () => onSelect!(d.name),
+                      onKeyDown: (e: KeyboardEvent) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          onSelect!(d.name)
+                        }
+                      },
+                    }
+                  : {})}
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ background: colors[i % colors.length] }}
+                  />
+                  <span className="truncate text-muted">{d.name}</span>
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  {prevByName && (
+                    <TrendDelta
+                      size="sm"
+                      current={d.value}
+                      previous={prevByName.get(d.name) ?? 0}
+                      title={`${prevByName.get(d.name) ?? 0} → ${d.value}`}
+                    />
+                  )}
+                  <span className="font-semibold text-ink">{d.value}</span>
+                </span>
+              </div>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )
@@ -203,18 +249,42 @@ export function RankedBars({
   data,
   minPoints = 2,
   emptyMessage,
+  onSelect,
 }: {
   data: NamedCount[]
   minPoints?: number
   emptyMessage?: string
+  /** Clicking a row calls this with the row name (e.g. to open the filtered task list). */
+  onSelect?: (name: string) => void
 }) {
   const colors = useChartColors()
   if (data.length < minPoints) return <NotEnough message={emptyMessage} height={180} />
   const max = data.reduce((m, d) => Math.max(m, d.value), 0) || 1
+  const clickable = Boolean(onSelect)
   return (
     <div className="flex flex-col gap-2">
       {data.map((d, i) => (
-        <div key={d.name} className="flex items-center gap-2.5 text-xs">
+        <div
+          key={d.name}
+          className={cx(
+            'flex items-center gap-2.5 rounded-md -mx-1 px-1 py-0.5 text-xs transition-colors',
+            clickable && 'cursor-pointer hover:bg-subtle',
+          )}
+          title={clickable ? `View tasks in ${d.name}` : undefined}
+          {...(clickable
+            ? {
+                role: 'button',
+                tabIndex: 0,
+                onClick: () => onSelect!(d.name),
+                onKeyDown: (e: KeyboardEvent) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onSelect!(d.name)
+                  }
+                },
+              }
+            : {})}
+        >
           <span className="w-28 shrink-0 truncate text-ink" title={d.name}>
             {d.name}
           </span>
@@ -270,6 +340,7 @@ export function VBarChart({
   emptyMessage,
   colors,
   compare,
+  onSelect,
 }: {
   data: NamedCount[]
   height?: number
@@ -277,9 +348,15 @@ export function VBarChart({
   emptyMessage?: string
   colors?: string[]
   compare?: CompareSeries
+  /** Clicking a bar calls this with the category name (e.g. to open the filtered task list). */
+  onSelect?: (name: string) => void
 }) {
   const themed = useChartColors()
   const palette = colors ?? themed
+  const barClick = onSelect
+    ? (d: { name?: string; payload?: { name?: string } }) => onSelect(String(d?.name ?? d?.payload?.name ?? ''))
+    : undefined
+  const barCursor = onSelect ? 'cursor-pointer' : undefined
 
   if (compare) {
     const prev = new Map(compare.data.map((d) => [d.name, d.value]))
@@ -306,12 +383,27 @@ export function VBarChart({
             itemStyle={tooltipItemStyle}
             labelStyle={tooltipLabelStyle}
           />
-          <Bar dataKey="prev" name={compare.label} radius={[4, 4, 0, 0]} maxBarSize={32} fillOpacity={0.45}>
+          <Bar
+            dataKey="prev"
+            name={compare.label}
+            radius={[4, 4, 0, 0]}
+            maxBarSize={32}
+            fillOpacity={0.45}
+            onClick={barClick}
+            className={barCursor}
+          >
             {rows.map((_, i) => (
               <Cell key={i} fill={palette[i % palette.length]} />
             ))}
           </Bar>
-          <Bar dataKey="value" name={compare.currentLabel} radius={[4, 4, 0, 0]} maxBarSize={32}>
+          <Bar
+            dataKey="value"
+            name={compare.currentLabel}
+            radius={[4, 4, 0, 0]}
+            maxBarSize={32}
+            onClick={barClick}
+            className={barCursor}
+          >
             {rows.map((_, i) => (
               <Cell key={i} fill={palette[i % palette.length]} />
             ))}
@@ -340,7 +432,7 @@ export function VBarChart({
           itemStyle={tooltipItemStyle}
           labelStyle={tooltipLabelStyle}
         />
-        <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={64}>
+        <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={64} onClick={barClick} className={barCursor}>
           {data.map((_, i) => (
             <Cell key={i} fill={palette[i % palette.length]} />
           ))}
@@ -364,6 +456,7 @@ export function StackedBarChart({
   minPoints = 1,
   emptyMessage,
   compare,
+  onSelect,
 }: {
   data: Array<Record<string, string | number>>
   keys: string[]
@@ -372,6 +465,8 @@ export function StackedBarChart({
   height?: number
   minPoints?: number
   emptyMessage?: string
+  /** Clicking a segment calls this with the category (x-axis) name and the stacked key (group). */
+  onSelect?: (category: string, group: string) => void
   /** Comparison baseline rows (same key shape) — splits each column into two
       half-columns, source year (faded) beside target year; categories missing
       from either year are hidden. */
@@ -465,6 +560,13 @@ export function StackedBarChart({
             stackId={compare ? 'cur' : 'stack'}
             fill={colorAt(i)}
             maxBarSize={compare ? 40 : 64}
+            onClick={
+              onSelect
+                ? (d: { name?: string; payload?: { name?: string } }) =>
+                    onSelect(String(d?.name ?? d?.payload?.name ?? ''), k)
+                : undefined
+            }
+            className={onSelect ? 'cursor-pointer' : undefined}
           >
             <LabelList
               dataKey={k}
