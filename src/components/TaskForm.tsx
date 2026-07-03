@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarClock, Sparkles, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { CalendarClock, ChevronDown, Sparkles, Trash2 } from 'lucide-react'
 import type { AssetBreakdown, Half, Size, Squad, Task, TaskInput } from '../types'
 import {
   SQUAD_DESCRIPTIONS,
@@ -102,13 +102,13 @@ function evalMath(input: string): number | null {
  * up/down. The wheel listener is non-passive so the page doesn't scroll.
  */
 function AssetInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  const ref = useRef<HTMLInputElement>(null)
+  const boxRef = useRef<HTMLLabelElement>(null)
   const [draft, setDraft] = useState<string | null>(null) // null → show the committed value
   const stateRef = useRef({ value, onChange })
   stateRef.current = { value, onChange }
 
   useEffect(() => {
-    const el = ref.current
+    const el = boxRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
@@ -127,16 +127,30 @@ function AssetInput({ label, value, onChange }: { label: string; value: number; 
     setDraft(null) // revert to the committed value (discards an invalid expression)
   }
 
+  const active = value > 0
+  // While typing a math expression, hide the label and widen the field so the
+  // whole expression is visible; the label returns once it's calculated/blurred.
+  // (Scroll-to-bump clears the draft, so the label stays put while scrolling.)
+  const editingMath = draft !== null && /[-+*/()]/.test(draft)
   return (
-    <div>
-      <span className="mb-1 block truncate text-[11px] font-medium text-muted" title={label}>
-        {label}
-      </span>
+    <label
+      ref={boxRef}
+      title={label}
+      className={cx(
+        'flex cursor-text items-center gap-2 rounded-xl px-3 py-2 transition focus-within:ring-2 focus-within:ring-brand-100 dark:focus-within:ring-brand-500/25',
+        active
+          ? 'bg-navy-100/60 text-navy-700 dark:border dark:border-navy-300 dark:bg-navy-300 dark:text-white'
+          : 'bg-subtle text-muted hover:text-ink dark:border dark:border-line dark:bg-card dark:hover:border-navy-300',
+      )}
+    >
+      {!editingMath && <span className="min-w-0 flex-1 truncate text-xs font-medium">{label}</span>}
       <input
-        ref={ref}
         type="text"
-        className="input"
         title="Type a number or basic math, e.g. 3+2"
+        className={cx(
+          'border-0 bg-transparent p-0 text-sm font-bold text-inherit outline-none focus:outline-none',
+          editingMath ? 'w-24 text-left' : 'w-10 shrink-0 text-right',
+        )}
         value={draft ?? String(value)}
         onChange={(e) => setDraft(e.target.value)}
         onFocus={(e) => e.currentTarget.select()}
@@ -148,7 +162,7 @@ function AssetInput({ label, value, onChange }: { label: string; value: number; 
           }
         }}
       />
-    </div>
+    </label>
   )
 }
 
@@ -167,6 +181,50 @@ function splitPastedName(value: string): { code?: string; name: string } {
   const m = value.match(/^\s*\[([^\]]+)\]\s*(.*)$/)
   if (m) return { code: m[1].trim(), name: m[2] }
   return { name: value }
+}
+
+/** A titled group of form fields, with a divider above (except the first). Can
+ *  show an inline action beside the title and be made collapsible. */
+function Section({
+  title,
+  first,
+  action,
+  collapsible = false,
+  defaultOpen = true,
+  children,
+}: {
+  title?: string
+  first?: boolean
+  action?: ReactNode
+  collapsible?: boolean
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <section className={cx('space-y-4', !first && 'border-t border-line pt-5')}>
+      {(title || action) && (
+        <div className="flex items-center gap-2.5">
+          {collapsible && title ? (
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              className="-my-1 flex items-center gap-1.5 py-1 text-sm font-bold text-ink"
+            >
+              {title}
+              <ChevronDown
+                className={cx('h-4 w-4 text-muted transition-transform', !open && '-rotate-90')}
+              />
+            </button>
+          ) : (
+            title && <h3 className="text-sm font-bold text-ink">{title}</h3>
+          )}
+          {action}
+        </div>
+      )}
+      {(!collapsible || open) && children}
+    </section>
+  )
 }
 
 export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }: TaskFormProps) {
@@ -340,7 +398,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   }
 
   return (
-    <form onSubmit={handleSubmit} className="task-form space-y-6">
+    <form onSubmit={handleSubmit} className="task-form space-y-5">
       {errors.length > 0 && (
         <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
           <ul className="list-disc space-y-0.5 pl-4">
@@ -351,12 +409,13 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         </div>
       )}
 
-      {/* Code + Name — the task's identity, kept at the top */}
+      <Section first>
+      {/* Code + Name — the task's identity */}
       <div className="grid gap-4 sm:grid-cols-[170px_1fr]">
         <div>
           <label className="label">Task code</label>
           <input
-            className={cx('input font-mono', codeError && 'border-rmit-red focus:border-rmit-red')}
+            className={cx('input h-11 font-mono', codeError && 'border-rmit-red focus:border-rmit-red')}
             placeholder="26.0608.A"
             value={code}
             onChange={(e) => onCodeChange(e.target.value)}
@@ -364,39 +423,25 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           {codeError ? (
             <p className="mt-1.5 text-xs font-medium text-rmit-red">{codeError}</p>
           ) : parsed.valid && parsed.iso ? (
-            <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-accent-green">
-              Booked {parsed.iso}
-              {parsed.legacy && (
-                <span className="rounded bg-subtle px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Legacy format
-                </span>
-              )}
-            </p>
+            <p className="mt-1.5 text-xs text-accent-green">Booked {parsed.iso}</p>
           ) : null}
         </div>
         <div>
           <label className="label">Task name</label>
           <input
-            className="input text-base font-semibold"
+            className="input h-12 text-base font-semibold"
             placeholder="Paste name with [code] here for code auto-fill."
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
           />
-          <p className="mt-1.5 text-xs text-muted">
-            Saved as{' '}
-            <span className="font-mono text-ink">
-              {code ? `[${code}] ` : ''}
-              {name || '…'}
-            </span>
-          </p>
         </div>
       </div>
 
-      {/* Squad + Campaign */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* Squad, Campaign & Task size on one line */}
+      <div className="grid gap-4 sm:grid-cols-[1fr_1fr_1.4fr]">
         <div>
           <label className="label">Squad (stakeholder)</label>
-          <select className="input" value={squad} onChange={(e) => setSquad(e.target.value)}>
+          <select className="input h-11" value={squad} onChange={(e) => setSquad(e.target.value)}>
             {!squadOptions.includes(squad) && squad && <option value={squad}>{squad}</option>}
             {squadOptions.map((s) => (
               <option key={s} value={s}>
@@ -410,7 +455,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         </div>
         <div>
           <label className="label">Campaign</label>
-          <select className="input" value={campaign} onChange={(e) => setCampaign(e.target.value)}>
+          <select className="input h-11" value={campaign} onChange={(e) => setCampaign(e.target.value)}>
             {!campaignOptions.includes(campaign) && campaign && <option value={campaign}>{campaign}</option>}
             {campaignOptions.map((c) => (
               <option key={c} value={c}>
@@ -418,56 +463,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
               </option>
             ))}
           </select>
-        </div>
-      </div>
-
-      {/* Types */}
-      <div>
-        <label className="label">Work type(s)</label>
-        <MultiSelect
-          options={typeOptions}
-          value={types}
-          onChange={setTypes}
-          placeholder="Select work types…"
-        />
-      </div>
-
-      {/* Assets — total is the live sum of the breakdown */}
-      <div>
-        <div className="mb-1.5 flex items-center gap-2">
-          <label className="label mb-0">Asset breakdown</label>
-          <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
-            {breakdownSum} total
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {assetTypeOptions.map((name) => (
-            <AssetInput
-              key={name}
-              label={name}
-              value={breakdown[name] || 0}
-              onChange={(v) => setBreakdownField(name, v)}
-            />
-          ))}
-          {settings.assetTypes.length === 0 && (
-            <p className="col-span-full text-xs text-muted">
-              Add asset types in Settings to break down deliverables.
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* People + Task size on one line */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="label">Person(s) in charge</label>
-          <MultiSelect
-            options={peopleOptions}
-            value={people}
-            onChange={setPeople}
-            placeholder="Assign team members…"
-            overflowCollapse
-          />
         </div>
         <div>
           <label className="label">Task size</label>
@@ -494,17 +489,98 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
               )
             })}
           </div>
-          <p className="mt-1.5 truncate text-xs text-muted">{SIZE_DESCRIPTIONS[size]}</p>
+          <p className="mt-1.5 text-xs text-muted">
+            {SIZE_DESCRIPTIONS[size]} · {durationLabel}
+          </p>
         </div>
       </div>
 
-      {/* Timeline + Half */}
+      {/* Work type — full width, badge multi-select (like task size) */}
+      <div>
+        <label className="label">Work type(s)</label>
+        <div className="flex flex-wrap gap-2">
+          {typeOptions.map((t) => {
+            const active = types.includes(t)
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTypes(active ? types.filter((x) => x !== t) : [...types, t])}
+                aria-pressed={active}
+                className={cx(
+                  'rounded-xl px-3 py-2 text-xs font-medium leading-5 transition',
+                  active
+                    ? 'bg-navy-100/60 text-navy-700 dark:border dark:border-navy-300 dark:bg-navy-300 dark:text-white'
+                    : 'bg-subtle text-muted hover:text-ink dark:border dark:border-line dark:bg-card dark:hover:border-navy-300',
+                )}
+              >
+                {t}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+      </Section>
+
+      <Section
+        title="Assets"
+        action={
+          <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
+            {breakdownSum} total
+          </span>
+        }
+      >
+        <div className="flex flex-wrap gap-2">
+          {assetTypeOptions.map((name) => (
+            <AssetInput
+              key={name}
+              label={name}
+              value={breakdown[name] || 0}
+              onChange={(v) => setBreakdownField(name, v)}
+            />
+          ))}
+          {settings.assetTypes.length === 0 && (
+            <p className="w-full text-xs text-muted">
+              Add asset types in Settings to break down deliverables.
+            </p>
+          )}
+        </div>
+      </Section>
+
+      <Section title="Assignment">
+      {/* People + Note on one line */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="label">Person(s) in charge</label>
+          <MultiSelect
+            options={peopleOptions}
+            value={people}
+            onChange={setPeople}
+            placeholder="Assign team members…"
+            overflowCollapse
+          />
+        </div>
+        <div>
+          <label className="label">Note</label>
+          <input
+            type="text"
+            className="input h-11"
+            placeholder="Optional — shows on hover in the task list."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </div>
+      </div>
+      </Section>
+
+      <Section title="Timeline">
+      {/* Start / End / Half */}
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <label className="label">Start date</label>
           <input
             type="date"
-            className="input"
+            className="input h-11"
             value={startDate}
             onChange={(e) => onStartDateChange(e.target.value)}
           />
@@ -517,12 +593,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
               <CalendarClock className="h-3.5 w-3.5" /> Use date from code ({parsed.iso})
             </button>
           )}
+          {!startDateTouched && parsed.valid && parsed.iso && parsed.iso === startDate && (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent-green">
+              <Sparkles className="h-3.5 w-3.5" /> Auto-set from code
+            </p>
+          )}
         </div>
         <div>
           <label className="label">End date (optional)</label>
           <input
             type="date"
-            className="input"
+            className="input h-11"
             value={endDate}
             min={startDate || undefined}
             onChange={(e) => onEndDateChange(e.target.value)}
@@ -566,17 +647,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           </div>
         </div>
       </div>
-
-      {/* Note */}
-      <div>
-        <label className="label">Note</label>
-        <textarea
-          className="input min-h-[64px] resize-y"
-          placeholder="Optional — shows on hover in the task list."
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </div>
+      </Section>
 
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 pt-2">
         <div className="flex items-center gap-3">
