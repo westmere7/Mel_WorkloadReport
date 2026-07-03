@@ -159,7 +159,7 @@ export function DonutChart({
           <span className="text-[11px] uppercase tracking-wide text-muted">total</span>
         </div>
       </div>
-      <ul className="flex-1 space-y-1.5">
+      <ul className="w-full space-y-1.5 sm:flex-1">
         {data.map((d, i) => {
           const clickable = Boolean(onSelect)
           const n = taskCounts?.[d.name]
@@ -174,7 +174,7 @@ export function DonutChart({
             <li key={d.name}>
               <div
                 className={cx(
-                  'flex items-center justify-between gap-3 rounded-md -mx-1 px-1 py-0.5 text-sm transition-colors',
+                  'flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 text-sm transition-colors',
                   clickable && 'cursor-pointer',
                   active === i && 'bg-subtle',
                 )}
@@ -195,13 +195,15 @@ export function DonutChart({
                     }
                   : {})}
               >
-                <span className="flex items-center gap-2 truncate">
+                <span className="flex min-w-0 items-center gap-2">
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
                     style={{ background: colors[i % colors.length] }}
                   />
                   <span className="truncate text-muted">{d.name}</span>
                 </span>
+                {/* Subtle leader line connecting the name to its value. */}
+                <span aria-hidden="true" className="min-w-[0.75rem] flex-1 self-center border-b border-dotted border-line" />
                 <span className="flex shrink-0 items-center gap-2">
                   {prevByName && (
                     <TrendDelta
