@@ -59,6 +59,7 @@ export function SettingsPage() {
         />
         <ListEditor
           title="Campaigns"
+          dotColor="bg-accent-teal"
           description="Specific campaigns or groups. Used in the task form."
           items={settings.campaigns}
           fallback={FALLBACK_ITEM}
@@ -69,6 +70,7 @@ export function SettingsPage() {
         />
         <ListEditor
           title="Work types"
+          dotColor="bg-accent-gold"
           description="Categories of design work."
           items={settings.types}
           fallback={FALLBACK_ITEM}
@@ -79,6 +81,7 @@ export function SettingsPage() {
         />
         <ListEditor
           title="Asset types"
+          dotColor="bg-accent-green"
           description="Deliverable types counted in the asset breakdown."
           items={settings.assetTypes}
           fallback={FALLBACK_ITEM}
@@ -89,6 +92,7 @@ export function SettingsPage() {
         />
         <ListEditor
           title="People"
+          dotColor="bg-accent-plum"
           description="Team members who can be assigned."
           items={settings.people}
           fallback={FALLBACK_ITEM}
@@ -325,6 +329,7 @@ function ListEditor({
   usage,
   fallback,
   locked,
+  dotColor = 'bg-rmit-red',
 }: {
   title: string
   description: string
@@ -336,6 +341,8 @@ function ListEditor({
   fallback?: string
   /** Item names that can't be renamed or removed (shown with a lock, like the fallback). */
   locked?: string[]
+  /** Tailwind bg class for each item's dot — per-panel colour, aesthetics only. */
+  dotColor?: string
 }) {
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
@@ -409,7 +416,7 @@ function ListEditor({
               {isLocked ? (
                 <>
                   <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-rmit-red" />
+                    <span className={cx('h-2 w-2 shrink-0 rounded-full', dotColor)} />
                     <span className="truncate text-ink">{item}</span>
                     <Lock className="h-3 w-3 shrink-0 text-faint" />
                   </span>
@@ -466,7 +473,7 @@ function ListEditor({
                     onClick={() => startEdit(item)}
                     title="Click to rename"
                   >
-                    <span className="h-2 w-2 shrink-0 rounded-full bg-rmit-red" />
+                    <span className={cx('h-2 w-2 shrink-0 rounded-full', dotColor)} />
                     <span className="truncate text-ink">{item}</span>
                   </button>
                   <span className="flex shrink-0 items-center gap-1">
