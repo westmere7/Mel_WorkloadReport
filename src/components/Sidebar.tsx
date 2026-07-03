@@ -149,7 +149,7 @@ export function MobileNav() {
   const nav = canEdit ? NAV : NAV.filter((item) => item.to !== '/settings')
 
   return (
-    <nav className="flex shrink-0 items-stretch justify-around border-t border-line bg-card md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-card pb-[env(safe-area-inset-bottom)] md:hidden">
       {nav.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}

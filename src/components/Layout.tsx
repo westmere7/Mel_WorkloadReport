@@ -137,7 +137,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             )}
           </header>
 
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          {/* Extra bottom padding on mobile so content clears the fixed bottom nav. */}
+          <main className="flex-1 overflow-y-auto p-6 pb-24 md:pb-6">{children}</main>
           {/* Bottom navigation — mobile only (the sidebar is hidden there). */}
           <MobileNav />
         </div>
