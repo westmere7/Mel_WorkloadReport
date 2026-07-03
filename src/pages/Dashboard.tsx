@@ -35,7 +35,7 @@ export function Dashboard() {
   const { tasks, live, settings } = useStore()
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
-  const [span, setSpan] = useState<SpanMode>('total')
+  const [span, setSpan] = useState<SpanMode>('year')
   const [year, setYear] = useState<number | null>(null)
   const [half, setHalf] = useState<Half>('H1')
   // Comparison mode: measure the target year against a source (baseline) year.
@@ -53,8 +53,9 @@ export function Dashboard() {
 
   const years = useMemo(() => taskYears(tasks), [tasks])
 
-  // Selected year falls back to the most recent year present in the data.
-  const activeYear = year ?? years[0] ?? 0
+  // Default to the current calendar year when it has data, else the most recent.
+  const currentYear = new Date().getFullYear()
+  const activeYear = year ?? (years.includes(currentYear) ? currentYear : years[0]) ?? 0
 
   // The "Workload across the year" chart is decoupled from the span filter (it always
   // shows a full 12-month year). In Total mode it tracks the LATEST year — not a year
