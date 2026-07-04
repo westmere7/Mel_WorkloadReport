@@ -27,6 +27,45 @@ function sumBreakdown(b: AssetBreakdown): number {
 }
 
 /**
+ * Stable, order-independent signature of a task's editable fields, normalised
+ * the same way `onSubmit` normalises them (trimmed strings, non-zero assets,
+ * sorted multi-selects). Comparing two signatures tells us whether anything
+ * actually changed — used to keep "Save changes" disabled until it did.
+ */
+function taskSignature(f: {
+  squad: string
+  campaign: string
+  code: string
+  name: string
+  types: string[]
+  people: string[]
+  assetBreakdown: AssetBreakdown
+  startDate: string | null
+  endDate: string | null
+  half: Half
+  size: Size
+  note: string
+}): string {
+  return JSON.stringify({
+    squad: f.squad,
+    campaign: f.campaign.trim(),
+    code: f.code.trim(),
+    name: f.name.trim(),
+    types: [...f.types].sort(),
+    people: [...f.people].sort(),
+    breakdown: Object.entries(f.assetBreakdown)
+      .filter(([, v]) => Number(v) > 0)
+      .map(([k, v]) => `${k}=${Number(v)}`)
+      .sort(),
+    startDate: f.startDate || null,
+    endDate: f.endDate || null,
+    half: f.half,
+    size: f.size,
+    note: f.note.trim(),
+  })
+}
+
+/**
  * Safely evaluate a basic arithmetic expression (+ - * / and parentheses, with
  * unary +/-). Returns null if the expression is invalid. No eval/Function.
  */
@@ -370,6 +409,45 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   // Recomputed each render so the submit button greys out until the form is valid.
   const canSubmit = validate().length === 0
 
+  // When editing, keep "Save changes" disabled until a field actually differs
+  // from the loaded task. (New tasks have no baseline, so they're always "dirty".)
+  const initialSig = useMemo(
+    () =>
+      initial
+        ? taskSignature({
+            squad: initial.squad,
+            campaign: initial.campaign,
+            code: initial.code,
+            name: initial.name,
+            types: initial.types,
+            people: initial.people,
+            assetBreakdown: initial.assetBreakdown,
+            startDate: initial.startDate ?? null,
+            endDate: initial.endDate ?? null,
+            half: initial.half,
+            size: initial.size,
+            note: initial.note ?? '',
+          })
+        : null,
+    [initial],
+  )
+  const dirty =
+    !initial ||
+    taskSignature({
+      squad,
+      campaign,
+      code,
+      name,
+      types,
+      people,
+      assetBreakdown: breakdown,
+      startDate: startDate || null,
+      endDate: endDate || null,
+      half,
+      size,
+      note,
+    }) !== initialSig
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const errs = validate()
@@ -680,7 +758,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
               Cancel
             </button>
           )}
-          <button type="submit" className="btn-primary" disabled={submitting || !canSubmit}>
+          <button type="submit" className="btn-primary" disabled={submitting || !canSubmit || !dirty}>
             {submitting ? 'Saving…' : submitLabel}
           </button>
         </div>
