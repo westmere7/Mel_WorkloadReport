@@ -19,12 +19,13 @@ import {
 } from 'recharts'
 import { LineChart as LineChartIcon } from 'lucide-react'
 import type { NamedCount } from '../lib/analytics'
-import type { Task } from '../types'
+import { STAKEHOLDER_GROUPS, stakeholderGroup } from '../lib/analytics'
+import type { Squad, Task } from '../types'
 import { CHART_COLORS_DARK, CHART_COLORS_LIGHT } from '../constants'
 import { useTheme } from '../lib/theme'
 import { TrendDelta } from './ui/TrendDelta'
 import { cx } from '../lib/format'
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useState, type KeyboardEvent } from 'react'
 
 /** True on narrow (mobile) viewports — Tailwind's `sm` breakpoint is 640px. */
 function useIsMobile(): boolean {
@@ -36,8 +37,14 @@ function useIsMobile(): boolean {
     const mq = window.matchMedia?.(query)
     if (!mq) return
     const on = () => setMobile(mq.matches)
+    on() // resync in case the width changed between initial render and mount
     mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
+    // Also on plain resize — some environments don't fire matchMedia 'change'.
+    window.addEventListener('resize', on)
+    return () => {
+      mq.removeEventListener('change', on)
+      window.removeEventListener('resize', on)
+    }
   }, [])
   return mobile
 }
@@ -54,6 +61,15 @@ export interface CompareSeries {
 /** Theme-aware categorical palette (re-renders on theme toggle). */
 function useChartColors() {
   return useTheme().theme === 'dark' ? CHART_COLORS_DARK : CHART_COLORS_LIGHT
+}
+
+/**
+ * Colour for a squad — by its stakeholder group (DOMESTIC / INTON / Other),
+ * matching the workload dots and the demand-chart legend. Theme-aware.
+ */
+export function useSquadColor(): (squad: Squad) => string {
+  const colors = useChartColors()
+  return (squad) => colors[STAKEHOLDER_GROUPS.indexOf(stakeholderGroup(squad))] ?? colors[2]
 }
 
 const tooltipStyle = {
@@ -669,22 +685,25 @@ function niceScale(peak: number): { top: number; ticks: number[] } {
   return { top, ticks }
 }
 
-const COL_W = 6 // task-column width in px
+const DOT_R = 3.5 // task-dot radius in px
+const DOT_R_HOT = 6 // hovered task-dot radius
 const COL_STAGGER_MS = 700 // total left→right entry-animation spread
 
 /**
- * Thin, faint columns — one per task — under the workload line, scaled on the
- * SAME y-axis as the line (a 300-asset task reaches 300, not an arbitrary
- * fraction). Rendered via <Customized>, which injects the plot `offset`. A
- * transparent hit layer follows the pointer and snaps a dashed cursor +
- * highlight to the nearest column. Columns rise from the baseline left→right
- * once on mount — this component's type is stable, so hover re-renders update
- * in place and never replay the animation.
+ * One dot per task, scattered under the workload line: x = the task's true
+ * day-of-year, y = its asset count on the SAME y-axis as the line (a 300-asset
+ * task sits at 300). Because height tracks the asset count, several tasks that
+ * start on the same day still separate vertically instead of stacking into a
+ * single bar. Each dot's fill comes from `colorFor` (by squad's stakeholder
+ * group). Rendered via <Customized>,
+ * which injects the plot `offset`; a transparent hit layer snaps a dashed
+ * cursor + highlight to the nearest dot (2D, so stacked dots stay targetable).
  */
-function TaskColumnsLayer({
+function TaskDotsLayer({
   offset,
   tasks = [],
   maxVal = 0,
+  colorFor,
   hoveredId,
   onHover,
   onPick,
@@ -692,38 +711,44 @@ function TaskColumnsLayer({
   offset?: { left: number; top: number; width: number; height: number }
   tasks?: Task[]
   maxVal?: number
+  /** Fill colour for a task's dot (by squad, or by year in compare mode). */
+  colorFor: (task: Task) => string
   hoveredId?: string | null
   onHover?: (task: Task | null) => void
   onPick?: (task: Task) => void
 }) {
   if (!offset || !tasks.length || maxVal <= 0) return null
   const { left, top, width, height: plotH } = offset
-  const minX = left + COL_W / 2
-  const maxX = left + width - COL_W / 2
-  // Each column sits at its true day-of-year position (clamped to the plot
-  // edges), sorted L→R for a tidy entry animation. We deliberately DON'T nudge
-  // overlapping columns apart: that spread used a fixed pixel gap that didn't
-  // scale with the plot width, so it shoved mid-year clusters rightward — past
-  // "Now" and drifting every time the panel resized. True positions scale with
-  // the plot, so columns stay aligned with the line at any width.
+  const minX = left + DOT_R
+  const maxX = left + width - DOT_R
+  // Each dot sits at its true day-of-year x (clamped to the plot edges) and a
+  // y set by its asset count. Positions scale with the plot, so dots stay
+  // aligned with the line and month ticks at any width. Sorted L→R for a tidy
+  // staggered entry.
   const placed = tasks
     .map((t) => {
       const [y, mo, day] = (t.startDate as string).split('-').map(Number)
       if (!y || !mo) return null
       const doy = new Date(y, mo - 1, day || 1).getTime() - new Date(y, 0, 1).getTime()
       const frac = Math.min(1, Math.max(0, doy / 86400000 / 366))
-      return { t, cx: Math.max(minX, Math.min(maxX, left + frac * width)) }
+      const val = t.assetTotal || 0
+      const cx = Math.max(minX, Math.min(maxX, left + frac * width))
+      const cy = top + plotH - (val / maxVal) * plotH
+      return { t, cx, cy, color: colorFor(t) }
     })
-    .filter((c): c is { t: Task; cx: number } => c !== null)
+    .filter((c): c is { t: Task; cx: number; cy: number; color: string } => c !== null)
     .sort((a, b) => a.cx - b.cx)
   const hovered = placed.find((c) => c.t.id === hoveredId) ?? null
 
-  const nearest = (clientX: number, box: DOMRect) => {
+  // Nearest dot by 2D distance so same-day dots (which differ only in y) can
+  // each be picked out with the pointer.
+  const nearest = (clientX: number, clientY: number, box: DOMRect) => {
     const mx = left + (clientX - box.left)
+    const my = top + (clientY - box.top)
     let best = placed[0]
     let bestD = Infinity
     for (const c of placed) {
-      const d = Math.abs(c.cx - mx)
+      const d = (c.cx - mx) ** 2 + (c.cy - my) ** 2
       if (d < bestD) {
         bestD = d
         best = c
@@ -734,40 +759,48 @@ function TaskColumnsLayer({
 
   return (
     <g>
-      {placed.map(({ t, cx: center }) => {
-        const h = ((t.assetTotal || 0) / maxVal) * plotH
-        if (h <= 0) return null
-        const isHot = t.id === hoveredId
-        const delay = Math.round(((center - left) / Math.max(1, width)) * COL_STAGGER_MS)
+      {placed.map(({ t, cx, cy, color }) => {
+        const delay = Math.round(((cx - left) / Math.max(1, width)) * COL_STAGGER_MS)
         return (
-          <rect
+          <circle
             key={t.id}
-            x={center - COL_W / 2}
-            y={top + plotH - h}
-            width={COL_W}
-            height={h}
-            rx={2}
-            className={cx(
-              'workload-col transition-[fill,opacity]',
-              isHot ? 'fill-[#E61E2A] opacity-90' : 'fill-[var(--chart-axis)] opacity-25',
-            )}
+            cx={cx}
+            cy={cy}
+            r={DOT_R}
+            fill={color}
+            fillOpacity={hovered ? (t.id === hoveredId ? 1 : 0.35) : 0.8}
+            stroke="var(--card)"
+            strokeWidth={1}
+            className="workload-dot transition-[fill-opacity]"
             style={{ animationDelay: `${delay}ms` }}
           />
         )
       })}
       {hovered && (
-        <line
-          x1={hovered.cx}
-          x2={hovered.cx}
-          y1={top}
-          y2={top + plotH}
-          stroke="#E61E2A"
-          strokeWidth={1}
-          strokeDasharray="4 4"
-          pointerEvents="none"
-        />
+        <>
+          {/* Dashed date cursor + the hovered dot re-drawn on top, enlarged. */}
+          <line
+            x1={hovered.cx}
+            x2={hovered.cx}
+            y1={top}
+            y2={top + plotH}
+            stroke={hovered.color}
+            strokeWidth={1}
+            strokeDasharray="4 4"
+            pointerEvents="none"
+          />
+          <circle
+            cx={hovered.cx}
+            cy={hovered.cy}
+            r={DOT_R_HOT}
+            fill={hovered.color}
+            stroke="var(--card)"
+            strokeWidth={2}
+            pointerEvents="none"
+          />
+        </>
       )}
-      {/* Transparent hit layer: follows the pointer and snaps to the nearest column. */}
+      {/* Transparent hit layer: follows the pointer and snaps to the nearest dot. */}
       <rect
         x={left}
         y={top}
@@ -776,12 +809,14 @@ function TaskColumnsLayer({
         fill="transparent"
         className="cursor-pointer"
         onMouseMove={(e) => {
-          const c = nearest(e.clientX, e.currentTarget.getBoundingClientRect())
+          const box = e.currentTarget.getBoundingClientRect()
+          const c = nearest(e.clientX, e.clientY, box)
           if (c && c.t.id !== hoveredId) onHover?.(c.t)
         }}
         onMouseLeave={() => onHover?.(null)}
         onClick={(e) => {
-          const c = nearest(e.clientX, e.currentTarget.getBoundingClientRect())
+          const box = e.currentTarget.getBoundingClientRect()
+          const c = nearest(e.clientX, e.clientY, box)
           if (c) onPick?.(c.t)
         }}
       />
@@ -789,18 +824,24 @@ function TaskColumnsLayer({
   )
 }
 
-// The workload chart shares ONE x-scale across the line, the month ticks and the
-// task columns: day-of-year as a 0–1 fraction (matching TaskColumnsLayer's /366).
-// Month labels and each month's aggregate value sit at that month's mid-point, so
-// a task's column lines up with where its start date actually falls in the year.
+// The workload chart shares ONE x-scale across the line and the task dots:
+// day-of-year as a 0–1 fraction (matching TaskDotsLayer's /366). Each month's
+// aggregate value sits at that month's mid-point, so the smooth curve peaks in
+// the middle of a month's span.
 const MONTH_MID_FRAC = Array.from({ length: 12 }, (_, m) =>
   (new Date(2025, m, 15).getTime() - new Date(2025, 0, 1).getTime()) / 86400000 / 366,
 )
-const nearestMonthIndex = (frac: number) => {
+// Month tick labels sit at each month's START (Jan 1, Feb 1, …) and flow to the
+// right, so a dot on the 1st of a month lines up directly under that month's
+// name instead of appearing half a month early (labels used to be mid-month).
+const MONTH_START_FRAC = Array.from({ length: 12 }, (_, m) =>
+  (new Date(2025, m, 1).getTime() - new Date(2025, 0, 1).getTime()) / 86400000 / 366,
+)
+const nearestMonthStartIndex = (frac: number) => {
   let best = 0
   let bestD = Infinity
-  for (let i = 0; i < MONTH_MID_FRAC.length; i++) {
-    const d = Math.abs(MONTH_MID_FRAC[i] - frac)
+  for (let i = 0; i < MONTH_START_FRAC.length; i++) {
+    const d = Math.abs(MONTH_START_FRAC[i] - frac)
     if (d < bestD) {
       bestD = d
       best = i
@@ -837,6 +878,7 @@ export function AreaTrendChart({
   onHoverTask?: (task: Task | null) => void
 }) {
   const colors = useChartColors()
+  const squadColor = useSquadColor()
   const isMobile = useIsMobile()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
@@ -846,82 +888,9 @@ export function AreaTrendChart({
     onHoverTask?.(t)
   }
 
-  // One column per task (disabled in compare mode); the cycle order is sorted by
-  // start day so the idle tour runs Jan→Dec.
+  // One dot per task, coloured by squad. Disabled in compare mode — two years'
+  // dots overlaid is too busy.
   const scatterTasks = compare ? [] : (tasks ?? []).filter((t) => t.startDate && (t.assetTotal || 0) > 0)
-  const cycleTasks = useMemo(
-    () =>
-      [...scatterTasks].sort((a, b) =>
-        (a.startDate ?? '') < (b.startDate ?? '') ? -1 : (a.startDate ?? '') > (b.startDate ?? '') ? 1 : 0,
-      ),
-    [scatterTasks], // eslint-disable-line react-hooks/exhaustive-deps
-  )
-
-  // Idle auto-tour: after 10s with no input (mouse/keyboard/scroll/touch), walk
-  // the columns Jan→Dec→Jan, ~1.5s each, each step behaving like a hover. Any
-  // input cancels it and restarts the idle countdown. Latest inputs are read via
-  // a ref so the effect can mount once and never tear down mid-cycle.
-  const cycleRef = useRef({ tasks: cycleTasks, enabled: false, setHover })
-  useEffect(() => {
-    // No idle auto-tour on mobile — the columns are hidden there.
-    cycleRef.current = { tasks: cycleTasks, enabled: !isMobile && !compare && cycleTasks.length > 1, setHover }
-  })
-  useEffect(() => {
-    let idleTimer: number | undefined
-    let stepTimer: number | undefined
-    let cycling = false
-    let idx = 0
-    let dir = 1
-
-    const stopCycle = () => {
-      if (stepTimer) {
-        clearInterval(stepTimer)
-        stepTimer = undefined
-      }
-      if (cycling) {
-        cycling = false
-        cycleRef.current.setHover(null)
-      }
-    }
-    const startCycle = () => {
-      if (!cycleRef.current.enabled) return
-      cycling = true
-      idx = 0
-      dir = 1
-      const step = () => {
-        const { tasks: list, enabled, setHover: hover } = cycleRef.current
-        if (!enabled || list.length === 0) {
-          stopCycle()
-          return
-        }
-        hover(list[Math.min(idx, list.length - 1)])
-        idx += dir
-        if (idx >= list.length - 1) {
-          idx = list.length - 1
-          dir = -1
-        } else if (idx <= 0) {
-          idx = 0
-          dir = 1
-        }
-      }
-      step() // show the first immediately, then advance every 1.5s
-      stepTimer = window.setInterval(step, 1500)
-    }
-    const resetIdle = () => {
-      stopCycle()
-      if (idleTimer) clearTimeout(idleTimer)
-      idleTimer = window.setTimeout(startCycle, 10000)
-    }
-
-    const events = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart', 'touchmove', 'scroll']
-    events.forEach((e) => window.addEventListener(e, resetIdle, { passive: true }))
-    resetIdle()
-    return () => {
-      events.forEach((e) => window.removeEventListener(e, resetIdle))
-      if (idleTimer) clearTimeout(idleTimer)
-      if (stepTimer) clearInterval(stepTimer)
-    }
-  }, [])
 
   const monthsWithData = data.filter((d) => d.value > 0).length
   const compareMonths = compare ? compare.data.filter((d) => d.value > 0).length : 0
@@ -1029,9 +998,19 @@ export function AreaTrendChart({
           type="number"
           dataKey="x"
           domain={[0, 1]}
-          ticks={MONTH_MID_FRAC}
-          tickFormatter={(v) => rows[nearestMonthIndex(v)]?.name ?? ''}
-          tick={AXIS}
+          ticks={MONTH_START_FRAC}
+          interval={0}
+          tick={(props: { x?: number; y?: number; payload?: { value?: number } }) => {
+            const { x = 0, y = 0, payload } = props
+            const name = rows[nearestMonthStartIndex(payload?.value ?? 0)]?.name ?? ''
+            // Anchor the label at the month's start and flow it right into the
+            // month's span, so a 1st-of-month dot sits under its name.
+            return (
+              <text x={x} y={y} dy={12} dx={2} textAnchor="start" fontSize={12} fill="var(--chart-axis)">
+                {name}
+              </text>
+            )
+          }}
           axisLine={false}
           tickLine={false}
         />
@@ -1098,14 +1077,15 @@ export function AreaTrendChart({
           animationDuration={900}
           animationEasing="ease-out"
         />
-        {/* Task columns are hidden on mobile — too thin/dense to target there,
-            and there's no room for the hover readout. */}
+        {/* Task dots are hidden on mobile — too dense to target there, and
+            there's no room for the hover readout. */}
         {!isMobile && scatterTasks.length > 0 && (
           <Customized
             component={
-              <TaskColumnsLayer
+              <TaskDotsLayer
                 tasks={scatterTasks}
                 maxVal={yTop}
+                colorFor={(t) => squadColor(t.squad)}
                 hoveredId={hoveredId}
                 onHover={setHover}
                 onPick={(t) => onTaskClick?.(t)}

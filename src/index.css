@@ -192,22 +192,24 @@
   }
 }
 
-/* Workload chart: task columns grow up from the baseline (staggered L→R). */
-@keyframes workload-col-rise {
+/* Workload chart: task dots fade + pop in (staggered L→R). */
+@keyframes workload-dot-in {
   from {
-    transform: scaleY(0);
+    opacity: 0;
+    transform: scale(0);
   }
   to {
-    transform: scaleY(1);
+    opacity: 1;
+    transform: scale(1);
   }
 }
-.workload-col {
+.workload-dot {
   transform-box: fill-box;
-  transform-origin: bottom;
-  animation: workload-col-rise 480ms ease-out both;
+  transform-origin: center;
+  animation: workload-dot-in 360ms ease-out both;
 }
 @media (prefers-reduced-motion: reduce) {
-  .workload-col {
+  .workload-dot {
     animation: none;
   }
 }

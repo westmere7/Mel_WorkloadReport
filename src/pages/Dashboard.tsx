@@ -9,7 +9,7 @@ import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
 import { TrendDelta } from '../components/ui/TrendDelta'
 import { AnimatedNumber } from '../components/ui/AnimatedNumber'
-import { AreaTrendChart, DonutChart, HBarChart, RankedBars, StackedBarChart, StackedLegend, VBarChart } from '../components/charts'
+import { AreaTrendChart, DonutChart, HBarChart, RankedBars, StackedBarChart, StackedLegend, useSquadColor, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
 import {
   assetsByCampaign,
@@ -36,6 +36,7 @@ export function Dashboard() {
   const { tasks, live, settings } = useStore()
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
+  const squadColor = useSquadColor()
   const [span, setSpan] = useState<SpanMode>('year')
   const [year, setYear] = useState<number | null>(null)
   const [half, setHalf] = useState<Half>('H1')
@@ -428,7 +429,7 @@ export function Dashboard() {
           <Card className="flex min-h-0 flex-1 flex-col">
             <CardHeader
               title="Workload & tasks across the year"
-              subtitle="Assets per month · hover or click a bar for task details"
+              subtitle="Assets per month · hover or click a dot for task details"
               action={
                 // Fixed height so the header (and card) doesn't resize as the
                 // hover readout swaps in and out.
@@ -438,10 +439,20 @@ export function Dashboard() {
                       <span className="inline-block max-w-[24rem] truncate rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
                         {hoverTask.name}
                       </span>
-                      <span className="text-[10px] font-medium text-muted">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted">
                         {hoverTask.assetTotal} {hoverTask.assetTotal === 1 ? 'asset' : 'assets'} ·{' '}
                         {hoverTask.people.length} {hoverTask.people.length === 1 ? 'person' : 'people'} ·{' '}
-                        {hoverTask.squad} · {hoverTask.size} · Start day: {formatDayMonth(hoverTask.startDate)}
+                        <span
+                          className="inline-block rounded-full px-1.5 py-px font-semibold"
+                          style={{
+                            backgroundColor: squadColor(hoverTask.squad),
+                            // Dark text on the light gold "Other Stakeholders" pill; white on the rest.
+                            color: stakeholderGroup(hoverTask.squad) === 'Other Stakeholders' ? '#6B4E00' : '#fff',
+                          }}
+                        >
+                          {hoverTask.squad}
+                        </span>
+                        {' '}· {hoverTask.size} · Start day: {formatDayMonth(hoverTask.startDate)}
                       </span>
                     </>
                   ) : (

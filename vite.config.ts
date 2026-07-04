@@ -10,7 +10,10 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
   server: {
-    port: 5173,
+    // Honour a PORT assigned by the environment (e.g. the preview harness),
+    // falling back to the usual dev port. Read via globalThis so we don't need
+    // Node type definitions just for `process`.
+    port: Number((globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.PORT) || 5173,
     host: true,
   },
 })
