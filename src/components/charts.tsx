@@ -26,6 +26,22 @@ import { TrendDelta } from './ui/TrendDelta'
 import { cx } from '../lib/format'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 
+/** True on narrow (mobile) viewports — Tailwind's `sm` breakpoint is 640px. */
+function useIsMobile(): boolean {
+  const query = '(max-width: 640px)'
+  const [mobile, setMobile] = useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia?.(query).matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia?.(query)
+    if (!mq) return
+    const on = () => setMobile(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return mobile
+}
+
 /** A comparison-mode baseline series: the source-year data + labels for both years. */
 export interface CompareSeries {
   data: NamedCount[]
@@ -682,40 +698,24 @@ function TaskColumnsLayer({
 }) {
   if (!offset || !tasks.length || maxVal <= 0) return null
   const { left, top, width, height: plotH } = offset
-  // Ideal centre from the start day, sorted L→R, then a single pass nudges any
-  // that would overlap a bit apart so clustered tasks stay legible.
-  const cols = tasks
+  const minX = left + COL_W / 2
+  const maxX = left + width - COL_W / 2
+  // Each column sits at its true day-of-year position (clamped to the plot
+  // edges), sorted L→R for a tidy entry animation. We deliberately DON'T nudge
+  // overlapping columns apart: that spread used a fixed pixel gap that didn't
+  // scale with the plot width, so it shoved mid-year clusters rightward — past
+  // "Now" and drifting every time the panel resized. True positions scale with
+  // the plot, so columns stay aligned with the line at any width.
+  const placed = tasks
     .map((t) => {
       const [y, mo, day] = (t.startDate as string).split('-').map(Number)
       if (!y || !mo) return null
       const doy = new Date(y, mo - 1, day || 1).getTime() - new Date(y, 0, 1).getTime()
       const frac = Math.min(1, Math.max(0, doy / 86400000 / 366))
-      return { t, x: left + frac * width }
+      return { t, cx: Math.max(minX, Math.min(maxX, left + frac * width)) }
     })
-    .filter((c): c is { t: Task; x: number } => c !== null)
-    .sort((a, b) => a.x - b.x)
-  const minX = left + COL_W / 2
-  const maxX = left + width - COL_W / 2
-  // Centre-to-centre spacing: prefer a comfortable gap, but shrink it so every
-  // column fits between the edges. Without this, an over-full year overflows
-  // and the surplus piles onto one edge — where columns can't be told apart.
-  const GAP = Math.min(COL_W + 2, cols.length > 1 ? (maxX - minX) / (cols.length - 1) : COL_W + 2)
-  // Pass 1 (L→R): push any overlapping column to the right of its neighbour.
-  let prev = -Infinity
-  for (const c of cols) {
-    if (c.x < prev + GAP) c.x = prev + GAP
-    prev = c.x
-  }
-  // Pass 2 (R→L): pull columns that overran the right edge back in, dragging
-  // their left neighbours along — so a year-end cluster fans out leftward
-  // instead of piling onto the edge (where only one stays selectable).
-  let next = maxX + GAP
-  for (let i = cols.length - 1; i >= 0; i--) {
-    const cap = Math.min(maxX, next - GAP)
-    if (cols[i].x > cap) cols[i].x = cap
-    next = cols[i].x
-  }
-  const placed = cols.map((c) => ({ t: c.t, cx: Math.max(minX, Math.min(maxX, c.x)) }))
+    .filter((c): c is { t: Task; cx: number } => c !== null)
+    .sort((a, b) => a.cx - b.cx)
   const hovered = placed.find((c) => c.t.id === hoveredId) ?? null
 
   const nearest = (clientX: number, box: DOMRect) => {
@@ -837,6 +837,7 @@ export function AreaTrendChart({
   onHoverTask?: (task: Task | null) => void
 }) {
   const colors = useChartColors()
+  const isMobile = useIsMobile()
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   // Act on hover: highlight the column, snap the dashed cursor, update readout.
@@ -862,7 +863,8 @@ export function AreaTrendChart({
   // a ref so the effect can mount once and never tear down mid-cycle.
   const cycleRef = useRef({ tasks: cycleTasks, enabled: false, setHover })
   useEffect(() => {
-    cycleRef.current = { tasks: cycleTasks, enabled: !compare && cycleTasks.length > 1, setHover }
+    // No idle auto-tour on mobile — the columns are hidden there.
+    cycleRef.current = { tasks: cycleTasks, enabled: !isMobile && !compare && cycleTasks.length > 1, setHover }
   })
   useEffect(() => {
     let idleTimer: number | undefined
@@ -1096,7 +1098,9 @@ export function AreaTrendChart({
           animationDuration={900}
           animationEasing="ease-out"
         />
-        {scatterTasks.length > 0 && (
+        {/* Task columns are hidden on mobile — too thin/dense to target there,
+            and there's no room for the hover readout. */}
+        {!isMobile && scatterTasks.length > 0 && (
           <Customized
             component={
               <TaskColumnsLayer
