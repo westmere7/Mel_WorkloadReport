@@ -18,7 +18,16 @@ function formatDuration(startISO: string | null, endISO: string | null): string 
 }
 
 /** Read-only task view for signed-out (view-only) users. */
-export function TaskDetails({ task, onClose }: { task: Task; onClose?: () => void }) {
+export function TaskDetails({
+  task,
+  onClose,
+  onEdit,
+}: {
+  task: Task
+  onClose?: () => void
+  /** When provided, shows an "Edit task details" button (e.g. for signed-in editors). */
+  onEdit?: () => void
+}) {
   const { settings } = useStore()
 
   // Asset types with a count > 0, in the app's asset-type order.
@@ -112,11 +121,18 @@ export function TaskDetails({ task, onClose }: { task: Task; onClose?: () => voi
         </Section>
       ) : null}
 
-      {onClose && (
-        <div className="flex justify-end border-t border-line pt-4">
-          <button className="btn-outline" onClick={onClose}>
-            Close
-          </button>
+      {(onClose || onEdit) && (
+        <div className="flex justify-end gap-2 border-t border-line pt-4">
+          {onEdit && (
+            <button className="btn-primary" onClick={onEdit}>
+              Edit task details
+            </button>
+          )}
+          {onClose && (
+            <button className="btn-outline" onClick={onClose}>
+              Close
+            </button>
+          )}
         </div>
       )}
     </div>

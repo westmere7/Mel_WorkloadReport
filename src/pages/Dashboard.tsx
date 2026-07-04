@@ -30,10 +30,11 @@ import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
 import { useAuth } from '../lib/auth'
-import type { Half, Squad, Task } from '../types'
+import type { Half, Squad, Task, TaskInput } from '../types'
+import { TaskForm } from '../components/TaskForm'
 
 export function Dashboard() {
-  const { tasks, live, settings } = useStore()
+  const { tasks, live, settings, updateTask, deleteTask } = useStore()
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
   const squadColor = useSquadColor()
@@ -132,9 +133,24 @@ export function Dashboard() {
   // The task currently under the pointer on the workload chart — shown live in
   // the card's top-right corner in place of the year.
   const [hoverTask, setHoverTask] = useState<Task | null>(null)
-  // Clicking a workload column opens this task's read-only details, without
-  // leaving the dashboard.
+  // Clicking a workload dot opens this task's read-only details, without leaving
+  // the dashboard. Signed-in editors can jump from there into the edit form
+  // (editTask) — and a delete confirm (deleteTask) — right on the dashboard.
   const [viewTask, setViewTask] = useState<Task | null>(null)
+  const [editTask, setEditTask] = useState<Task | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<Task | null>(null)
+
+  const handleUpdateTask = async (input: TaskInput) => {
+    if (!editTask) return
+    await updateTask(editTask.id, input)
+    setEditTask(null)
+  }
+  const confirmDeleteTask = async () => {
+    if (!deleteConfirm) return
+    await deleteTask(deleteConfirm.id)
+    setDeleteConfirm(null)
+    setEditTask(null)
+  }
   // Mark "now" on the workload chart only when viewing the current calendar year.
   const nowMonth = useMemo(() => {
     const now = new Date()
@@ -594,9 +610,58 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Read-only task details, opened by clicking a workload column. */}
+      {/* Task details, opened by clicking a workload dot. Signed-in editors get
+          an "Edit task details" button that swaps in the edit form below. */}
       <Modal open={Boolean(viewTask)} onClose={() => setViewTask(null)} title="Task details" wide>
-        {viewTask && <TaskDetails task={viewTask} onClose={() => setViewTask(null)} />}
+        {viewTask && (
+          <TaskDetails
+            task={viewTask}
+            onClose={() => setViewTask(null)}
+            onEdit={
+              canEdit
+                ? () => {
+                    setEditTask(viewTask)
+                    setViewTask(null)
+                  }
+                : undefined
+            }
+          />
+        )}
+      </Modal>
+
+      {/* Edit form — reached from the details view; never leaves the dashboard. */}
+      <Modal open={Boolean(editTask)} onClose={() => setEditTask(null)} title="Edit task" wide>
+        {editTask && (
+          <TaskForm
+            initial={editTask}
+            submitLabel="Save changes"
+            onSubmit={handleUpdateTask}
+            onCancel={() => setEditTask(null)}
+            onDelete={() => setDeleteConfirm(editTask)}
+          />
+        )}
+      </Modal>
+
+      {/* Delete confirm */}
+      <Modal
+        open={Boolean(deleteConfirm)}
+        onClose={() => setDeleteConfirm(null)}
+        title="Delete task"
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setDeleteConfirm(null)}>
+              Cancel
+            </button>
+            <button className="btn-primary" onClick={confirmDeleteTask}>
+              Delete
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted">
+          Delete <strong className="text-ink">{deleteConfirm?.name}</strong>
+          {deleteConfirm?.code ? ` (${deleteConfirm.code})` : ''}? This cannot be undone.
+        </p>
       </Modal>
     </div>
   )
