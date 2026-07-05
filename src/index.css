@@ -192,13 +192,20 @@
   }
 }
 
-/* Workload chart: task dots fade + pop in (staggered L→R). */
+/* Workload chart: task dots pop in with a subtle bounce (staggered L→R). */
 @keyframes workload-dot-in {
-  from {
+  0% {
     opacity: 0;
     transform: scale(0);
   }
-  to {
+  55% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+  75% {
+    transform: scale(0.9);
+  }
+  100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -206,7 +213,7 @@
 .workload-dot {
   transform-box: fill-box;
   transform-origin: center;
-  animation: workload-dot-in 360ms ease-out both;
+  animation: workload-dot-in 440ms ease-out both;
 }
 @media (prefers-reduced-motion: reduce) {
   .workload-dot {

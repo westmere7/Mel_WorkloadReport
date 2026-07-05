@@ -300,10 +300,10 @@ export function Dashboard() {
           {compare && (
             <div
               className="flex items-center gap-2.5 cursor-pointer select-none border-l border-line pl-3"
-              title={`Only compare tasks up to ${formatDate(todayISO()).split(' ').slice(0, 2).join(' ')} for both years`}
+              title={`Compare both years only through ${formatDate(todayISO()).split(' ').slice(0, 2).join(' ')}, so this year's partial data isn't measured against last year's full year.`}
               onClick={() => setYtd((y) => !y)}
             >
-              <span className="text-xs font-semibold text-muted">Up to same date only</span>
+              <span className="text-xs font-semibold text-muted">Match range</span>
               <button
                 type="button"
                 role="switch"
@@ -493,7 +493,7 @@ export function Dashboard() {
                   onHoverTask={setHoverTask}
                   compare={
                     compare
-                      ? { data: srcByMonth, label: String(srcYear), currentLabel: String(activeYear) }
+                      ? { data: srcByMonth, label: String(srcYear), currentLabel: String(activeYear), tasks: sourceTasks }
                       : undefined
                   }
                 />

@@ -56,6 +56,8 @@ export interface CompareSeries {
   label: string
   /** Target-year label, e.g. "2026". */
   currentLabel: string
+  /** Source-year tasks — scattered as small, non-interactive dots in compare mode. */
+  tasks?: Task[]
 }
 
 /** Theme-aware categorical palette (re-renders on theme toggle). */
@@ -687,6 +689,7 @@ function niceScale(peak: number): { top: number; ticks: number[] } {
 
 const DOT_R = 3.5 // task-dot radius in px
 const DOT_R_HOT = 6 // hovered task-dot radius
+const DOT_R_COMPARE = 2.25 // smaller radius for the two overlaid year sets in compare mode
 const COL_STAGGER_MS = 700 // total left→right entry-animation spread
 
 /**
@@ -707,6 +710,9 @@ function TaskDotsLayer({
   hoveredId,
   onHover,
   onPick,
+  animKey = '',
+  radius = DOT_R,
+  interactive = true,
 }: {
   offset?: { left: number; top: number; width: number; height: number }
   tasks?: Task[]
@@ -716,11 +722,17 @@ function TaskDotsLayer({
   hoveredId?: string | null
   onHover?: (task: Task | null) => void
   onPick?: (task: Task) => void
+  /** Dataset signature — changing it remounts the dots so the L→R pop replays. */
+  animKey?: string
+  /** Dot radius in px. Compare mode uses a smaller value so the two years overlap cleanly. */
+  radius?: number
+  /** When false, dots are display-only: no hover highlight, cursor, or click hit-layer. */
+  interactive?: boolean
 }) {
   if (!offset || !tasks.length || maxVal <= 0) return null
   const { left, top, width, height: plotH } = offset
-  const minX = left + DOT_R
-  const maxX = left + width - DOT_R
+  const minX = left + radius
+  const maxX = left + width - radius
   // Each dot sits at its true day-of-year x (clamped to the plot edges) and a
   // y set by its asset count. Positions scale with the plot, so dots stay
   // aligned with the line and month ticks at any width. Sorted L→R for a tidy
@@ -763,12 +775,12 @@ function TaskDotsLayer({
         const delay = Math.round(((cx - left) / Math.max(1, width)) * COL_STAGGER_MS)
         return (
           <circle
-            key={t.id}
+            key={`${animKey}-${t.id}`}
             cx={cx}
             cy={cy}
-            r={DOT_R}
+            r={radius}
             fill={color}
-            fillOpacity={hovered ? (t.id === hoveredId ? 1 : 0.35) : 0.8}
+            fillOpacity={!interactive ? 0.75 : hovered ? (t.id === hoveredId ? 1 : 0.35) : 0.8}
             stroke="var(--card)"
             strokeWidth={1}
             className="workload-dot transition-[fill-opacity]"
@@ -800,26 +812,30 @@ function TaskDotsLayer({
           />
         </>
       )}
-      {/* Transparent hit layer: follows the pointer and snaps to the nearest dot. */}
-      <rect
-        x={left}
-        y={top}
-        width={width}
-        height={plotH}
-        fill="transparent"
-        className="cursor-pointer"
-        onMouseMove={(e) => {
-          const box = e.currentTarget.getBoundingClientRect()
-          const c = nearest(e.clientX, e.clientY, box)
-          if (c && c.t.id !== hoveredId) onHover?.(c.t)
-        }}
-        onMouseLeave={() => onHover?.(null)}
-        onClick={(e) => {
-          const box = e.currentTarget.getBoundingClientRect()
-          const c = nearest(e.clientX, e.clientY, box)
-          if (c) onPick?.(c.t)
-        }}
-      />
+      {/* Transparent hit layer: follows the pointer and snaps to the nearest dot.
+          Omitted for display-only (compare-mode) layers so they never intercept
+          the pointer or the target-year layer's own hit testing. */}
+      {interactive && (
+        <rect
+          x={left}
+          y={top}
+          width={width}
+          height={plotH}
+          fill="transparent"
+          className="cursor-pointer"
+          onMouseMove={(e) => {
+            const box = e.currentTarget.getBoundingClientRect()
+            const c = nearest(e.clientX, e.clientY, box)
+            if (c && c.t.id !== hoveredId) onHover?.(c.t)
+          }}
+          onMouseLeave={() => onHover?.(null)}
+          onClick={(e) => {
+            const box = e.currentTarget.getBoundingClientRect()
+            const c = nearest(e.clientX, e.clientY, box)
+            if (c) onPick?.(c.t)
+          }}
+        />
+      )}
     </g>
   )
 }
@@ -888,9 +904,13 @@ export function AreaTrendChart({
     onHoverTask?.(t)
   }
 
-  // One dot per task, coloured by squad. Disabled in compare mode — two years'
-  // dots overlaid is too busy.
-  const scatterTasks = compare ? [] : (tasks ?? []).filter((t) => t.startDate && (t.assetTotal || 0) > 0)
+  // One dot per task with a start date and assets. Outside compare mode these are
+  // coloured by squad and fully interactive (hover/click). In compare mode we draw
+  // two display-only sets instead — target vs source year — each in its own colour.
+  const hasDot = (t: Task) => Boolean(t.startDate) && (t.assetTotal || 0) > 0
+  const scatterTasks = compare ? [] : (tasks ?? []).filter(hasDot)
+  const targetDots = compare ? (tasks ?? []).filter(hasDot) : []
+  const sourceDots = compare ? (compare.tasks ?? []).filter(hasDot) : []
 
   const monthsWithData = data.filter((d) => d.value > 0).length
   const compareMonths = compare ? compare.data.filter((d) => d.value > 0).length : 0
@@ -903,56 +923,66 @@ export function AreaTrendChart({
     ? data.map((d, i) => ({ ...d, prev: compare.data[i]?.value ?? 0 }))
     : data
   const rows = base.map((d, i) => ({ ...d, x: MONTH_MID_FRAC[i] ?? 0, monthIndex: i }))
+  const compareColor = colors[1]
+
+  // "Now" marker — shown only when viewing the current calendar year. The target
+  // line is cut off here: nothing (line, fill, or dot) is drawn past this month.
+  const showNow = nowMonth != null && nowMonth >= 0 && nowMonth < data.length
+  const nowFrac = showNow ? (MONTH_MID_FRAC[nowMonth as number] ?? 0) : 0
+  const isFutureMonth = (r: { monthIndex?: number }) =>
+    showNow && Number(r.monthIndex) > (nowMonth as number)
+
   // Flat end-caps at the year's edges (Jan 1 / Dec 31) so the area/line spans the
   // full plot width even though the monthly points sit at month mid-points. The
   // caps repeat the first/last month's value and are flagged `anchor` so they
   // draw no dot. Compare mode inherits them via `prev`.
   const first = rows[0]
   const last = rows[rows.length - 1]
-  const areaRows =
+  const areaRowsFull =
     first && last
       ? [{ ...first, x: 0, anchor: true }, ...rows, { ...last, x: 1, anchor: true }]
       : rows
-  const compareColor = colors[1]
+  // Drop the target value on future months so the line and fill end at "Now"
+  // rather than trailing across the empty rest of the year.
+  const areaRows = showNow
+    ? areaRowsFull.map((r) => (isFutureMonth(r) ? { ...r, value: null } : r))
+    : areaRowsFull
 
-  // Peak of each series — marked with a dot on the curve in the series's own
-  // colour. In compare mode the target and source lines each get their own dot.
-  const peakOf = (getVal: (r: any) => number) => {
-    let best = 0
-    for (let i = 1; i < rows.length; i++) if (getVal(rows[i]) > getVal(rows[best])) best = i
+  // Peak of a series — optionally restricted to the drawn (non-cut-off) months.
+  const peakOf = (getVal: (r: any) => number, skipFuture = false) => {
+    let best = -1
+    for (let i = 0; i < rows.length; i++) {
+      if (skipFuture && isFutureMonth(rows[i])) continue
+      if (best === -1 || getVal(rows[i]) > getVal(rows[best])) best = i
+    }
+    if (best === -1) return null
     const value = getVal(rows[best])
     return value > 0 ? { value, x: rows[best].x, idx: best } : null
   }
+
+  // Scale the y-axis to a clean round top above the tallest point across ALL
+  // months (including cut-off ones, so future task dots still fit), so gridlines
+  // stay uniform. `yTop` also scales the task columns so they line up with the axis.
+  const scaleMax = Math.max(
+    peakOf((r) => Number(r.value) || 0)?.value ?? 0,
+    compare ? peakOf((r) => Number(r.prev) || 0)?.value ?? 0 : 0,
+  )
+  const { top: yTop, ticks: yTicks } = niceScale(scaleMax)
+
+  // Peak markers sit on the drawn curve, so the target peak ignores cut-off months.
   const peaks: Array<{ value: number; color: string; x: number; idx: number }> = []
-  const targetPeak = peakOf((r) => Number(r.value) || 0)
+  const targetPeak = peakOf((r) => Number(r.value) || 0, true)
   if (targetPeak) peaks.push({ ...targetPeak, color: WORKLOAD_LINE })
   if (compare) {
     const sourcePeak = peakOf((r) => Number(r.prev) || 0)
     if (sourcePeak) peaks.push({ ...sourcePeak, color: compareColor })
   }
 
-  // Scale the y-axis to a clean round top just above the tallest point (target
-  // or source peak), so gridlines stay uniform and the peak sits below the top
-  // rather than on a stray top line. `yTop` also scales the task columns so
-  // they line up with the axis.
-  const peakMax = peaks.reduce((m, p) => Math.max(m, p.value), 0)
-  const { top: yTop, ticks: yTicks } = niceScale(peakMax)
-
-  const showNow = nowMonth != null && nowMonth >= 0 && nowMonth < data.length
-  const nowFrac = showNow ? (MONTH_MID_FRAC[nowMonth as number] ?? 0) : 0
-
-  // With the flat end-caps the line spans the full plot width, so the stroke
-  // gradient's 0–1 objectBoundingBox maps directly onto the day-of-year fraction:
-  // the red→grey "Now" switch sits at nowFrac.
-  const nowOffset = showNow ? `${nowFrac * 100}%` : '0%'
-  const FUTURE_GREY = 'var(--chart-axis-strong)'
-
-  // Colour each dot: red up to and including "Now", grey afterward.
+  // One little dot per real month on the target line, in RMIT red.
   const renderDot = (props: { cx?: number; cy?: number; index?: number; payload?: any }) => {
     const { cx, cy, index = 0, payload } = props
-    // Skip the flat end-caps — dots only mark real months.
+    // Skip the flat end-caps; cut-off future months are already null (no dot).
     if (cx == null || cy == null || payload?.anchor) return <g key={`dot-${index}`} />
-    const isFuture = showNow && Number(payload?.monthIndex) > (nowMonth as number)
     return (
       <circle
         key={`dot-${index}`}
@@ -960,7 +990,7 @@ export function AreaTrendChart({
         cy={cy}
         r={2.5}
         fill="var(--card)"
-        stroke={isFuture ? FUTURE_GREY : '#E61E2A'}
+        stroke="#E61E2A"
         strokeWidth={1.5}
       />
     )
@@ -975,6 +1005,23 @@ export function AreaTrendChart({
     rows.map((r) => (r as { prev?: number }).prev ?? 0).join(','),
   ].join('|')
 
+  // Legend entries. Compare mode: one per year, each showing its line + dot.
+  // Single-year mode: the stakeholder-group colours used to paint the task dots.
+  // Dot markers are dropped on mobile, where the scattered dots are hidden.
+  const legendItems: Array<{ label: string; color: string; line: boolean; dot: boolean }> = compare
+    ? [
+        { label: compare.currentLabel, color: WORKLOAD_LINE, line: true, dot: !isMobile && targetDots.length > 0 },
+        { label: compare.label, color: compareColor, line: true, dot: !isMobile && sourceDots.length > 0 },
+      ]
+    : isMobile
+      ? [{ label: 'Workload', color: WORKLOAD_LINE, line: true, dot: false }]
+      : STAKEHOLDER_GROUPS.filter((g) => scatterTasks.some((t) => stakeholderGroup(t.squad) === g)).map((g) => ({
+          label: g,
+          color: colors[STAKEHOLDER_GROUPS.indexOf(g)] ?? colors[2],
+          line: false,
+          dot: true,
+        }))
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={areaRows} margin={{ left: 0, right: 12, top: 28, bottom: 4 }}>
@@ -985,13 +1032,6 @@ export function AreaTrendChart({
             <stop offset="60%" stopColor="#E61E2A" stopOpacity={0.14} />
             <stop offset="100%" stopColor="#E61E2A" stopOpacity={0.02} />
           </linearGradient>
-          {/* Line colour: red before "Now", grey after (hard switch at the offset) */}
-          {showNow && (
-            <linearGradient id="workloadStroke" x1="0" y1="0" x2="1" y2="0">
-              <stop offset={nowOffset} stopColor="#E61E2A" />
-              <stop offset={nowOffset} stopColor={FUTURE_GREY} />
-            </linearGradient>
-          )}
         </defs>
         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
         <XAxis
@@ -1020,29 +1060,27 @@ export function AreaTrendChart({
           axisLine={false}
           tickLine={false}
           width={32}
-          domain={peakMax > 0 ? [0, yTop] : undefined}
-          ticks={peakMax > 0 ? yTicks : undefined}
+          domain={scaleMax > 0 ? [0, yTop] : undefined}
+          ticks={scaleMax > 0 ? yTicks : undefined}
         />
-        {compare && (
+        {legendItems.length > 0 && (
           <Legend
-            content={(props) => {
-              const { payload } = props
-              if (!payload) return null
-              return (
-                <ul className="flex items-center justify-center gap-4 text-xs font-semibold mt-2">
-                  {payload.map((entry: any, index: number) => {
-                    const isTarget = entry.dataKey === 'value'
-                    const color = isTarget ? '#E61E2A' : compareColor
-                    return (
-                      <li key={`item-${index}`} className="flex items-center gap-1.5" style={{ color }}>
-                        <span className="inline-block w-3.5 h-0.5 rounded-full" style={{ backgroundColor: color }} />
-                        <span>{entry.value}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )
-            }}
+            verticalAlign="bottom"
+            content={() => (
+              <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs font-semibold mt-2">
+                {legendItems.map((it, index) => (
+                  <li key={`item-${index}`} className="flex items-center gap-1.5" style={{ color: it.color }}>
+                    {it.line && (
+                      <span className="inline-block h-0.5 w-3.5 rounded-full" style={{ backgroundColor: it.color }} />
+                    )}
+                    {it.dot && (
+                      <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: it.color }} />
+                    )}
+                    <span>{it.label}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           />
         )}
         {/* Source year — drawn first so the target-year line sits on top of it. */}
@@ -1068,7 +1106,7 @@ export function AreaTrendChart({
           type="monotone"
           dataKey="value"
           name={compare ? compare.currentLabel : 'Workload'}
-          stroke={showNow ? 'url(#workloadStroke)' : '#E61E2A'}
+          stroke="#E61E2A"
           strokeWidth={3}
           fill="url(#workloadFill)"
           dot={renderDot}
@@ -1079,7 +1117,7 @@ export function AreaTrendChart({
         />
         {/* Task dots are hidden on mobile — too dense to target there, and
             there's no room for the hover readout. */}
-        {!isMobile && scatterTasks.length > 0 && (
+        {!isMobile && !compare && scatterTasks.length > 0 && (
           <Customized
             component={
               <TaskDotsLayer
@@ -1089,6 +1127,37 @@ export function AreaTrendChart({
                 hoveredId={hoveredId}
                 onHover={setHover}
                 onPick={(t) => onTaskClick?.(t)}
+                animKey={animKey}
+              />
+            }
+          />
+        )}
+        {/* Compare mode: two small, display-only sets — source year first (below),
+            then the target year on top — each in its line's colour. No interaction. */}
+        {!isMobile && compare && sourceDots.length > 0 && (
+          <Customized
+            component={
+              <TaskDotsLayer
+                tasks={sourceDots}
+                maxVal={yTop}
+                colorFor={() => compareColor}
+                radius={DOT_R_COMPARE}
+                interactive={false}
+                animKey={`src-${animKey}`}
+              />
+            }
+          />
+        )}
+        {!isMobile && compare && targetDots.length > 0 && (
+          <Customized
+            component={
+              <TaskDotsLayer
+                tasks={targetDots}
+                maxVal={yTop}
+                colorFor={() => WORKLOAD_LINE}
+                radius={DOT_R_COMPARE}
+                interactive={false}
+                animKey={`tgt-${animKey}`}
               />
             }
           />
@@ -1115,10 +1184,12 @@ export function AreaTrendChart({
               key={`peak-${p.idx}-${idx}`}
               x={p.x}
               y={p.value}
+              // Invisible anchor: the marker circle is hidden (it read as another
+              // task dot and confused viewers) but r is kept so the "Peak" label
+              // still sits the same distance above the curve.
               r={5}
-              fill={p.color}
-              stroke="var(--card)"
-              strokeWidth={2}
+              fill="none"
+              stroke="none"
               isFront
               ifOverflow="visible"
               label={(labelProps: any) => (

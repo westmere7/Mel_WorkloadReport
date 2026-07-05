@@ -55,7 +55,7 @@ export function TaskList() {
   const years = useMemo(() => taskYears(tasks), [tasks])
   const activeYear = spanYear ?? years[0] ?? 0
 
-  // "No." = the order a task was added (earliest = 1), stable across filters.
+  // "No." = the add/update order (earliest = 1); editing a task bumps it to the end.
   const addedOrder = useMemo(() => addedOrderMap(tasks), [tasks])
   const taskNo = (t: Task) => addedOrder.get(t.id) ?? 0
 

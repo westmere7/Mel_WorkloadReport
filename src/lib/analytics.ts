@@ -130,15 +130,16 @@ export function totalAssets(tasks: Task[]): number {
 }
 
 /**
- * Map each task id to its "No." — the order the task was added (earliest = 1).
- * Ordered by createdAt when present, falling back to start date, with the code
- * as a final deterministic tiebreak. Used by the task list and CSV export so
- * both show the same numbering.
+ * Map each task id to its "No." — the add/update order (earliest = 1). The
+ * number tracks activity, not identity: editing a task bumps its updatedAt so
+ * it moves to the end of the order (highest No.). Ordered by updatedAt when
+ * present, falling back to start date, with the code as a final deterministic
+ * tiebreak. Used by the task list and CSV export so both show the same numbering.
  */
 export function addedOrderMap(tasks: Task[]): Map<string, number> {
   const sorted = [...tasks].sort((a, b) => {
-    const ca = a.createdAt || ''
-    const cb = b.createdAt || ''
+    const ca = a.updatedAt || ''
+    const cb = b.updatedAt || ''
     if (ca !== cb) return ca < cb ? -1 : 1
     const sa = a.startDate || ''
     const sb = b.startDate || ''
