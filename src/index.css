@@ -221,6 +221,26 @@
   }
 }
 
+/* Workload lines "draw" in left-to-right: a clip wipe reveals the fill + line
+   (and its month dots) from the y-axis outward, instead of recharts' rise/morph.
+   Replays whenever the area remounts (mode/scale/data changes remount its key). */
+@keyframes workload-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.workload-area {
+  animation: workload-draw 900ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .workload-area {
+    animation: none;
+  }
+}
+
 @keyframes gentle-bob {
   0%, 100% {
     transform: translateY(0);

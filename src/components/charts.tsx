@@ -761,6 +761,7 @@ function TaskDotsLayer({
   animKey = '',
   radius = DOT_R,
   interactive = true,
+  xScaleMax = 1,
 }: {
   offset?: { left: number; top: number; width: number; height: number }
   tasks?: Task[]
@@ -776,6 +777,9 @@ function TaskDotsLayer({
   radius?: number
   /** When false, dots are display-only: no hover highlight, cursor, or click hit-layer. */
   interactive?: boolean
+  /** Upper bound of the x-fraction axis (matches the chart's domain). Dots remap
+      their day-of-year fraction onto [0, xScaleMax] → full plot width. */
+  xScaleMax?: number
 }) {
   if (!offset || !tasks.length || maxVal <= 0) return null
   const { left, top, width, height: plotH } = offset
@@ -790,7 +794,8 @@ function TaskDotsLayer({
       const [y, mo, day] = (t.startDate as string).split('-').map(Number)
       if (!y || !mo) return null
       const doy = new Date(y, mo - 1, day || 1).getTime() - new Date(y, 0, 1).getTime()
-      const frac = Math.min(1, Math.max(0, doy / 86400000 / 366))
+      // Remap the raw day-of-year fraction onto the (possibly zoomed) [0, xScaleMax] axis.
+      const frac = Math.min(1, Math.max(0, doy / 86400000 / 366) / xScaleMax)
       const val = t.assetTotal || 0
       const cx = Math.max(minX, Math.min(maxX, left + frac * width))
       const cy = top + plotH - (val / maxVal) * plotH
@@ -925,6 +930,7 @@ export function AreaTrendChart({
   tasks,
   onTaskClick,
   onHoverTask,
+  fillToNow,
 }: {
   data: NamedCount[]
   height?: number | string
@@ -940,6 +946,10 @@ export function AreaTrendChart({
   onTaskClick?: (task: Task) => void
   /** Called as the pointer moves across the columns — the nearest task, or null on leave. */
   onHoverTask?: (task: Task | null) => void
+  /** With "match range" on the data only covers Jan→now, so zoom the x-axis to
+      that span — the drawn range fills the width instead of leaving the rest of
+      the year empty. Only takes effect when a "Now" month is in view. */
+  fillToNow?: boolean
 }) {
   const colors = useChartColors()
   const squadColor = useSquadColor()
@@ -980,21 +990,35 @@ export function AreaTrendChart({
   const isFutureMonth = (r: { monthIndex?: number }) =>
     showNow && Number(r.monthIndex) > (nowMonth as number)
 
-  // Flat end-caps at the year's edges (Jan 1 / Dec 31) so the area/line spans the
-  // full plot width even though the monthly points sit at month mid-points. The
-  // caps repeat the first/last month's value and are flagged `anchor` so they
-  // draw no dot. Compare mode inherits them via `prev`.
+  // With "match range" on the data stops at "now", so zoom the x-axis to Jan→now
+  // (xMax) instead of the whole year; the drawn range then fills the plot width.
+  const eps = 1e-6
+  const xMax = fillToNow && showNow ? nowFrac : 1
+
+  // Flat end-caps at the range's edges so the area/line spans the full plot width
+  // even though the monthly points sit at month mid-points. The caps repeat the
+  // first/last month's value and are flagged `anchor` so they draw no dot.
+  // Compare mode inherits them via `prev`.
   const first = rows[0]
   const last = rows[rows.length - 1]
-  const areaRowsFull =
-    first && last
-      ? [{ ...first, x: 0, anchor: true }, ...rows, { ...last, x: 1, anchor: true }]
-      : rows
-  // Drop the target value on future months so the line and fill end at "Now"
-  // rather than trailing across the empty rest of the year.
-  const areaRows = showNow
-    ? areaRowsFull.map((r) => (isFutureMonth(r) ? { ...r, value: null } : r))
-    : areaRowsFull
+  let areaRows: any[]
+  if (xMax < 1) {
+    // Zoomed to Jan→now: keep the left end-cap (Jan 1) and drop every month past
+    // now — the current month already sits at the right edge (nowFrac), so no
+    // right end-cap is needed.
+    const inRange = rows.filter((r) => r.x <= xMax + eps)
+    areaRows = first ? [{ ...first, x: 0, anchor: true }, ...inRange] : inRange
+  } else {
+    const areaRowsFull =
+      first && last
+        ? [{ ...first, x: 0, anchor: true }, ...rows, { ...last, x: 1, anchor: true }]
+        : rows
+    // Drop the target value on future months so the line and fill end at "Now"
+    // rather than trailing across the empty rest of the year.
+    areaRows = showNow
+      ? areaRowsFull.map((r) => (isFutureMonth(r) ? { ...r, value: null } : r))
+      : areaRowsFull
+  }
 
   // Peak of a series — optionally restricted to the drawn (non-cut-off) months.
   const peakOf = (getVal: (r: any) => number, skipFuture = false) => {
@@ -1048,7 +1072,13 @@ export function AreaTrendChart({
   // switches but NOT on hover. Keying the areas by it remounts them so recharts
   // replays its left-to-right reveal, matching the task columns' L→R entrance.
   const animKey = [
+    // Encode every mode that should re-trigger the entrance animation — entering/
+    // leaving compare, the match-range request, and the resulting fitted scale —
+    // so toggling any of them remounts the areas/dots and replays the L→R reveal
+    // even when the underlying values happen to be unchanged.
     compare ? 'cmp' : 'one',
+    fillToNow ? 'mr1' : 'mr0',
+    xMax < 1 ? 'fit' : 'full',
     rows.map((r) => r.value).join(','),
     rows.map((r) => (r as { prev?: number }).prev ?? 0).join(','),
   ].join('|')
@@ -1085,8 +1115,8 @@ export function AreaTrendChart({
         <XAxis
           type="number"
           dataKey="x"
-          domain={[0, 1]}
-          ticks={MONTH_START_FRAC}
+          domain={[0, xMax]}
+          ticks={xMax < 1 ? MONTH_START_FRAC.filter((f) => f <= xMax + eps) : MONTH_START_FRAC}
           interval={0}
           tick={(props: { x?: number; y?: number; payload?: { value?: number } }) => {
             const { x = 0, y = 0, payload } = props
@@ -1135,6 +1165,7 @@ export function AreaTrendChart({
         {compare && (
           <Area
             key={`prev-${animKey}`}
+            className="workload-area"
             type="monotone"
             dataKey="prev"
             name={compare.label}
@@ -1144,13 +1175,14 @@ export function AreaTrendChart({
             fillOpacity={0.06}
             dot={{ r: 2, fill: 'var(--card)', stroke: compareColor, strokeWidth: 1.5 }}
             activeDot={{ r: 4 }}
-            isAnimationActive
-            animationDuration={900}
-            animationEasing="ease-out"
+            // The L→R "draw" is a CSS clip wipe (see .workload-area); recharts'
+            // own rise/morph animation is disabled so they don't fight.
+            isAnimationActive={false}
           />
         )}
         <Area
           key={`value-${animKey}`}
+          className="workload-area"
           type="monotone"
           dataKey="value"
           name={compare ? compare.currentLabel : 'Workload'}
@@ -1159,9 +1191,8 @@ export function AreaTrendChart({
           fill="url(#workloadFill)"
           dot={renderDot}
           activeDot={{ r: 5 }}
-          isAnimationActive
-          animationDuration={900}
-          animationEasing="ease-out"
+          // L→R "draw" via CSS clip wipe (.workload-area); recharts' morph off.
+          isAnimationActive={false}
         />
         {/* Task dots are hidden on mobile — too dense to target there, and
             there's no room for the hover readout. */}
@@ -1176,6 +1207,7 @@ export function AreaTrendChart({
                 onHover={setHover}
                 onPick={(t) => onTaskClick?.(t)}
                 animKey={animKey}
+                xScaleMax={xMax}
               />
             }
           />
@@ -1192,6 +1224,7 @@ export function AreaTrendChart({
                 radius={DOT_R_COMPARE}
                 interactive={false}
                 animKey={`src-${animKey}`}
+                xScaleMax={xMax}
               />
             }
           />
@@ -1206,11 +1239,12 @@ export function AreaTrendChart({
                 radius={DOT_R_COMPARE}
                 interactive={false}
                 animKey={`tgt-${animKey}`}
+                xScaleMax={xMax}
               />
             }
           />
         )}
-        {showNow && (
+        {showNow && xMax >= 1 && (
           <ReferenceLine
             x={nowFrac}
             stroke="var(--chart-axis-strong)"
@@ -1226,7 +1260,10 @@ export function AreaTrendChart({
           />
         )}
         {peaks.map((p, idx) => {
-          const align = p.idx === 0 ? 'start' : p.idx === rows.length - 1 ? 'end' : 'middle'
+          // Anchor the label inward at the range's ends so it never clips; the
+          // rightmost visible month is `now` when zoomed, else December.
+          const lastIdx = xMax < 1 ? (nowMonth as number) : rows.length - 1
+          const align = p.idx === 0 ? 'start' : p.idx >= lastIdx ? 'end' : 'middle'
           return (
             <ReferenceDot
               key={`peak-${p.idx}-${idx}`}

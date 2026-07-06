@@ -367,7 +367,7 @@ export function Dashboard() {
   const ytdLabel = ytd ? ` (up to ${todayDM})` : ''
   const compareSubtitleSuffix = compare ? ` — ${activeYear} over ${srcYear} (${srcYear} faded)${ytdLabel}` : ''
   // The squad ranked-bar cards mark the source year with a tick, not a faded bar.
-  const squadCompareSuffix = compare ? ` — ${activeYear} over ${srcYear} (white bar)${ytdLabel}` : ''
+  const squadCompareSuffix = compare ? ` — ${activeYear} over ${srcYear} (bar)${ytdLabel}` : ''
   // Human-readable description of the current (non-compare) span, for stat hints.
   const spanDesc = span === 'total' ? 'all time' : span === 'half' ? `${activeYear} ${half}` : `${activeYear}`
 
@@ -496,6 +496,9 @@ export function Dashboard() {
                   data={byMonth}
                   height="100%"
                   nowMonth={nowMonth}
+                  // Zoom to Jan→now whenever the year is still in progress: always
+                  // in single-year mode, and in compare mode only when matching ranges.
+                  fillToNow={compare ? ytd : true}
                   tasks={chartYearTasks}
                   onTaskClick={setViewTask}
                   onHoverTask={setHoverTask}
