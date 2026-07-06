@@ -159,6 +159,8 @@ export function Dashboard() {
 
   // ── Source-year aggregates (comparison mode only) ──────────────────────
   const srcSummary = useMemo(() => summarize(sourceTasks), [sourceTasks])
+  const srcBySquad = useMemo(() => assetsBySquad(sourceTasks), [sourceTasks])
+  const srcBySquadTasks = useMemo(() => countByField(sourceTasks, 'squad'), [sourceTasks])
   const srcAssetCampaign = useMemo(
     () => dropCommon(assetsByCampaign(sourceTasks)),
     [sourceTasks, hideCommonCampaigns], // eslint-disable-line react-hooks/exhaustive-deps
@@ -364,6 +366,8 @@ export function Dashboard() {
   // Split-column charts fade the source year and only keep categories in both years.
   const ytdLabel = ytd ? ` (up to ${todayDM})` : ''
   const compareSubtitleSuffix = compare ? ` — ${activeYear} over ${srcYear} (${srcYear} faded)${ytdLabel}` : ''
+  // The squad ranked-bar cards mark the source year with a tick, not a faded bar.
+  const squadCompareSuffix = compare ? ` — ${activeYear} over ${srcYear} (white bar)${ytdLabel}` : ''
   // Human-readable description of the current (non-compare) span, for stat hints.
   const spanDesc = span === 'total' ? 'all time' : span === 'half' ? `${activeYear} ${half}` : `${activeYear}`
 
@@ -419,20 +423,24 @@ export function Dashboard() {
         />
 
         <Card className="flex flex-col">
-          <CardHeader title="Tasks by squad" subtitle="Requests by stakeholder team" />
+          <CardHeader title="Tasks by squad" subtitle={`Requests by stakeholder team${squadCompareSuffix}`} />
           <RankedBars
             data={bySquadTasks}
             emptyMessage="Add tasks for at least 2 squads."
             onSelect={(name) => goTasks([['squad', name]])}
+            compare={compare ? srcBySquadTasks : undefined}
+            sourceLabel={String(srcYear)}
           />
         </Card>
 
         <Card className="flex flex-col">
-          <CardHeader title="Assets by squad" subtitle="Deliverables by stakeholder team" />
+          <CardHeader title="Assets by squad" subtitle={`Deliverables by stakeholder team${squadCompareSuffix}`} />
           <RankedBars
             data={bySquad}
             emptyMessage="Add tasks for at least 2 squads."
             onSelect={(name) => goTasks([['squad', name]])}
+            compare={compare ? srcBySquad : undefined}
+            sourceLabel={String(srcYear)}
           />
         </Card>
       </div>

@@ -308,59 +308,107 @@ export function HBarChart({
  * A ranked list of proportional bars — a lighter, axis-free alternative to the
  * recharts bar charts. Each row is a single line: label, a filled track, then the
  * value, so the list stays compact.
+ *
+ * `compare` only affects comparison mode; the single-year layout is untouched.
+ * There each row shows a % trend delta before the value (mirroring the donut
+ * legend), and a tall source-year marker on the track — sized on the same axis
+ * as the bar, so when the target year is higher the marker sits inside the bar
+ * yet still pokes above/below it to stay visible.
  */
 export function RankedBars({
   data,
   minPoints = 2,
   emptyMessage,
   onSelect,
+  compare,
+  sourceLabel,
 }: {
   data: NamedCount[]
   minPoints?: number
   emptyMessage?: string
   /** Clicking a row calls this with the row name (e.g. to open the filtered task list). */
   onSelect?: (name: string) => void
+  /** Comparison baseline — rows gain a source-year bar marker + a % trend delta. */
+  compare?: NamedCount[]
+  /** Label for the source year, used in the marker/delta tooltips. */
+  sourceLabel?: string
 }) {
   const colors = useChartColors()
   if (data.length < minPoints) return <NotEnough message={emptyMessage} height={180} />
-  const max = data.reduce((m, d) => Math.max(m, d.value), 0) || 1
+  const prevByName = compare ? new Map(compare.map((d) => [d.name, d.value])) : null
+  // Shared scale so the target-year bar and the source-year marker line up. In
+  // single-year mode this collapses to the largest value (the original behaviour).
+  const max =
+    Math.max(
+      data.reduce((m, d) => Math.max(m, d.value), 0),
+      compare ? compare.reduce((m, d) => Math.max(m, d.value), 0) : 0,
+    ) || 1
   const clickable = Boolean(onSelect)
   return (
     <div className="flex flex-col gap-2">
-      {data.map((d, i) => (
-        <div
-          key={d.name}
-          className={cx(
-            'flex items-center gap-2.5 rounded-md -mx-1 px-1 py-0.5 text-xs transition-colors',
-            clickable && 'cursor-pointer hover:bg-subtle',
-          )}
-          title={clickable ? `View tasks in ${d.name}` : undefined}
-          {...(clickable
-            ? {
-                role: 'button',
-                tabIndex: 0,
-                onClick: () => onSelect!(d.name),
-                onKeyDown: (e: KeyboardEvent) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    onSelect!(d.name)
-                  }
-                },
-              }
-            : {})}
-        >
-          <span className="w-28 shrink-0 truncate text-ink" title={d.name}>
-            {d.name}
-          </span>
-          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-subtle">
-            <div
-              className="h-full rounded-full transition-[width]"
-              style={{ width: `${(d.value / max) * 100}%`, background: colors[i % colors.length] }}
-            />
+      {data.map((d, i) => {
+        const color = colors[i % colors.length]
+        const prev = prevByName?.get(d.name) ?? 0
+        return (
+          <div
+            key={d.name}
+            className={cx(
+              'flex items-center gap-2.5 rounded-md -mx-1 px-1 py-0.5 text-xs transition-colors',
+              clickable && 'cursor-pointer hover:bg-subtle',
+            )}
+            title={clickable ? `View tasks in ${d.name}` : undefined}
+            {...(clickable
+              ? {
+                  role: 'button',
+                  tabIndex: 0,
+                  onClick: () => onSelect!(d.name),
+                  onKeyDown: (e: KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSelect!(d.name)
+                    }
+                  },
+                }
+              : {})}
+          >
+            <span className="w-28 shrink-0 truncate text-ink" title={d.name}>
+              {d.name}
+            </span>
+            {compare ? (
+              // No `overflow-hidden` here so the taller source-year marker can poke
+              // above and below the track when it sits inside the target-year bar.
+              <div className="relative h-2.5 flex-1 rounded-full bg-subtle">
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full transition-[width]"
+                  style={{ width: `${(d.value / max) * 100}%`, background: color }}
+                />
+                {prev > 0 && (
+                  <span
+                    className="absolute top-1/2 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                    style={{ left: `${(prev / max) * 100}%`, background: 'var(--chart-axis-strong)' }}
+                    title={`${sourceLabel ?? 'source'}: ${prev}`}
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-subtle">
+                <div
+                  className="h-full rounded-full transition-[width]"
+                  style={{ width: `${(d.value / max) * 100}%`, background: color }}
+                />
+              </div>
+            )}
+            {compare ? (
+              <span className="flex shrink-0 items-center justify-end gap-1.5 tabular-nums">
+                <TrendDelta size="sm" current={d.value} previous={prev} title={`${prev} → ${d.value}`} />
+                <span className="w-9 text-right font-semibold text-muted">{d.value}</span>
+              </span>
+            ) : (
+              <span className="w-7 shrink-0 text-right font-semibold tabular-nums text-muted">{d.value}</span>
+            )}
           </div>
-          <span className="w-7 shrink-0 text-right font-semibold tabular-nums text-muted">{d.value}</span>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
