@@ -33,6 +33,24 @@ import { useAuth } from '../lib/auth'
 import type { Half, Squad, Task, TaskInput } from '../types'
 import { TaskForm } from '../components/TaskForm'
 
+/**
+ * The current local date as `yyyy-mm-dd`, re-rendering only when the day rolls
+ * over. A kiosk left running for days keeps every "today"-relative view (match
+ * range, the "Now" marker, the current-year default) accurate without a refresh.
+ */
+function useToday(): string {
+  const [today, setToday] = useState(todayISO)
+  useEffect(() => {
+    // Poll each minute but only re-render on the rare tick where the day changed.
+    const id = window.setInterval(() => {
+      const t = todayISO()
+      setToday((prev) => (prev === t ? prev : t))
+    }, 60_000)
+    return () => window.clearInterval(id)
+  }, [])
+  return today
+}
+
 export function Dashboard() {
   const { tasks, live, settings, updateTask, deleteTask } = useStore()
   const { openNewTask } = useNewTask()
@@ -45,11 +63,13 @@ export function Dashboard() {
   const [compare, setCompare] = useState(false)
   const [sourceYear, setSourceYear] = useState<number | null>(null)
   const [ytd, setYtd] = useState(true)
-  const todayMD = useMemo(() => todayISO().slice(5), [])
+  // Reactive "today" so a kiosk left running updates day-relative views at midnight.
+  const today = useToday()
+  const todayMD = useMemo(() => today.slice(5), [today])
   const todayDM = useMemo(() => {
-    const parts = formatDate(todayISO()).split(' ')
+    const parts = formatDate(today).split(' ')
     return `${parts[0]} ${parts[1]}` // e.g. "2 Jul"
-  }, [])
+  }, [today])
   // Chart display preferences — edited in Settings → Dashboard.
   const { demandDim, hideCommonCampaigns, showTasksByPerson } = useDashboardPrefs()
   const navigate = useNavigate()
@@ -57,7 +77,7 @@ export function Dashboard() {
   const years = useMemo(() => taskYears(tasks), [tasks])
 
   // Default to the current calendar year when it has data, else the most recent.
-  const currentYear = new Date().getFullYear()
+  const currentYear = Number(today.slice(0, 4))
   const activeYear = year ?? (years.includes(currentYear) ? currentYear : years[0]) ?? 0
 
   // The "Workload across the year" chart is decoupled from the span filter (it always
@@ -153,9 +173,9 @@ export function Dashboard() {
   }
   // Mark "now" on the workload chart only when viewing the current calendar year.
   const nowMonth = useMemo(() => {
-    const now = new Date()
-    return chartYear === now.getFullYear() ? now.getMonth() : null
-  }, [chartYear])
+    const y = Number(today.slice(0, 4))
+    return chartYear === y ? Number(today.slice(5, 7)) - 1 : null
+  }, [chartYear, today])
 
   // ── Source-year aggregates (comparison mode only) ──────────────────────
   const srcSummary = useMemo(() => summarize(sourceTasks), [sourceTasks])
@@ -302,7 +322,7 @@ export function Dashboard() {
           {compare && (
             <div
               className="flex items-center gap-2.5 cursor-pointer select-none border-l border-line pl-3"
-              title={`Compare both years only through ${formatDate(todayISO()).split(' ').slice(0, 2).join(' ')}, so this year's partial data isn't measured against last year's full year.`}
+              title={`Compare both years only through ${todayDM}, so this year's partial data isn't measured against last year's full year.`}
               onClick={() => setYtd((y) => !y)}
             >
               <span className="text-xs font-semibold text-muted">Match range</span>
