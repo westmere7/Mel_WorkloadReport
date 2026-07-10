@@ -31,6 +31,15 @@ function uid(): string {
  */
 export class LocalRepository implements Repository {
   readonly backend = 'local' as const
+  readonly supportsImages = false
+
+  async uploadImage(): Promise<never> {
+    throw new Error('Image upload requires Supabase. Connect a project to enable it.')
+  }
+
+  async deleteImage(): Promise<void> {
+    // No-op: local mode never stores images, so there's nothing to remove.
+  }
 
   constructor() {
     // Seed once.
@@ -49,6 +58,7 @@ export class LocalRepository implements Repository {
       ...t,
       size: t.size ?? 'M',
       createdBy: t.createdBy ?? null,
+      images: t.images ?? [],
       assetBreakdown: normalizeBreakdown(t.assetBreakdown),
     }))
   }

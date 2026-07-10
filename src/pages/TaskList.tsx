@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   DatabaseBackup,
+  Images,
   Search,
   StickyNote,
   Trash2,
@@ -282,7 +283,20 @@ export function TaskList() {
                       {t.people.length > 2 && <Badge tone="navy">+{t.people.length - 2}</Badge>}
                     </div>
                   </td>
-                  <td className="px-3 py-3 text-right font-semibold text-ink">{t.assetTotal}</td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {t.images?.length ? (
+                        <span
+                          title={`${t.images.length} demo image${t.images.length === 1 ? '' : 's'}`}
+                          className="inline-flex items-center gap-0.5 text-faint"
+                        >
+                          <Images className="h-3.5 w-3.5" />
+                          <span className="text-[11px] tabular-nums">{t.images.length}</span>
+                        </span>
+                      ) : null}
+                      <span className="font-semibold text-ink">{t.assetTotal}</span>
+                    </div>
+                  </td>
                   <td className="whitespace-nowrap px-3 py-3 text-muted">{formatDate(t.startDate)}</td>
                   <td className="whitespace-nowrap px-3 py-3 text-muted">{formatDate(t.endDate)}</td>
                   <td className="px-3 py-3">

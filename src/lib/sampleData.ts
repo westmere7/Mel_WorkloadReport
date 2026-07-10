@@ -78,6 +78,7 @@ export function generateSampleTasks(count = 60): TaskInput[] {
       endDate,
       half,
       size: pick(SIZES),
+      images: [],
     })
   }
 

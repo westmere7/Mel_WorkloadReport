@@ -13,7 +13,7 @@ function sizeFromAssets(total: number): Size {
  * Sample tasks so the app is useful the moment it loads (local mode).
  * Cleared/overwritten the first time you create or edit tasks.
  */
-const BASE: Omit<Task, 'size'>[] = [
+const BASE: Omit<Task, 'size' | 'images'>[] = [
   {
     id: 'seed-0001',
     squad: 'Student Recruitment',
@@ -240,4 +240,8 @@ const BASE: Omit<Task, 'size'>[] = [
   },
 ]
 
-export const SEED_TASKS: Task[] = BASE.map((t) => ({ ...t, size: sizeFromAssets(t.assetTotal) }))
+export const SEED_TASKS: Task[] = BASE.map((t) => ({
+  ...t,
+  size: sizeFromAssets(t.assetTotal),
+  images: [],
+}))

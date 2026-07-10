@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { AppSettings, Task, TaskInput } from '../types'
+import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
 import type { Repository } from './repository'
 import { LocalRepository } from './localRepository'
 import { SupabaseRepository } from './supabaseRepository'
@@ -44,6 +44,11 @@ interface StoreValue {
     key: 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes',
     value: string,
   ) => Promise<void>
+  /** Whether task image uploads are available (Supabase Storage only). */
+  supportsImages: boolean
+  /** Compress-then-upload happens in the caller; this stores the blob and returns its descriptor. */
+  uploadImage: (blob: Blob, width: number, height: number) => Promise<TaskImage>
+  deleteImage: (id: string) => Promise<void>
   /** True while a live (realtime/cross-tab) subscription is active. */
   live: boolean
 }
@@ -132,16 +137,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const deleteTask = useCallback(
     async (id: string) => {
+      const target = tasks.find((t) => t.id === id)
       await repo.deleteTask(id)
       setTasks((prev) => prev.filter((t) => t.id !== id))
+      // Best-effort: free the task's images from storage (no-op in local mode).
+      target?.images?.forEach((img) => void repo.deleteImage(img.id).catch(() => {}))
     },
-    [repo],
+    [repo, tasks],
   )
 
   const deleteAllTasks = useCallback(async () => {
+    const orphanImages = tasks.flatMap((t) => t.images ?? [])
     await repo.deleteAllTasks()
     setTasks([])
-  }, [repo])
+    orphanImages.forEach((img) => void repo.deleteImage(img.id).catch(() => {}))
+  }, [repo, tasks])
 
   const importTasks = useCallback(
     async (inputs: TaskInput[], mode: 'replace' | 'merge') => {
@@ -160,7 +170,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const key = input.code.trim()
         const match = key ? byCode.get(key) : undefined
         if (match) {
-          await repo.updateTask(match.id, input)
+          // CSV doesn't carry images (they live in Storage) — keep the existing ones.
+          await repo.updateTask(match.id, { ...input, images: match.images })
           updated++
         } else {
           toCreate.push(input)
@@ -190,6 +201,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     [repo],
   )
+
+  const uploadImage = useCallback(
+    (blob: Blob, width: number, height: number) => repo.uploadImage(blob, width, height),
+    [repo],
+  )
+  const deleteImage = useCallback((id: string) => repo.deleteImage(id), [repo])
 
   const renameListItem = useCallback(
     async (key: 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes', oldValue: string, newValue: string) => {
@@ -258,10 +275,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveSettings,
       renameListItem,
       removeListItem,
+      supportsImages: repo.supportsImages,
+      uploadImage,
+      deleteImage,
       live,
     }),
     [
       repo.backend,
+      repo.supportsImages,
       loading,
       error,
       tasks,
@@ -277,6 +298,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveSettings,
       renameListItem,
       removeListItem,
+      uploadImage,
+      deleteImage,
     ],
   )
 

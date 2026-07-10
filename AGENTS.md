@@ -66,7 +66,9 @@ happens** (see §6).
 `src/types.ts`:
 
 - **`Task`** — `id, squad, campaign, code, name, types[], assetTotal, assetBreakdown,
-  people[], startDate|null, endDate|null, half, size, note?, createdAt, updatedAt`.
+  people[], startDate|null, endDate|null, half, size, images[], note?, createdAt, updatedAt`.
+- **`TaskImage`** — `{ id, url, w, h }`. Up to 10 per task; the `id` is the Storage
+  object name (`<id>.webp`), `url` is its public URL. See §15.
 - **`TaskInput`** = `Task` without system fields (used for create/update).
 - **`AppSettings`** — `{ squads[], campaigns[], types[], people[], assetTypes[] }`. The
   five user-editable reference lists. `Squad` is now just `string` (was a fixed union) —
@@ -347,6 +349,11 @@ to run it**, because a write including an unknown column fails:
 - `app_users` table — accounts for the sign-in gate (see §13). **Guarded**: signing in
   before the migration shows a friendly "run schema.sql" message (codes `42P01` /
   `PGRST205`), everything else keeps working.
+- `tasks.images jsonb default '[]'` — task images (see §15). **Guarded**: create/update
+  retry without `images` if the column is missing (`isMissingImagesColumn` / `stripImages`).
+  Also adds a **Storage bucket + policies** (`task-images`) — re-running `schema.sql`
+  creates them; until then uploads fail (surfaced inline in the form) but everything else
+  saves.
 
 `asset_breakdown` is `jsonb`, so changing the breakdown shape needs no schema change.
 
@@ -439,3 +446,40 @@ updateAccount }`):
   server, reload, inspect the DOM / console). Don't rely on screenshots alone.
 - Destructive/data-writing verification (create/import/delete) runs against the user's
   live Supabase — clean up test data afterward and don't populate/delete without cause.
+
+## 15. Task images (Supabase Storage)
+
+Tasks can carry up to **10 images** (`task.images: TaskImage[]`). Groundwork for a future
+**Showcase mode** (cycling big campaigns + their assets + yearly headline stats).
+
+- **Storage, not the DB.** Images live in a **public** Supabase Storage bucket
+  **`task-images`**; only `{ id, url, w, h }` descriptors are stored in the `tasks.images`
+  jsonb column. Free-tier Storage (~1 GB) easily holds thousands of compressed images.
+- **Client-side WebP compression** (`src/lib/image.ts` → `compressToWebP`): downscales to
+  ≤1600px longest edge and re-encodes to WebP (q0.82), typically ~100–300 KB. Dependency-
+  free (canvas). Animated GIFs are flattened to a static first frame.
+- **Repository surface** (`Repository`): `readonly supportsImages` (Supabase `true`, Local
+  `false`), `uploadImage(blob, w, h) → TaskImage`, `deleteImage(id)`. Supabase impl uses
+  `storage.from('task-images')`; filenames are `crypto.randomUUID() + '.webp'`.
+  **Supabase-only**: the local backend throws on upload; the form gates the UI on
+  `store.supportsImages` and shows a "requires Supabase" hint instead.
+- **UI**: to keep the busy form uncluttered, images live behind a **yellow "Demo" button
+  in the Assets section header** (amber styling + amber count badge). Clicking it swaps the
+  form body for a self-contained **Demo panel** (an `imagesOpen` view-swap *inside* the same
+  modal, with "← Back to task" + "Done" buttons — NOT a nested modal, which would double-fire
+  Escape): an "Add" tile + thumbnail grid with hover ×. Uploads happen immediately (path is
+  UUID-based, so it works for unsaved/new tasks); the `images` array rides through the normal
+  `TaskInput`/create/update path (mappers handle the column). **Clicking a thumbnail opens it
+  in a full-screen `ui/ImageLightbox`** (z-[60] over the modal; Escape captured so it closes
+  only the lightbox). `TaskList` shows the image-count icon **in the Assets column** (beside
+  the asset total); the read-only `TaskDetails` shows a "Demo" gallery that opens the same
+  lightbox.
+- **Orphan cleanup (best-effort).** Storage deletes are **deferred to save/cancel** so
+  cancelling truly discards changes. TaskForm tracks `sessionIds` (uploaded this session)
+  + `initialIds`; on **save** it purges `(initial ∪ session) − final`, on **cancel/unmount**
+  it purges all `sessionIds`. A `finalized` ref (set true up-front on submit, reset on
+  failure) stops the modal-close unmount from deleting just-saved images. `store.deleteTask`
+  / `deleteAllTasks` also purge the deleted tasks' images. A hard browser-close mid-edit
+  can still orphan a file (rare; a periodic sweep could be added later).
+- **CSV** carries only an image **count** column (images aren't in CSV); a **merge** import
+  preserves each matched task's existing images (`store.importTasks` sets `images: match.images`).

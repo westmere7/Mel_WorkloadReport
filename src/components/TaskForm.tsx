@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { CalendarClock, ChevronDown, Sparkles, Trash2 } from 'lucide-react'
-import type { AssetBreakdown, Half, Size, Squad, Task, TaskInput } from '../types'
+import { ArrowLeft, CalendarClock, ChevronDown, ImagePlus, Loader2, Sparkles, Trash2, X } from 'lucide-react'
+import type { AssetBreakdown, Half, Size, Squad, Task, TaskImage, TaskInput } from '../types'
 import {
   SQUAD_DESCRIPTIONS,
   SIZES,
@@ -11,8 +11,12 @@ import {
 } from '../constants'
 import { useStore } from '../data/store'
 import { MultiSelect } from './ui/MultiSelect'
+import { ImageLightbox } from './ui/ImageLightbox'
 import { addDaysISO, cx, toMessage } from '../lib/format'
+import { compressToWebP, ACCEPTED_IMAGE_TYPES } from '../lib/image'
 import { deriveHalf, parseTaskCode } from '../lib/taskCode'
+
+const MAX_IMAGES = 10
 
 interface TaskFormProps {
   initial?: Task
@@ -45,6 +49,7 @@ function taskSignature(f: {
   half: Half
   size: Size
   note: string
+  images: string[]
 }): string {
   return JSON.stringify({
     squad: f.squad,
@@ -62,6 +67,7 @@ function taskSignature(f: {
     half: f.half,
     size: f.size,
     note: f.note.trim(),
+    images: [...f.images].sort(),
   })
 }
 
@@ -267,7 +273,7 @@ function Section({
 }
 
 export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }: TaskFormProps) {
-  const { settings, tasks } = useStore()
+  const { settings, tasks, supportsImages, uploadImage, deleteImage } = useStore()
 
   // Editable lists always include the reserved "Others" fallback as an option.
   const squadOptions = withFallback(settings.squads)
@@ -293,8 +299,78 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   const [halfTouched, setHalfTouched] = useState(Boolean(initial))
   const [size, setSize] = useState<Size>(initial?.size ?? 'M')
   const [note, setNote] = useState(initial?.note ?? '')
+  const [images, setImages] = useState<TaskImage[]>(initial?.images ?? [])
+  const [uploading, setUploading] = useState(0)
+  const [imgError, setImgError] = useState<string | null>(null)
+  const [imagesOpen, setImagesOpen] = useState(false) // show the Demo (images) sub-panel
+  const [lightbox, setLightbox] = useState<string | null>(null) // enlarged image URL
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
+
+  // Image bookkeeping for orphan cleanup. `sessionIds` = everything uploaded in
+  // this form session; `initialIds` = what the task already had. Storage deletes
+  // are deferred to save/cancel so cancelling truly discards all changes.
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const sessionIds = useRef<Set<string>>(new Set())
+  const initialIds = useRef<Set<string>>(new Set((initial?.images ?? []).map((i) => i.id)))
+  const imagesRef = useRef<TaskImage[]>(images)
+  imagesRef.current = images
+  const finalized = useRef(false) // true once save/cancel has reconciled deletions
+
+  const canAddImages = images.length + uploading < MAX_IMAGES
+
+  const addFiles = async (files: FileList) => {
+    setImgError(null)
+    const remaining = MAX_IMAGES - images.length - uploading
+    const chosen = Array.from(files).slice(0, Math.max(0, remaining))
+    if (chosen.length === 0) return
+    setUploading((n) => n + chosen.length)
+    await Promise.all(
+      chosen.map(async (file) => {
+        try {
+          const { blob, width, height } = await compressToWebP(file)
+          const img = await uploadImage(blob, width, height)
+          sessionIds.current.add(img.id)
+          setImages((prev) => [...prev, img])
+        } catch (e) {
+          setImgError(toMessage(e))
+        } finally {
+          setUploading((n) => n - 1)
+        }
+      }),
+    )
+  }
+
+  // Removing only drops it from the form; the storage delete happens on save.
+  const removeImage = (id: string) => setImages((prev) => prev.filter((i) => i.id !== id))
+
+  // Fire-and-forget storage deletes (best-effort; never blocks the UI).
+  const purge = (ids: Iterable<string>) => {
+    for (const id of ids) void deleteImage(id).catch(() => {})
+  }
+
+  // After a successful save, delete images that are no longer part of the task
+  // (removed originals + added-then-removed uploads).
+  const reconcileSaved = (finalIds: Set<string>) => {
+    finalized.current = true
+    const orphans = [...initialIds.current, ...sessionIds.current].filter((id) => !finalIds.has(id))
+    purge(orphans)
+  }
+
+  const handleCancel = () => {
+    finalized.current = true
+    purge(sessionIds.current) // nothing this session was committed
+    onCancel?.()
+  }
+
+  // Safety net: if the form unmounts (e.g. modal X / Esc) without an explicit
+  // save or cancel, clean up anything uploaded this session.
+  useEffect(() => {
+    return () => {
+      if (!finalized.current) purge(sessionIds.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const parsed = useMemo(() => parseTaskCode(code), [code])
   const breakdownSum = useMemo(() => sumBreakdown(breakdown), [breakdown])
@@ -427,6 +503,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
             half: initial.half,
             size: initial.size,
             note: initial.note ?? '',
+            images: (initial.images ?? []).map((i) => i.id),
           })
         : null,
     [initial],
@@ -446,6 +523,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       half,
       size,
       note,
+      images: images.map((i) => i.id),
     }) !== initialSig
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -454,6 +532,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     setErrors(errs)
     if (errs.length) return
     setSubmitting(true)
+    // Claim cleanup for this save up-front, so if the modal closes during/after
+    // submit the unmount handler won't purge images we're about to keep. Released
+    // again only if the save fails (so a later cancel can still clean up).
+    finalized.current = true
     try {
       await onSubmit({
         squad,
@@ -469,8 +551,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         half,
         size,
         note: note.trim(),
+        images,
       })
+      reconcileSaved(new Set(images.map((i) => i.id)))
     } catch (err) {
+      finalized.current = false // save failed — let cancel/unmount clean up later
       setErrors([toMessage(err)])
     } finally {
       setSubmitting(false)
@@ -479,6 +564,96 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
 
   return (
     <form onSubmit={handleSubmit} className="task-form space-y-5">
+      {imagesOpen ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setImagesOpen(false)}
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-ink transition hover:text-rmit-red"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back to task
+            </button>
+            {supportsImages && (
+              <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
+                {images.length}/{MAX_IMAGES}
+              </span>
+            )}
+          </div>
+          {!supportsImages ? (
+            <p className="rounded-xl bg-subtle p-4 text-sm text-muted">
+              Image upload requires Supabase — connect a project to enable it.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-muted">
+                Attach up to {MAX_IMAGES} demo images — these feed the auto-showcase. Click one
+                to view it larger.
+              </p>
+              <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+                {images.map((img) => (
+                  <div
+                    key={img.id}
+                    className="group relative aspect-square overflow-hidden rounded-xl border border-line bg-subtle"
+                  >
+                    <img
+                      src={img.url}
+                      alt=""
+                      loading="lazy"
+                      onClick={() => setLightbox(img.url)}
+                      className="h-full w-full cursor-zoom-in object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(img.id)}
+                      title="Remove image"
+                      className="absolute right-1 top-1 rounded-lg bg-black/55 p-1 text-white opacity-0 transition hover:bg-black/75 group-hover:opacity-100"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {Array.from({ length: uploading }).map((_, i) => (
+                  <div
+                    key={`uploading-${i}`}
+                    className="flex aspect-square items-center justify-center rounded-xl border border-line bg-subtle"
+                  >
+                    <Loader2 className="h-5 w-5 animate-spin text-muted" />
+                  </div>
+                ))}
+                {canAddImages && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-line text-muted transition hover:border-navy-300 hover:text-ink"
+                  >
+                    <ImagePlus className="h-6 w-6" />
+                    <span className="text-xs font-medium">Add</span>
+                  </button>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_IMAGE_TYPES}
+                multiple
+                hidden
+                onChange={(e) => {
+                  if (e.target.files) void addFiles(e.target.files)
+                  e.target.value = ''
+                }}
+              />
+              {imgError && <p className="text-sm font-medium text-rmit-red">{imgError}</p>}
+            </>
+          )}
+          <div className="flex justify-end border-t border-line pt-4">
+            <button type="button" className="btn-primary" onClick={() => setImagesOpen(false)}>
+              Done
+            </button>
+          </div>
+        </div>
+      ) : (
+      <>
       {errors.length > 0 && (
         <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
           <ul className="list-disc space-y-0.5 pl-4">
@@ -605,9 +780,25 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       <Section
         title="Assets"
         action={
-          <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
-            {breakdownSum} total
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
+              {breakdownSum} total
+            </span>
+            <button
+              type="button"
+              onClick={() => setImagesOpen(true)}
+              title="Attach demo images to this task"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 hover:text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300 dark:hover:bg-amber-500/25"
+            >
+              <ImagePlus className="h-3.5 w-3.5" />
+              Demo Images
+              {images.length > 0 && (
+                <span className="rounded-full bg-amber-600 px-1.5 text-[10px] font-bold leading-4 text-white">
+                  {images.length}
+                </span>
+              )}
+            </button>
+          </div>
         }
       >
         <div className="flex flex-wrap gap-2">
@@ -754,7 +945,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         </div>
         <div className="flex gap-2">
           {onCancel && (
-            <button type="button" className="btn-outline" onClick={onCancel}>
+            <button type="button" className="btn-outline" onClick={handleCancel}>
               Cancel
             </button>
           )}
@@ -763,6 +954,9 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           </button>
         </div>
       </div>
+      </>
+      )}
+      {lightbox && <ImageLightbox src={lightbox} onClose={() => setLightbox(null)} />}
     </form>
   )
 }

@@ -1,10 +1,12 @@
-import type { AppSettings, Task, TaskInput } from '../types'
+import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
 import type { Repository } from './repository'
 import { getSupabase } from '../lib/supabaseClient'
 import { DEFAULT_SETTINGS, canonicalAssetName, normalizeSizeDurations } from '../constants'
 import { rowToTask, taskInputToRow } from './mappers'
 
 const SETTINGS_ID = 'app'
+/** Public Storage bucket for task images (created by supabase/schema.sql). */
+const IMAGE_BUCKET = 'task-images'
 
 /** True if a Supabase error is complaining about a missing `note` column (pre-migration). */
 function isMissingNoteColumn(err: unknown): boolean {
@@ -42,12 +44,42 @@ function stripCreatedBy<T extends { created_by?: unknown }>(row: T): Omit<T, 'cr
   return rest
 }
 
+/** True if a Supabase error is complaining about a missing `images` column (pre-migration). */
+function isMissingImagesColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('images') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** Drop the `images` key from a row (used to retry when the column isn't there yet). */
+function stripImages<T extends { images?: unknown }>(row: T): Omit<T, 'images'> {
+  const { images: _drop, ...rest } = row
+  return rest
+}
+
 /**
  * Supabase-backed repository. Active automatically when VITE_SUPABASE_URL
  * and VITE_SUPABASE_ANON_KEY are set. Expects the schema in supabase/schema.sql.
  */
 export class SupabaseRepository implements Repository {
   readonly backend = 'supabase' as const
+  readonly supportsImages = true
+
+  async uploadImage(blob: Blob, width: number, height: number): Promise<TaskImage> {
+    const id = crypto.randomUUID()
+    const path = `${id}.webp`
+    const sb = getSupabase()
+    const { error } = await sb.storage
+      .from(IMAGE_BUCKET)
+      .upload(path, blob, { contentType: 'image/webp', upsert: false })
+    if (error) throw error
+    const { data } = sb.storage.from(IMAGE_BUCKET).getPublicUrl(path)
+    return { id, url: data.publicUrl, w: width, h: height }
+  }
+
+  async deleteImage(id: string): Promise<void> {
+    const { error } = await getSupabase().storage.from(IMAGE_BUCKET).remove([`${id}.webp`])
+    if (error) throw error
+  }
 
   async listTasks(): Promise<Task[]> {
     const { data, error } = await getSupabase()
@@ -71,6 +103,10 @@ export class SupabaseRepository implements Repository {
       row = stripNote(row)
       ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
     }
+    if (error && isMissingImagesColumn(error)) {
+      row = stripImages(row)
+      ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
+    }
     if (error) throw error
     return rowToTask(data)
   }
@@ -88,6 +124,10 @@ export class SupabaseRepository implements Repository {
       rows = rows.map(stripNote)
       ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
     }
+    if (error && isMissingImagesColumn(error)) {
+      rows = rows.map(stripImages)
+      ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
+    }
     if (error) throw error
     return (data ?? []).map(rowToTask)
   }
@@ -97,6 +137,9 @@ export class SupabaseRepository implements Repository {
     let { data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single()
     if (error && isMissingNoteColumn(error)) {
       ;({ data, error } = await getSupabase().from('tasks').update(stripNote(row)).eq('id', id).select('*').single())
+    }
+    if (error && isMissingImagesColumn(error)) {
+      ;({ data, error } = await getSupabase().from('tasks').update(stripImages(row)).eq('id', id).select('*').single())
     }
     if (error) throw error
     return rowToTask(data)

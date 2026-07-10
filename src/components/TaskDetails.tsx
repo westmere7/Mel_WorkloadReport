@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Badge, toneForLabel } from './ui/Badge'
+import { ImageLightbox } from './ui/ImageLightbox'
 import { useStore } from '../data/store'
 import { SIZE_TONE, SIZE_DESCRIPTIONS, withFallback } from '../constants'
 import { cx, formatDate } from '../lib/format'
@@ -29,6 +31,7 @@ export function TaskDetails({
   onEdit?: () => void
 }) {
   const { settings } = useStore()
+  const [lightbox, setLightbox] = useState<string | null>(null)
 
   // Asset types with a count > 0, in the app's asset-type order.
   const assetRows = withFallback(settings.assetTypes)
@@ -121,6 +124,30 @@ export function TaskDetails({
         </Section>
       ) : null}
 
+      {/* Demo images */}
+      {task.images?.length ? (
+        <Section label={`Demo Images (${task.images.length})`}>
+          <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
+            {task.images.map((img) => (
+              <button
+                key={img.id}
+                type="button"
+                onClick={() => setLightbox(img.url)}
+                title="View larger"
+                className="group relative aspect-square overflow-hidden rounded-xl border border-line bg-subtle"
+              >
+                <img
+                  src={img.url}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full cursor-zoom-in object-cover transition group-hover:scale-105"
+                />
+              </button>
+            ))}
+          </div>
+        </Section>
+      ) : null}
+
       {(onClose || onEdit) && (
         <div className="flex justify-end gap-2 border-t border-line pt-4">
           {onEdit && (
@@ -135,6 +162,7 @@ export function TaskDetails({
           )}
         </div>
       )}
+      {lightbox && <ImageLightbox src={lightbox} onClose={() => setLightbox(null)} />}
     </div>
   )
 }

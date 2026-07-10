@@ -15,6 +15,15 @@ export type Size = 'XS' | 'S' | 'M' | 'L' | 'XL'
 /** Breakdown of the total asset count, keyed by asset-type name (editable in Settings). */
 export type AssetBreakdown = Record<string, number>
 
+/** An image attached to a task (stored in Supabase Storage; `id` is the object name). */
+export interface TaskImage {
+  id: string
+  url: string
+  /** Pixel dimensions of the stored (compressed) image, for layout/aspect. */
+  w: number
+  h: number
+}
+
 export interface Task {
   id: string
   /** Requesting team — one of the fixed Squad values. */
@@ -40,6 +49,8 @@ export interface Task {
   half: Half
   /** T-shirt size / effort of the task. */
   size: Size
+  /** Attached images (max 10). Stored in Supabase Storage; empty by default. */
+  images: TaskImage[]
   /** Freeform note — shown on hover in the task list. Optional. */
   note?: string
   createdAt: string

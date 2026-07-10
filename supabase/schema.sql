@@ -22,6 +22,7 @@ create table if not exists public.tasks (
   half            text not null default 'H1' check (half in ('H1', 'H2')),
   size            text not null default 'M' check (size in ('XS', 'S', 'M', 'L', 'XL')),
   note            text not null default '',
+  images          jsonb not null default '[]'::jsonb,
   created_by      text,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
@@ -40,6 +41,11 @@ alter table public.tasks
 -- tasks created before this migration have no recorded creator.
 alter table public.tasks
   add column if not exists created_by text;
+
+-- Add the `images` column to pre-existing tables (idempotent). JSON array of
+-- { id, url, w, h } — the images themselves live in Supabase Storage.
+alter table public.tasks
+  add column if not exists images jsonb not null default '[]'::jsonb;
 
 create index if not exists tasks_created_at_idx on public.tasks (created_at desc);
 create index if not exists tasks_squad_idx      on public.tasks (squad);
@@ -163,3 +169,25 @@ begin
     alter publication supabase_realtime add table public.settings;
   end if;
 end $$;
+
+-- ── Storage: task images ────────────────────────────────────────
+-- A PUBLIC bucket for task images. Images are compressed to WebP client-side
+-- and stored under an unguessable UUID filename ("<uuid>.webp"). Public read
+-- means the URLs embed directly (used by the task list, details, and the
+-- future Showcase mode). The anon key can upload/delete (consistent with the
+-- app's open RLS above) — tighten with the rest before exposing publicly.
+insert into storage.buckets (id, name, public)
+values ('task-images', 'task-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "anon read task-images" on storage.objects;
+create policy "anon read task-images" on storage.objects
+  for select using (bucket_id = 'task-images');
+
+drop policy if exists "anon upload task-images" on storage.objects;
+create policy "anon upload task-images" on storage.objects
+  for insert with check (bucket_id = 'task-images');
+
+drop policy if exists "anon delete task-images" on storage.objects;
+create policy "anon delete task-images" on storage.objects
+  for delete using (bucket_id = 'task-images');

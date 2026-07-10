@@ -1,4 +1,4 @@
-import type { AppSettings, Task, TaskInput } from '../types'
+import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
 
 /**
  * Storage-agnostic contract for the app's data.
@@ -8,6 +8,19 @@ import type { AppSettings, Task, TaskInput } from '../types'
 export interface Repository {
   /** A short label for the active backend, shown in Settings. */
   readonly backend: 'local' | 'supabase'
+
+  /** Whether task image uploads are available (Supabase Storage only). */
+  readonly supportsImages: boolean
+
+  /**
+   * Upload a compressed image blob to storage and return its descriptor.
+   * `width`/`height` are the blob's pixel dimensions (computed at compress time).
+   * Throws on backends that don't support images.
+   */
+  uploadImage(blob: Blob, width: number, height: number): Promise<TaskImage>
+
+  /** Delete a previously-uploaded image by its id (the storage object name). */
+  deleteImage(id: string): Promise<void>
 
   listTasks(): Promise<Task[]>
   createTask(input: TaskInput, createdBy?: string | null): Promise<Task>

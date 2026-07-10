@@ -20,7 +20,7 @@ const CORE_HEADERS = [
 // Non-asset columns: core + optional extras (No., Note) that also aren't asset
 // types. "No." is a derived add-order index — kept out of asset detection so a
 // re-imported export doesn't turn it into a bogus asset type.
-const NON_ASSET_HEADERS = [...CORE_HEADERS, 'Note', 'No.']
+const NON_ASSET_HEADERS = [...CORE_HEADERS, 'Note', 'No.', 'Images']
 
 function esc(value: string | number): string {
   const s = String(value ?? '')
@@ -58,6 +58,7 @@ export function exportTasksCsv(
     'Half',
     'Size',
     'Note',
+    'Images',
   ]
 
   const rows = ordered.map((t) => [
@@ -75,6 +76,7 @@ export function exportTasksCsv(
     t.half,
     t.size,
     t.note ?? '',
+    t.images?.length ?? 0,
   ])
 
   const csv = [headers, ...rows].map((r) => r.map(esc).join(',')).join('\n')
@@ -190,6 +192,9 @@ export function parseTasksCsv(text: string): TaskInput[] {
       half,
       size,
       note: get('Note'),
+      // Images live in Storage, not the CSV. New rows start with none; on a
+      // merge import, existing tasks keep their images (see store.importTasks).
+      images: [],
     }
   })
 }

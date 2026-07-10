@@ -1,4 +1,4 @@
-import type { AssetBreakdown, Half, Size, Squad, Task, TaskInput } from '../types'
+import type { AssetBreakdown, Half, Size, Squad, Task, TaskImage, TaskInput } from '../types'
 import { normalizeBreakdown } from '../constants'
 
 /** Shape of a row in the Supabase `tasks` table (snake_case columns). */
@@ -17,6 +17,7 @@ export interface TaskRow {
   half: string
   size: string | null
   note: string | null
+  images: TaskImage[] | null
   created_at: string
   updated_at: string
   created_by: string | null
@@ -38,6 +39,7 @@ export function rowToTask(row: TaskRow): Task {
     endDate: row.end_date,
     half: (row.half as Half) ?? 'H1',
     size: (row.size as Size) ?? 'M',
+    images: Array.isArray(row.images) ? row.images : [],
     note: row.note ?? '',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -60,6 +62,7 @@ export function taskInputToRow(input: TaskInput): Omit<TaskRow, 'id' | 'created_
     end_date: input.endDate,
     half: input.half,
     size: input.size,
+    images: input.images ?? [],
     note: input.note ?? '',
   }
 }
