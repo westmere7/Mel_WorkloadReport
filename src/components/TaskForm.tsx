@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, CalendarClock, ChevronDown, ImagePlus, Loader2, Sparkles, Trash2, X } from 'lucide-react'
+import { ArrowLeft, CalendarClock, ChevronDown, ChevronUp, ImagePlus, Loader2, Sparkles, Trash2, X } from 'lucide-react'
 import type { AssetBreakdown, Half, Size, Squad, Task, TaskImage, TaskInput } from '../types'
 import {
   SQUAD_DESCRIPTIONS,
@@ -172,6 +172,12 @@ function AssetInput({ label, value, onChange }: { label: string; value: number; 
     setDraft(null) // revert to the committed value (discards an invalid expression)
   }
 
+  // Stepper / wheel bump: adjust the committed value and drop any in-progress draft.
+  const bump = (delta: number) => {
+    onChange(Math.max(0, value + delta))
+    setDraft(null)
+  }
+
   const active = value > 0
   // While typing a math expression, hide the label and widen the field so the
   // whole expression is visible; the label returns once it's calculated/blurred.
@@ -194,7 +200,7 @@ function AssetInput({ label, value, onChange }: { label: string; value: number; 
         title="Type a number or basic math, e.g. 3+2"
         className={cx(
           'border-0 bg-transparent p-0 text-sm font-bold text-inherit outline-none focus:outline-none',
-          editingMath ? 'w-24 text-left' : 'w-10 shrink-0 text-right',
+          editingMath ? 'w-24 text-left' : 'w-11 shrink-0 text-right',
         )}
         value={draft ?? String(value)}
         onChange={(e) => setDraft(e.target.value)}
@@ -207,6 +213,30 @@ function AssetInput({ label, value, onChange }: { label: string; value: number; 
           }
         }}
       />
+      {/* Stepper — quick ±1 without focusing the field (mouse-wheel on hover also works). */}
+      <span className="-mr-1 flex shrink-0 flex-col">
+        <button
+          type="button"
+          tabIndex={-1}
+          title={`Increase ${label}`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => bump(1)}
+          className="flex h-3.5 w-4 cursor-pointer items-center justify-center rounded opacity-50 transition hover:opacity-100"
+        >
+          <ChevronUp className="h-3 w-3" strokeWidth={3} />
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          disabled={value <= 0}
+          title={`Decrease ${label}`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => bump(-1)}
+          className="flex h-3.5 w-4 cursor-pointer items-center justify-center rounded opacity-50 transition hover:opacity-100 disabled:opacity-20"
+        >
+          <ChevronDown className="h-3 w-3" strokeWidth={3} />
+        </button>
+      </span>
     </label>
   )
 }
