@@ -1,8 +1,9 @@
-# GCMC Workload Report — Agent Knowledge Base
+# GCMC Workload Report — Knowledge Base
 
 A living reference for AI agents (and humans) working on this codebase. Read this
 before making changes; it captures architecture, conventions, domain rules, and the
-non-obvious gotchas that have bitten us.
+non-obvious gotchas that have bitten us. (This is the file some tools also look for as
+`AGENTS.md` — it was renamed to `KNOWLEDGEBASE.md`; it's the single source of truth.)
 
 ---
 
@@ -301,9 +302,13 @@ multi-selects, and as an asset-breakdown field) and appears in charts when it ha
   until the user edits it (`endDateTouched`). A green "Auto-set from {size}" note shows;
   a "⚡ Auto-set …" button re-applies it after a manual override.
 - **Asset breakdown**: one input per `withFallback(settings.assetTypes)`; total is the
-  live sum (shown in a pill). Inputs support **mouse-wheel on hover** (no focus needed)
-  via a **non-passive** wheel listener (`AssetInput`) — React's `onWheel` is passive so
-  `preventDefault` there wouldn't stop page scroll.
+  live sum (shown in a pill). Each `AssetInput` offers three ways to change a value:
+  type a number **or basic math** (e.g. `3+2`, evaluated on blur/Enter via `evalMath`);
+  **mouse-wheel on hover** (no focus needed) via a **non-passive** wheel listener (React's
+  `onWheel` is passive, so it couldn't `preventDefault` page scroll); and small **▲▼ stepper
+  buttons** for ±1 (`tabIndex={-1}` + `onMouseDown` preventDefault so they don't grab focus
+  or trigger the wrapping `<label>`; floored at 0). The number field keeps a fixed width so
+  the steppers/label never squeeze the digits.
 - **Validation guards** (`validate()`): everything required **except the end date**;
   **total assets must be > 0**. The submit button is disabled (greyed) until valid.
 - **Delete** ("Remove task", bottom-left, edit mode only) routes through the shared
@@ -463,8 +468,8 @@ Tasks can carry up to **10 images** (`task.images: TaskImage[]`). Groundwork for
   `storage.from('task-images')`; filenames are `crypto.randomUUID() + '.webp'`.
   **Supabase-only**: the local backend throws on upload; the form gates the UI on
   `store.supportsImages` and shows a "requires Supabase" hint instead.
-- **UI**: to keep the busy form uncluttered, images live behind a **yellow "Demo" button
-  in the Assets section header** (amber styling + amber count badge). Clicking it swaps the
+- **UI**: to keep the busy form uncluttered, images live behind a **yellow "Demo Images"
+  button in the Assets section header** (amber styling + amber count badge). Clicking it swaps the
   form body for a self-contained **Demo panel** (an `imagesOpen` view-swap *inside* the same
   modal, with "← Back to task" + "Done" buttons — NOT a nested modal, which would double-fire
   Escape): an "Add" tile + thumbnail grid with hover ×. Uploads happen immediately (path is
@@ -472,7 +477,7 @@ Tasks can carry up to **10 images** (`task.images: TaskImage[]`). Groundwork for
   `TaskInput`/create/update path (mappers handle the column). **Clicking a thumbnail opens it
   in a full-screen `ui/ImageLightbox`** (z-[60] over the modal; Escape captured so it closes
   only the lightbox). `TaskList` shows the image-count icon **in the Assets column** (beside
-  the asset total); the read-only `TaskDetails` shows a "Demo" gallery that opens the same
+  the asset total); the read-only `TaskDetails` shows a "Demo Images" gallery that opens the same
   lightbox.
 - **Orphan cleanup (best-effort).** Storage deletes are **deferred to save/cancel** so
   cancelling truly discards changes. TaskForm tracks `sessionIds` (uploaded this session)
@@ -483,3 +488,14 @@ Tasks can carry up to **10 images** (`task.images: TaskImage[]`). Groundwork for
   can still orphan a file (rare; a periodic sweep could be added later).
 - **CSV** carries only an image **count** column (images aren't in CSV); a **merge** import
   preserves each matched task's existing images (`store.importTasks` sets `images: match.images`).
+- **Storage limits & the R2 escape hatch.** Supabase Free ≈ **1 GB storage + ~5 GB egress/mo**
+  (DB is separate — we keep images out of it). With WebP compression, storage size won't be
+  the first wall; **egress** (image views, e.g. a running Showcase) is. When a limit is hit,
+  new uploads just error inline in the Demo panel (task saves are unaffected) and Supabase
+  restricts the Free project (no surprise bill; existing files kept). Watch **Reports → Usage**.
+  If egress climbs, the escape hatch is **Cloudflare R2** (10 GB free, **$0 egress**,
+  S3-compatible): keep Supabase for DB/auth/realtime, move only the images bucket — the
+  `Repository.uploadImage/deleteImage` seam localises the change, but R2 needs a small Worker
+  to mint presigned upload URLs (browser can't hold R2 secrets) + a custom domain for reads.
+  Also note: Supabase Free **pauses a project after ~7 days idle** — a separate long-term
+  concern that moving storage doesn't fix.
