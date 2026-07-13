@@ -26,7 +26,9 @@ import { StepGenerate } from '../components/showcase/StepGenerate'
 function fmtWhen(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  const dateStr = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true })
+  return `${dateStr}, ${timeStr}`
 }
 
 /** Restore the saved draft, dropping task ids that no longer exist. */
@@ -211,6 +213,10 @@ export function ShowcasePage() {
     <div className="mx-auto max-w-[1440px] grid gap-6 lg:grid-cols-3 items-start">
       {/* Left panel: main wizard */}
       <div className="lg:col-span-2 space-y-4">
+        <div className="rounded-xl border border-brand-200 bg-brand-50/50 px-4 py-2 text-xs text-brand-700 dark:border-brand-500/20 dark:bg-brand-500/10 dark:text-brand-300">
+          <strong>Experimental Mode:</strong> For the official showreel video, please go harass Danh—he has successfully delayed it for half a year now.
+        </div>
+
         <Card className="py-4">
           <WizardProgress step={step} maxReached={yearHasEnoughAssets ? WIZARD_STEPS.length - 1 : 0} onJump={jump} />
         </Card>

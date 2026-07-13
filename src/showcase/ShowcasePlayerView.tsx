@@ -35,7 +35,8 @@ function SceneContent({ payload, pace }: { payload: ScenePayload; pace: number }
           showCode={payload.showCode}
           pace={pace}
           layoutVariant={payload.layoutVariant}
-          cameraMove={payload.cameraMove}
+          fontStyle={payload.fontStyle}
+          titleWeight={payload.titleWeight}
           revealDelay={payload.revealDelay}
           revealStagger={payload.revealStagger}
           typoEffect={payload.typoEffect}

@@ -820,51 +820,191 @@
   100% { background-position: 0% 50%; }
 }
 
-/* ── Cinematic Virtual Camera Transitions ────────────────────── */
-.sc-camera-zoom-in {
-  animation: sc-cam-zoom-in calc(var(--pace) * 8s) cubic-bezier(0.16, 1, 0.3, 1) both;
+/* ── Typography Overrides ────────────────────────────────────── */
+.sc-font-museo {
+  font-family: Museo, Inter, sans-serif !important;
 }
-.sc-camera-zoom-out {
-  animation: sc-cam-zoom-out calc(var(--pace) * 8s) cubic-bezier(0.16, 1, 0.3, 1) both;
+.sc-font-helvetica {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
 }
-.sc-camera-pan-left {
-  animation: sc-cam-pan-left calc(var(--pace) * 8s) cubic-bezier(0.16, 1, 0.3, 1) both;
+.sc-weight-bold {
+  font-weight: 700 !important;
 }
-.sc-camera-pan-right {
-  animation: sc-cam-pan-right calc(var(--pace) * 8s) cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-.sc-camera-pan-up-tilt {
-  animation: sc-cam-pan-up-tilt calc(var(--pace) * 8s) cubic-bezier(0.16, 1, 0.3, 1) both;
-  perspective: 1000px;
-}
-.sc-camera-tilt-down-zoom {
-  animation: sc-cam-tilt-down-zoom calc(var(--pace) * 8s) cubic-bezier(0.16, 1, 0.3, 1) both;
-  perspective: 1000px;
+.sc-weight-black {
+  font-weight: 900 !important;
+  letter-spacing: -0.04em !important;
 }
 
-@keyframes sc-cam-zoom-in {
-  from { transform: scale(1.06); }
-  to { transform: scale(1.0); }
+/* ── Polaroid Layout (1 Image) ──────────────────────────────── */
+.sc-polaroid-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2em;
+  width: 100%;
 }
-@keyframes sc-cam-zoom-out {
-  from { transform: scale(0.94); }
-  to { transform: scale(1.0); }
+.sc-polaroid-frame {
+  background: #ffffff;
+  padding: 1.2em 1.2em 3em 1.2em;
+  box-shadow: 0 1.2em 3.5em rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+  transform: rotate(-2deg);
+  max-width: 25em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
-@keyframes sc-cam-pan-left {
-  from { transform: translate3d(2.5em, 0, 0); }
-  to { transform: translate3d(0, 0, 0); }
+.sc-polaroid-frame img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
-@keyframes sc-cam-pan-right {
-  from { transform: translate3d(-2.5em, 0, 0); }
-  to { transform: translate3d(0, 0, 0); }
+.sc-polaroid-caption {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  font-size: 1.1em;
+  color: #101010 !important;
+  margin-top: 1em;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
-@keyframes sc-cam-pan-up-tilt {
-  from { transform: translate3d(0, 1.8em, 0) rotateX(1.8deg); }
-  to { transform: translate3d(0, 0, 0) rotateX(0deg); }
+
+/* ── Circular Crop Layout (1 Image) ─────────────────────────── */
+.sc-crop-circle-layout {
+  display: grid;
+  grid-template-columns: 55% 45%;
+  align-items: center;
+  gap: 3em;
+  width: 100%;
 }
-@keyframes sc-cam-tilt-down-zoom {
-  from { transform: translate3d(0, -1.8em, 0) rotateY(-1.8deg) scale(0.96); }
-  to { transform: translate3d(0, 0, 0) rotateY(0deg) scale(1.0); }
+.sc-circle-crop-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.sc-circle-crop-container {
+  width: 20em;
+  height: 20em;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 4px solid #ffffff;
+  box-shadow: 0 1.5em 4em rgba(0, 0, 0, 0.3);
+}
+.sc-circle-crop-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Masonry Staggered Steps (2+ Images) ─────────────────────── */
+.sc-masonry-layout {
+  display: grid;
+  grid-template-columns: 45% 55%;
+  align-items: center;
+  gap: 3em;
+  width: 100%;
+}
+.sc-masonry-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5em;
+  position: relative;
+}
+.sc-masonry-card {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1em 3em rgba(0, 0, 0, 0.25);
+  transition: transform 0.3s ease;
+}
+.sc-masonry-card-1 {
+  transform: translateY(-1.5em);
+}
+.sc-masonry-card-2 {
+  transform: translateY(1.5em);
+}
+.sc-masonry-card-3 {
+  transform: translateY(-0.5em);
+}
+.sc-masonry-card img {
+  width: 100%;
+  height: 12em;
+  object-fit: cover;
+}
+
+/* ── Filmstrip Layout (2+ Images) ────────────────────────────── */
+.sc-filmstrip-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 2.2em;
+  width: 100%;
+  justify-content: center;
+}
+.sc-filmstrip-container {
+  display: flex;
+  gap: 1.5em;
+  width: 100%;
+  overflow: hidden;
+  padding: 1em 0;
+  justify-content: center;
+}
+.sc-filmstrip-card {
+  width: 16em;
+  height: 11em;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1em 2.5em rgba(0, 0, 0, 0.25);
+}
+.sc-filmstrip-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Featured Center Split (2+ Images) ───────────────────────── */
+.sc-featured-split-layout {
+  display: grid;
+  grid-template-columns: 40% 60%;
+  align-items: center;
+  gap: 3.5em;
+  width: 100%;
+}
+.sc-featured-images-grid {
+  display: grid;
+  grid-template-columns: 60% 40%;
+  gap: 1.2em;
+  align-items: center;
+}
+.sc-featured-main {
+  height: 18em;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1.2em 3em rgba(0, 0, 0, 0.3);
+}
+.sc-featured-main img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sc-featured-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2em;
+}
+.sc-featured-side-card {
+  height: 8.4em;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0.8em 2em rgba(0, 0, 0, 0.2);
+}
+.sc-featured-side-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* ── Additional Kinetic Typography Reveals ───────────────────── */

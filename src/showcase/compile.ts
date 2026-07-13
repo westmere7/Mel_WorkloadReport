@@ -65,8 +65,9 @@ export function compileScenes(config: ShowcaseConfig): CompiledShowcase {
         // Draw variance for EVERY project regardless of image count so the
         // sequence stays deterministic even if showImages is toggled.
         const kb = pick(rng, ['a', 'b', 'c', 'd'] as KenBurnsVariant[])
-        const layoutVariant = pick(rng, [0, 1, 2])
-        const cameraMove = pick(rng, ['zoom-in', 'zoom-out', 'pan-left', 'pan-right', 'pan-up-tilt', 'tilt-down-zoom'])
+        const layoutVariant = pick(rng, [0, 1, 2, 3, 4, 5])
+        const fontStyle = pick(rng, ['museo', 'helvetica'])
+        const titleWeight = pick(rng, ['bold', 'black'])
         const revealDelay = Math.round(range(rng, 100, 350))
         const revealStagger = Math.round(range(rng, 35, 75))
         const typoEffect = pick(rng, ['rise', 'slide-fade', 'zoom-fade'])
@@ -90,7 +91,8 @@ export function compileScenes(config: ShowcaseConfig): CompiledShowcase {
           showCode: config.style.showCodes,
           showImages: config.style.showImages,
           layoutVariant,
-          cameraMove,
+          fontStyle,
+          titleWeight,
           revealDelay,
           revealStagger,
           typoEffect,
