@@ -1,12 +1,99 @@
 import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
 import type { Repository } from './repository'
+import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
+import type { ShowcaseConfig, ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
 import { getSupabase } from '../lib/supabaseClient'
 import { DEFAULT_SETTINGS, canonicalAssetName, normalizeSizeDurations } from '../constants'
-import { rowToTask, taskInputToRow } from './mappers'
+import { rowToTask, taskInputToRow, taskToRow } from './mappers'
 
 const SETTINGS_ID = 'app'
 /** Public Storage bucket for task images (created by supabase/schema.sql). */
 const IMAGE_BUCKET = 'task-images'
+/** Private Storage bucket for year-snapshot JSON blobs (created by supabase/schema.sql). */
+const SNAPSHOT_BUCKET = 'snapshots'
+
+/** True if a Supabase error means a table/relation is missing (pre-migration). */
+function isMissingRelation(err: unknown): boolean {
+  const e = err as { code?: string; message?: string } | null
+  return (
+    e?.code === '42P01' ||
+    e?.code === 'PGRST205' ||
+    (e?.message ?? '').toLowerCase().includes('does not exist')
+  )
+}
+
+const SNAPSHOT_SETUP_MSG =
+  "Snapshots aren't set up yet — run supabase/schema.sql to create the snapshots table + bucket."
+
+const SHOWCASE_SETUP_MSG =
+  "Showcase links aren't set up yet — run supabase/schema.sql to create the showcases table."
+
+interface ShowcaseRow {
+  id: string
+  title: string | null
+  year: number
+  created_by: string | null
+  task_count: number | null
+  bytes: number | null
+  expires_at: string | null
+  config?: ShowcaseConfig
+  created_at: string
+}
+function showcaseRowToMeta(row: ShowcaseRow): ShowcaseMeta {
+  return {
+    id: row.id,
+    title: row.title ?? '',
+    year: row.year,
+    createdAt: row.created_at,
+    createdBy: row.created_by ?? null,
+    expiresAt: row.expires_at ?? null,
+    taskCount: row.task_count ?? 0,
+    bytes: row.bytes ?? 0,
+  }
+}
+
+interface SnapshotRow {
+  id: string
+  year: number
+  name: string | null
+  comment: string | null
+  created_by: string | null
+  task_count: number | null
+  image_count: number | null
+  bytes: number | null
+  app_version: string | null
+  storage_path: string
+  created_at: string
+}
+function snapshotRowToMeta(row: SnapshotRow): SnapshotMeta {
+  return {
+    id: row.id,
+    year: row.year,
+    name: row.name ?? '',
+    comment: row.comment ?? '',
+    createdAt: row.created_at,
+    createdBy: row.created_by ?? null,
+    taskCount: row.task_count ?? 0,
+    imageCount: row.image_count ?? 0,
+    bytes: row.bytes ?? 0,
+    appVersion: row.app_version ?? '',
+  }
+}
+function metaToSnapshotRow(meta: SnapshotMeta, path: string) {
+  return {
+    id: meta.id,
+    year: meta.year,
+    name: meta.name,
+    comment: meta.comment,
+    created_by: meta.createdBy,
+    task_count: meta.taskCount,
+    image_count: meta.imageCount,
+    bytes: meta.bytes,
+    app_version: meta.appVersion,
+    storage_path: path,
+    created_at: meta.createdAt,
+  }
+}
 
 /** True if a Supabase error is complaining about a missing `note` column (pre-migration). */
 function isMissingNoteColumn(err: unknown): boolean {
@@ -30,6 +117,12 @@ function isMissingSquadsColumn(err: unknown): boolean {
 function isMissingSizeDurationsColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
   return msg.includes('size_durations') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** True if a Supabase error is complaining about a missing `allow_remove_used` column (pre-migration). */
+function isMissingAllowRemoveColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('allow_remove_used') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
 /** True if a Supabase error is complaining about a missing `created_by` column (pre-migration). */
@@ -159,6 +252,15 @@ export class SupabaseRepository implements Repository {
     if (error) throw error
   }
 
+  async restoreTasks(tasks: Task[]): Promise<void> {
+    const sb = getSupabase()
+    const { error: delErr } = await sb.from('tasks').delete().gte('created_at', '1970-01-01T00:00:00Z')
+    if (delErr) throw delErr
+    if (tasks.length === 0) return
+    const { error } = await sb.from('tasks').insert(tasks.map(taskToRow))
+    if (error) throw error
+  }
+
   subscribe(onChange: () => void): () => void {
     const channel = getSupabase()
       .channel('public:tasks')
@@ -262,6 +364,7 @@ export class SupabaseRepository implements Repository {
       people: data.people ?? DEFAULT_SETTINGS.people,
       assetTypes: data.asset_types ?? DEFAULT_SETTINGS.assetTypes,
       sizeDurations: normalizeSizeDurations(data.size_durations),
+      allowRemoveUsed: data.allow_remove_used ?? DEFAULT_SETTINGS.allowRemoveUsed,
     }
   }
 
@@ -281,9 +384,14 @@ export class SupabaseRepository implements Repository {
       ...base,
       squads: settings.squads,
       size_durations: settings.sizeDurations,
+      allow_remove_used: settings.allowRemoveUsed,
     }
     let { data, error } = await upsert(payload)
     // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
+    if (error && isMissingAllowRemoveColumn(error)) {
+      delete payload.allow_remove_used
+      ;({ data, error } = await upsert(payload))
+    }
     if (error && isMissingSizeDurationsColumn(error)) {
       delete payload.size_durations
       ;({ data, error } = await upsert(payload))
@@ -300,6 +408,119 @@ export class SupabaseRepository implements Repository {
       people: data.people,
       assetTypes: data.asset_types ?? settings.assetTypes,
       sizeDurations: normalizeSizeDurations(data.size_durations ?? settings.sizeDurations),
+      allowRemoveUsed: data.allow_remove_used ?? settings.allowRemoveUsed,
     }
+  }
+
+  // ── Year snapshots ────────────────────────────────────────────
+  async listSnapshots(): Promise<SnapshotMeta[]> {
+    const { data, error } = await getSupabase()
+      .from('snapshots')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) {
+      if (isMissingRelation(error)) return [] // not migrated yet — show an empty list
+      throw error
+    }
+    return (data ?? []).map((r) => snapshotRowToMeta(r as SnapshotRow))
+  }
+
+  async saveSnapshot(payload: SnapshotPayload): Promise<SnapshotMeta> {
+    const sb = getSupabase()
+    const { meta } = payload
+    const path = `${meta.id}.json`
+    const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
+    const { error: upErr } = await sb.storage
+      .from(SNAPSHOT_BUCKET)
+      .upload(path, blob, { contentType: 'application/json', upsert: true })
+    if (upErr) throw new Error(isMissingRelation(upErr) ? SNAPSHOT_SETUP_MSG : upErr.message)
+    const { data, error } = await sb
+      .from('snapshots')
+      .insert(metaToSnapshotRow(meta, path))
+      .select('*')
+      .single()
+    if (error) {
+      // Roll back the orphaned blob if the metadata insert fails.
+      await sb.storage.from(SNAPSHOT_BUCKET).remove([path])
+      throw new Error(isMissingRelation(error) ? SNAPSHOT_SETUP_MSG : error.message)
+    }
+    return snapshotRowToMeta(data as SnapshotRow)
+  }
+
+  async loadSnapshot(id: string): Promise<SnapshotPayload> {
+    const sb = getSupabase()
+    const { data: row, error: rowErr } = await sb
+      .from('snapshots')
+      .select('storage_path')
+      .eq('id', id)
+      .single()
+    if (rowErr) throw rowErr
+    const path = (row as { storage_path: string }).storage_path
+    const { data: blob, error } = await sb.storage.from(SNAPSHOT_BUCKET).download(path)
+    if (error) throw error
+    return JSON.parse(await blob.text()) as SnapshotPayload
+  }
+
+  async deleteSnapshot(id: string): Promise<void> {
+    const sb = getSupabase()
+    const { data: row } = await sb.from('snapshots').select('storage_path').eq('id', id).maybeSingle()
+    const path = (row as { storage_path?: string } | null)?.storage_path ?? `${id}.json`
+    await sb.storage.from(SNAPSHOT_BUCKET).remove([path])
+    const { error } = await sb.from('snapshots').delete().eq('id', id)
+    if (error) throw error
+  }
+
+  // ── Showcases ─────────────────────────────────────────────────
+  async listShowcases(): Promise<ShowcaseMeta[]> {
+    // Exclude `config` so the list stays light.
+    const { data, error } = await getSupabase()
+      .from('showcases')
+      .select('id, title, year, created_by, task_count, bytes, expires_at, created_at')
+      .order('created_at', { ascending: false })
+    if (error) {
+      if (isMissingRelation(error)) return []
+      throw error
+    }
+    return (data ?? []).map((r) => showcaseRowToMeta(r as ShowcaseRow))
+  }
+
+  async saveShowcase(record: ShowcaseRecord): Promise<ShowcaseMeta> {
+    const { meta, config } = record
+    const { data, error } = await getSupabase()
+      .from('showcases')
+      .insert({
+        id: meta.id,
+        title: meta.title,
+        year: meta.year,
+        created_by: meta.createdBy,
+        task_count: meta.taskCount,
+        bytes: meta.bytes,
+        expires_at: meta.expiresAt,
+        config,
+        created_at: meta.createdAt,
+      })
+      .select('id, title, year, created_by, task_count, bytes, expires_at, created_at')
+      .single()
+    if (error) throw new Error(isMissingRelation(error) ? SHOWCASE_SETUP_MSG : error.message)
+    return showcaseRowToMeta(data as ShowcaseRow)
+  }
+
+  async getShowcase(id: string): Promise<ShowcaseRecord | null> {
+    const { data, error } = await getSupabase().from('showcases').select('*').eq('id', id).maybeSingle()
+    if (error) {
+      if (isMissingRelation(error)) return null
+      // A malformed id makes Postgres complain about uuid syntax — treat as not-found.
+      if ((error as { code?: string }).code === '22P02') return null
+      throw error
+    }
+    if (!data) return null
+    const row = data as ShowcaseRow
+    if (!row.config) return null
+    return { meta: showcaseRowToMeta(row), config: row.config }
+  }
+
+  async deleteShowcase(id: string): Promise<void> {
+    const { error } = await getSupabase().from('showcases').delete().eq('id', id)
+    if (error) throw error
   }
 }

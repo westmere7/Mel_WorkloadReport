@@ -17,6 +17,20 @@ import { DEFAULT_SETTINGS, FALLBACK_ITEM } from '../constants'
 import { generateSampleTasks } from '../lib/sampleData'
 import { toMessage } from '../lib/format'
 import { useAuth } from '../lib/auth'
+import {
+  buildPayload,
+  dataUrlToBlob,
+  downloadJson,
+  snapshotFilename,
+  type SnapshotInput,
+  type SnapshotMeta,
+} from '../lib/snapshot'
+import {
+  buildShowcaseConfig,
+  isExpired,
+  type ShowcaseDraft,
+  type ShowcaseMeta,
+} from '../lib/showcase'
 
 interface StoreValue {
   backend: 'local' | 'supabase'
@@ -49,13 +63,33 @@ interface StoreValue {
   /** Compress-then-upload happens in the caller; this stores the blob and returns its descriptor. */
   uploadImage: (blob: Blob, width: number, height: number) => Promise<TaskImage>
   deleteImage: (id: string) => Promise<void>
+  // ── Year snapshots ────────────────────────────────────────────
+  snapshots: SnapshotMeta[]
+  /** Freeze current tasks+settings+images into a snapshot (progress = images embedded). */
+  createSnapshot: (
+    input: SnapshotInput,
+    onProgress?: (done: number, total: number) => void,
+  ) => Promise<SnapshotMeta>
+  /** Destructively restore a snapshot (progress = images re-uploaded). */
+  revertSnapshot: (id: string, onProgress?: (done: number, total: number) => void) => Promise<void>
+  deleteSnapshot: (id: string) => Promise<void>
+  /** Download a snapshot as a self-contained JSON file. */
+  downloadSnapshot: (id: string) => Promise<void>
+  // ── Showcases ─────────────────────────────────────────────────
+  showcases: ShowcaseMeta[]
+  /** Lazy list — called by the wizard's Generate step; purges expired links. */
+  refreshShowcases: () => Promise<void>
+  /** Freeze the draft against current data and persist it; returns the meta (link id). */
+  generateShowcase: (draft: ShowcaseDraft) => Promise<ShowcaseMeta>
+  deleteShowcase: (id: string) => Promise<void>
   /** True while a live (realtime/cross-tab) subscription is active. */
   live: boolean
 }
 
 const StoreContext = createContext<StoreValue | null>(null)
 
-function createRepository(): Repository {
+/** Exported for the store AND for store-less consumers (the public showcase viewer). */
+export function createRepository(): Repository {
   return isSupabaseConfigured() ? new SupabaseRepository() : new LocalRepository()
 }
 
@@ -68,6 +102,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const [tasks, setTasks] = useState<Task[]>([])
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
+  const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
+  const [showcases, setShowcases] = useState<ShowcaseMeta[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [live, setLive] = useState(false)
@@ -84,6 +120,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
+    // Best-effort: snapshots are non-critical and may not be migrated yet.
+    repo.listSnapshots().then(setSnapshots).catch(() => setSnapshots([]))
   }, [repo])
 
   useEffect(() => {
@@ -208,6 +246,94 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
   const deleteImage = useCallback((id: string) => repo.deleteImage(id), [repo])
 
+  const createSnapshot = useCallback(
+    async (input: SnapshotInput, onProgress?: (done: number, total: number) => void) => {
+      const payload = await buildPayload(tasks, settings, input, user, onProgress)
+      const meta = await repo.saveSnapshot(payload)
+      setSnapshots((prev) => [meta, ...prev.filter((s) => s.id !== meta.id)])
+      return meta
+    },
+    [repo, tasks, settings, user],
+  )
+
+  const revertSnapshot = useCallback(
+    async (id: string, onProgress?: (done: number, total: number) => void) => {
+      const payload = await repo.loadSnapshot(id)
+
+      // Re-upload the embedded images (Supabase only) → map original id → fresh descriptor.
+      const remap = new Map<string, TaskImage>()
+      if (repo.supportsImages && payload.images.length) {
+        const total = payload.images.length
+        onProgress?.(0, total)
+        for (let i = 0; i < payload.images.length; i++) {
+          const im = payload.images[i]
+          try {
+            remap.set(im.origId, await repo.uploadImage(dataUrlToBlob(im.dataUrl), im.w, im.h))
+          } catch {
+            /* skip a failed image; the task keeps its original reference */
+          }
+          onProgress?.(i + 1, total)
+        }
+      }
+
+      const restored = payload.tasks.map((t) => ({
+        ...t,
+        images: repo.supportsImages ? (t.images ?? []).map((im) => remap.get(im.id) ?? im) : [],
+      }))
+
+      // Free the images the current (about-to-be-replaced) tasks referenced.
+      const orphaned = tasks.flatMap((t) => t.images ?? [])
+      await repo.restoreTasks(restored)
+      const savedSettings = await repo.saveSettings(payload.settings)
+      setTasks(restored)
+      setSettings(savedSettings)
+      orphaned.forEach((im) => void repo.deleteImage(im.id).catch(() => {}))
+    },
+    [repo, tasks],
+  )
+
+  const deleteSnapshot = useCallback(
+    async (id: string) => {
+      await repo.deleteSnapshot(id)
+      setSnapshots((prev) => prev.filter((s) => s.id !== id))
+    },
+    [repo],
+  )
+
+  const downloadSnapshot = useCallback(
+    async (id: string) => {
+      const payload = await repo.loadSnapshot(id)
+      downloadJson(snapshotFilename(payload.meta), payload)
+    },
+    [repo],
+  )
+
+  const refreshShowcases = useCallback(async () => {
+    const all = await repo.listShowcases()
+    const live = all.filter((m) => !isExpired(m))
+    setShowcases(live)
+    // Lazy purge: expired links are deleted best-effort in the background.
+    all.filter((m) => isExpired(m)).forEach((m) => void repo.deleteShowcase(m.id).catch(() => {}))
+  }, [repo])
+
+  const generateShowcase = useCallback(
+    async (draft: ShowcaseDraft) => {
+      const record = buildShowcaseConfig(tasks, settings, draft, user)
+      const meta = await repo.saveShowcase(record)
+      setShowcases((prev) => [meta, ...prev.filter((s) => s.id !== meta.id)])
+      return meta
+    },
+    [repo, tasks, settings, user],
+  )
+
+  const deleteShowcase = useCallback(
+    async (id: string) => {
+      await repo.deleteShowcase(id)
+      setShowcases((prev) => prev.filter((s) => s.id !== id))
+    },
+    [repo],
+  )
+
   const renameListItem = useCallback(
     async (key: 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes', oldValue: string, newValue: string) => {
       const trimmed = newValue.trim()
@@ -278,6 +404,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       supportsImages: repo.supportsImages,
       uploadImage,
       deleteImage,
+      snapshots,
+      createSnapshot,
+      revertSnapshot,
+      deleteSnapshot,
+      downloadSnapshot,
+      showcases,
+      refreshShowcases,
+      generateShowcase,
+      deleteShowcase,
       live,
     }),
     [
@@ -287,6 +422,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       error,
       tasks,
       settings,
+      snapshots,
       live,
       refresh,
       createTask,
@@ -300,6 +436,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeListItem,
       uploadImage,
       deleteImage,
+      createSnapshot,
+      revertSnapshot,
+      deleteSnapshot,
+      downloadSnapshot,
+      showcases,
+      refreshShowcases,
+      generateShowcase,
+      deleteShowcase,
     ],
   )
 

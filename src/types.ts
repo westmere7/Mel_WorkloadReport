@@ -71,6 +71,8 @@ export interface AppSettings {
   assetTypes: string[]
   /** Days each task size adds to the start date when auto-filling the end date. */
   sizeDurations: Record<Size, number>
+  /** When false, a group item (squad/campaign/type/asset-type/person) used by ≥1 task can't be removed. */
+  allowRemoveUsed: boolean
 }
 
 /** Empty breakdown helper. */

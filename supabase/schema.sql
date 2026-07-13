@@ -83,6 +83,10 @@ alter table public.settings
   add column if not exists size_durations jsonb not null default
     '{"XS":7,"S":28,"M":42,"L":56,"XL":182}'::jsonb;
 
+-- Governance toggle: when false, group items in use by ≥1 task can't be removed.
+alter table public.settings
+  add column if not exists allow_remove_used boolean not null default false;
+
 insert into public.settings (id, campaigns, types, people)
 values (
   'app',
@@ -191,3 +195,76 @@ create policy "anon upload task-images" on storage.objects
 drop policy if exists "anon delete task-images" on storage.objects;
 create policy "anon delete task-images" on storage.objects
   for delete using (bucket_id = 'task-images');
+
+-- ── Year snapshots ──────────────────────────────────────────────
+-- Frozen archives of the full workload state. The heavy JSON payload (incl.
+-- base64 demo images) lives in the PRIVATE `snapshots` Storage bucket below;
+-- this table holds only lightweight metadata for the Settings list.
+create table if not exists public.snapshots (
+  id           uuid primary key default gen_random_uuid(),
+  year         integer not null,
+  name         text not null default '',
+  comment      text not null default '',
+  created_by   text,
+  task_count   integer not null default 0,
+  image_count  integer not null default 0,
+  bytes        bigint not null default 0,
+  app_version  text,
+  storage_path text not null,
+  created_at   timestamptz not null default now()
+);
+create index if not exists snapshots_created_at_idx on public.snapshots (created_at desc);
+
+alter table public.snapshots enable row level security;
+drop policy if exists "anon full access to snapshots" on public.snapshots;
+create policy "anon full access to snapshots" on public.snapshots
+  for all using (true) with check (true);
+
+-- ── Storage: snapshots (PRIVATE) ────────────────────────────────
+-- Not public: the snapshot JSON is a full data export, so it's fetched via the
+-- API (.download()) with the anon key + the select policy below rather than a
+-- guessable public URL. Anon can read/write/delete (consistent with the app's
+-- open RLS) — tighten before exposing publicly.
+insert into storage.buckets (id, name, public)
+values ('snapshots', 'snapshots', false)
+on conflict (id) do nothing;
+
+drop policy if exists "anon read snapshots" on storage.objects;
+create policy "anon read snapshots" on storage.objects
+  for select using (bucket_id = 'snapshots');
+
+drop policy if exists "anon upload snapshots" on storage.objects;
+create policy "anon upload snapshots" on storage.objects
+  for insert with check (bucket_id = 'snapshots');
+
+drop policy if exists "anon update snapshots" on storage.objects;
+create policy "anon update snapshots" on storage.objects
+  for update using (bucket_id = 'snapshots') with check (bucket_id = 'snapshots');
+
+drop policy if exists "anon delete snapshots" on storage.objects;
+create policy "anon delete snapshots" on storage.objects
+  for delete using (bucket_id = 'snapshots');
+
+-- ── Showcases (shareable animated year-in-review links) ─────────
+-- The full self-contained ShowcaseConfig lives inline as jsonb (small — tens
+-- of KB; images are referenced by their public task-images URLs, not embedded).
+-- `expires_at` is enforced lazily client-side: the viewer shows "expired" and
+-- the wizard's list purges expired rows. null = keep forever. Anon read is
+-- required — showcase links are public by design.
+create table if not exists public.showcases (
+  id          uuid primary key default gen_random_uuid(),
+  title       text not null default '',
+  year        integer not null,
+  created_by  text,
+  task_count  integer not null default 0,
+  bytes       integer not null default 0,
+  expires_at  timestamptz,
+  config      jsonb not null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists showcases_created_at_idx on public.showcases (created_at desc);
+
+alter table public.showcases enable row level security;
+drop policy if exists "anon full access to showcases" on public.showcases;
+create policy "anon full access to showcases" on public.showcases
+  for all using (true) with check (true);

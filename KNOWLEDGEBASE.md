@@ -173,6 +173,11 @@ happens** (see §6).
 - **Task List** (`src/pages/TaskList.tsx`): prominent search, span selector, four
   **multi-select** filters (squad/campaign/people/size), sortable columns, row → edit
   modal, per-row delete, a note **hover icon**, and the **Import & Backup** button.
+  **Paginated at `PAGE_SIZE = 50`**: the `filtered` (filter+sort) result is sliced into
+  pages and the `<Pagination>` footer shows only when `filtered.length > 50`. `page` resets
+  to 1 on any filter/search/sort change (an effect keyed to those, NOT to `tasks`, so a live
+  task update doesn't yank your page); `currentPage` is clamped to the page count so a
+  shrinking result set never strands an empty page. Header reads "Showing X–Y of N".
   Signed out, rows still open — but as a **read-only `TaskDetails`** view
   (`src/components/TaskDetails.tsx`, modal titled "Task details"), not the editable form;
   the Actions column and Import & Backup are hidden. `TaskDetails` is a clean scannable
@@ -184,22 +189,28 @@ happens** (see §6).
   `NewTaskModal`/`useNewTask`) and Edit (from Task List). Big feature surface — see §8.
 - **Import & Backup** (`src/components/ImportBackupModal.tsx`): CSV import (clean-load vs
   merge) + span-scoped CSV backup.
-- **Settings** (`src/pages/Settings.tsx`): a **Dashboard** card (grouped chart-display
-  toggles, see above); five `ListEditor`s (**squads**/campaigns/work types/asset
-  types/people) with add/rename/remove + a locked **"Others"** fallback row; and a locked
-  Task-sizes card. (Squads used to be a locked list — now editable like the rest, **except
-  DOM & INTON which are locked** via `ListEditor`'s `locked` prop, since
-  `stakeholderGroup()` keys off those exact names.)
-  Each `ListEditor` shows items **sorted alphabetically** (`sortAlpha`) and **warns before
-  removing an item that has linked tasks** (a confirm modal shown only when `usage>0`;
-  0-task items delete straight away). Sort is **display + consumption only** — stored
-  arrays keep insertion order; `withFallback()` sorts (Others last) so the **task form
-  and charts list A→Z too** (this is why the sort "affects new task order"). CSV export
-  passes raw `settings.assetTypes` (header/rows share it, import is order-agnostic).
-  The whole page requires sign-in (route redirects to `/` otherwise). NOTE: the old
-  **Data backend** card and the **Developer/danger zone** (populate sample data / delete
-  all) were removed from the UI — `store.populateSampleData`/`deleteAllTasks` still exist
-  but are no longer surfaced.
+- **Showcase** (`src/pages/Showcase.tsx` wizard + `src/pages/ShowcaseViewer.tsx` public player +
+  `src/showcase/` engine + `src/lib/showcase.ts` contract): animated shareable year-in-review —
+  see §17.
+- **Settings** (`src/pages/Settings.tsx`), top→bottom: a **Dashboard** card (chart-display
+  toggles); a collapsible **"Groups"** `CollapsibleSection` (open state persisted in
+  localStorage `mwr.settings.groupsOpen`) — itself a **master `Card`** whose nested editor
+  cards use `className="bg-subtle"` so they read as tiles inside the panel (same big-panel /
+  smaller-panels-inside look as the Dashboard card); and the **Year snapshots** card (§16). Settings/controls render as tinted `PrefRow`s (`bg-subtle`, `font-medium` title)
+  so they read as distinct from the bold `CardHeader`/section titles — don't restyle a setting
+  to look like a heading. `PrefRow`/`Switch`/`CollapsibleSection` are the shared building blocks.
+- **Groups section**: five `ListEditor`s (**squads**/campaigns/work types/asset types/people)
+  with add/rename/remove + a locked **"Others"** fallback row, plus a locked Task-sizes card
+  (`SizeDurationsCard`). Squads are editable **except DOM & INTON** (`locked` prop, since
+  `stakeholderGroup()` keys off those names). At the top of the section is the governance toggle
+  **"Allow removing groups already associated with tasks"** (`settings.allowRemoveUsed`, default
+  **off**): when off, `ListEditor.requestRemove` **blocks** removing an item with `usage>0` (shows
+  a "can't remove — turn on the setting" modal); when on, removing a used item pops the
+  reassign-to-"Others" confirm. 0-task items always delete straight away. Items shown
+  **alphabetically** (`sortAlpha`); `withFallback()` sorts (Others last) so the task form/charts
+  list A→Z too. The whole page requires sign-in. NOTE: the old **Data backend** card and
+  **Developer/danger zone** were removed from the UI (`store.populateSampleData`/`deleteAllTasks`
+  still exist, unsurfaced).
 - **Charts** (`src/components/charts.tsx`): `AreaTrendChart, DonutChart, VBarChart,
   HBarChart, StackedBarChart`, **`RankedBars`** (axis-free inline list — each row is a
   single line: label · filled track · value; used for "Tasks by squad"), `NotEnough`, and
@@ -359,6 +370,15 @@ to run it**, because a write including an unknown column fails:
   Also adds a **Storage bucket + policies** (`task-images`) — re-running `schema.sql`
   creates them; until then uploads fail (surfaced inline in the form) but everything else
   saves.
+- `settings.allow_remove_used boolean default false` — the Groups removal-guard toggle (§5).
+  **Guarded**: `saveSettings` retries the upsert without it (`isMissingAllowRemoveColumn`), so
+  saving other settings never breaks pre-migration; reads fall back to `false`.
+- `snapshots` table + **private `snapshots` bucket** + policies + faithful restore — see §16.
+  **Guarded**: `listSnapshots` returns `[]` on missing-table (`42P01`/`PGRST205`); creating
+  shows a friendly "run schema.sql" message.
+- `showcases` table (config inline jsonb + `expires_at`) — see §17. **Guarded**: `listShowcases`
+  → `[]` on missing table; generating shows a "run schema.sql" message; the public viewer's
+  `getShowcase` returns null (→ "not found" screen).
 
 `asset_breakdown` is `jsonb`, so changing the breakdown shape needs no schema change.
 
@@ -499,3 +519,92 @@ Tasks can carry up to **10 images** (`task.images: TaskImage[]`). Groundwork for
   to mint presigned upload URLs (browser can't hold R2 secrets) + a custom domain for reads.
   Also note: Supabase Free **pauses a project after ~7 days idle** — a separate long-term
   concern that moving storage doesn't fix.
+
+## 16. Year snapshots
+
+Freeze the entire workload state — all tasks + settings + the tasks' demo images — into a
+**self-contained JSON**, managed from a **"Year snapshots" card** at the bottom of Settings
+(`SnapshotsCard` in `src/pages/Settings.tsx`). Per-year archive + rollback.
+
+- **`src/lib/snapshot.ts`** — the types + helpers. `SnapshotMeta` (lightweight list row),
+  `SnapshotImage { origId, w, h, dataUrl }` (base64), `SnapshotPayload { meta, tasks, settings,
+  images }`. Helpers: `fetchAsDataUrl` (fetch→blob→FileReader base64), `dataUrlToBlob`,
+  `downloadJson`, `snapshotFilename`, `formatBytes`, and **`buildPayload(tasks, settings, input,
+  createdBy, onProgress)`** which embeds every task image (progress-reported; a failed fetch is
+  skipped so the snapshot still saves). **`ADMIN_PASSWORD = '777776'`** lives here (client-side
+  gate for revert, same posture as §13).
+- **Images embedded (base64):** snapshots are self-contained and survive later deletions; the
+  downloaded JSON is portable. Cost: each snapshot duplicates image bytes (+~33%) — ties into the
+  §15 storage note; delete old ones.
+- **Persistence (Repository, both impls):** `listSnapshots`, `saveSnapshot(payload)`,
+  `loadSnapshot(id)`, `deleteSnapshot(id)`, plus **`restoreTasks(tasks: Task[])`** — a *faithful*
+  replace-all that preserves `id/createdAt/createdBy` (via `mappers.taskToRow`), unlike the
+  `TaskInput` create paths. Supabase: JSON blob in a **private `snapshots` bucket** (`<id>.json`,
+  read via `.download()`) + a `snapshots` **metadata table** for the list. Local: `mwr.snapshots`
+  (meta list) + `mwr.snapshot.<id>` (payload) in localStorage; no images (local has none).
+- **Store:** `snapshots` state (loaded best-effort in `refresh`), `createSnapshot(input,
+  onProgress)`, `revertSnapshot(id, onProgress)`, `deleteSnapshot(id)`, `downloadSnapshot(id)`.
+  **Revert** = load payload → (Supabase) re-upload each embedded image via `uploadImage` → build
+  `origId → TaskImage` map → remap `task.images` → `restoreTasks` + `saveSettings` → purge the
+  old (replaced) tasks' images from storage.
+- **UI:** "Create snapshot" opens a modal (year select from `taskYears()` + current year, name,
+  comment) with a `Loader2` progress spinner ("Embedding images… 3/12"). Each saved snapshot row
+  has **Revert** (opens an admin-password modal — `777776` — `closeOnBackdrop={false}`),
+  **Download JSON**, and **Delete** (confirm). All gated by Settings' sign-in requirement.
+- **Migration:** re-run `supabase/schema.sql` — adds the `snapshots` table + the **private**
+  `snapshots` bucket + storage policies. **Guarded:** before migration `listSnapshots` swallows
+  the missing-table error (`42P01`/`PGRST205`) and returns `[]`; creating shows a friendly
+  "run schema.sql" message. So the rest of the app is unaffected until you migrate.
+
+## 17. Showcase mode (animated shareable year-in-review)
+
+The payoff for demo images (§15): a **Showcase** sidebar item (edit-gated) opens a 7-step wizard
+that freezes a year's data into a **self-contained `ShowcaseConfig`**, and Generate mints a public
+link `/showcase/<id>` playing a deterministic, pure-CSS animated presentation.
+
+- **Routing (first route outside the shell):** `App.tsx` splits at the top — `/showcase/:id` →
+  `ShowcaseViewerPage` (chrome-free, NO store/auth/loading gate) vs a layout route `StoreShell`
+  (`StoreProvider > NewTaskProvider > Layout > loading gate > Outlet`) hosting `/`, `/tasks`,
+  `/showcase` (wizard, `EditGate`), `/settings` (`EditGate`), `*`. **StoreProvider moved from
+  main.tsx into StoreShell**; `createRepository()` is exported from store.tsx for store-less
+  consumers (the viewer). Sidebar: `EDIT_ONLY = ['/settings','/showcase']` filter (both navs).
+- **Contract:** `src/lib/showcase.ts` — `ShowcaseConfig` (versioned via `SHOWCASE_CONFIG_VERSION`;
+  viewer rejects newer versions politely). Frozen at generate time: `projects` (ShowcaseProject
+  cards incl. image **URLs** — frozen references, not copies; deleting a task image later breaks
+  that showcase's image), precomputed `stats` (`STAT_OPTIONS`, 13 ids) + `top3` (`TOP3_OPTIONS`,
+  6 ids) computed over ALL tasks of the year, `sectionOrder` (intro locked first), theme/style/
+  canvas/pacing, and `seed`. `mulberry32`/`seededShuffle`/`durationDays` live here. Draft
+  (`ShowcaseDraft`) autosaves to localStorage `mwr.showcaseDraft.v1`.
+- **Persistence:** `showcases` table, config **inline jsonb** (10–40 KB — image URLs, not base64;
+  unlike snapshots no bucket needed). `list` excludes `config`. Expiry (`EXPIRY_OPTIONS`
+  1w/1m/3m/1y/never, default 3m) is **lazy**: viewer shows "expired"; the wizard's
+  `refreshShowcases` purges expired rows. Local mode: `mwr.showcases.v1` + `mwr.showcase.<id>` —
+  links only open in the same browser (caveat shown; viewer not-found hints it).
+- **Wizard:** `src/pages/Showcase.tsx` + `src/components/showcase/` (WizardProgress + 7 steps +
+  `wizardBits` Segmented/SelectableCard). Step 2 defaults to **L+XL selected**, biggest-first;
+  size-filter chips select/deselect that size's tasks; reorder arrows disable when the
+  **Randomize** switch is on (live `seededShuffle` preview; Re-roll mints a new seed); changing
+  year resets the selection. `ui/Switch.tsx` was extracted for reuse (Settings still has its
+  local copy).
+- **Engine:** `src/showcase/` (viewer-only; `showcase.css` imported by `ShowcasePlayerView`).
+  `compileScenes(config)` bakes ALL variance (Ken Burns variant, collage tilts, wipe alternation,
+  blob phases) from `mulberry32(config.seed)` into payloads — no Math.random/Date.now in render.
+  `useShowcasePlayer` = single rAF over `performance.now()`, scenes overlap by `TRANSITION_MS`
+  (800ms; exit z-1 under enter z-2, ≤2 mounted), state updates only on phase change,
+  `visibilitychange` pauses (JS clock + `[data-paused] * {animation-play-state:paused}`), loop =
+  cycle-prefixed keys + clock wrap. **Pacing** `PACE {fast .85, normal 1, relaxed 1.25}` consumed
+  by JS boundaries AND CSS via `--pace` (`calc(var(--pace) * Xms)`); per-element staggers via the
+  `--d` custom prop (`bits/anim.ts dly()`). Stage is authored at true canvas px, root
+  `font-size = width/100` so all `em` sizes scale on both canvases, `transform: scale(fit)`.
+  Themes (`showcaseTheme`) are cinematic: red `#160309` / navy `#030318` rooms with brand-colour
+  light; white = gallery. **CSS gotcha:** `sc-pop` animates the independent `scale` channel and
+  `sc-bob` the independent `translate` channel so the collage cards' static
+  `transform: translate() rotate()` tilt survives concurrent animations. Reduced motion: a var
+  block zeroes `--sc-rise-y/--sc-pop-*/--sc-zoom-*` (everything degrades to crossfades), ambient
+  loops disabled, bars fade instead of growing.
+- **Viewer:** `ShowcaseViewerPage` — loading / notFound (+local-mode hint) / expired /
+  unsupported-version / ready states; controls are ONLY Play (+ Loop switch) and Play-again
+  (End scene; Space/Enter also starts/replays). Progress hairline reads the clock via ref (no
+  scene re-renders).
+- **Migration:** re-run `supabase/schema.sql` (adds `public.showcases` + open RLS). Anon read is
+  required — links are public by design.

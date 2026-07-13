@@ -1,0 +1,842 @@
+/* ════════════════════════════════════════════════════════════════
+   Showcase runtime styles. Loaded ONLY by the viewer route.
+   Conventions:
+   - Everything is `sc-` prefixed.
+   - The stage root font-size = canvas-width / 100, so 1em ≈ 1% of the
+     canvas width — all sizes below are em-based and scale on both canvases.
+   - Every duration/delay is multiplied by --pace; staggers come in via the
+     per-element `--d` custom property (see bits/anim.ts `dly()`).
+   - Perf: transform / opacity / clip-path only. The single blur is STATIC
+     (aurora parent). Reduced motion zeroes the motion vars → crossfades.
+   ════════════════════════════════════════════════════════════════ */
+
+.sc-viewport {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #050510;
+}
+
+.sc-stage {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  transform-origin: center;
+  background: var(--sc-bg);
+  color: var(--sc-ink);
+  font-family: Inter, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+
+  /* Easings */
+  --sc-ease-hero: cubic-bezier(0.19, 1, 0.22, 1);   /* expo-out — entrances */
+  --sc-ease-settle: cubic-bezier(0.23, 1, 0.32, 1); /* quint-out — bars/settles */
+  --sc-ease-move: cubic-bezier(0.86, 0, 0.07, 1);   /* quint-in-out — slide moves */
+  --sc-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Motion parameters (reduced-motion zeroes these → crossfade-only) */
+  --pace: 1;
+  --sc-rise-y: 112%;
+  --sc-pop-scale: 0.86;
+  --sc-pop-blur: 6px;
+  --sc-zoom-from: 0.94;
+  --sc-zoom-to: 1.08;
+}
+
+@supports (animation-timing-function: linear(0, 1)) {
+  .sc-stage {
+    /* Gentle spring — single ~5% overshoot, corporate-safe. */
+    --sc-ease-spring: linear(
+      0, 0.009 1.5%, 0.035 3.1%, 0.141 6.6%, 0.281 9.9%, 0.457 13.5%, 0.644 17.4%,
+      0.798 21%, 0.914 24.8%, 0.992 28.6%, 1.037 32.7%, 1.056 36.9%, 1.055 42%,
+      1.036 48.7%, 1.016 56.2%, 1.004 64.6%, 0.999 74.5%, 1
+    );
+  }
+}
+
+/* Freeze every animation (with the JS clock) while the tab is hidden. */
+.sc-stage[data-paused] * {
+  animation-play-state: paused !important;
+}
+
+/* ── Scene shells + transitions ──────────────────────────────── */
+
+.sc-scene {
+  position: absolute;
+  inset: 0;
+  will-change: transform, opacity;
+}
+.sc-scene[data-enter='zoom'] {
+  animation: sc-enter-zoom calc(var(--pace) * 800ms) var(--sc-ease-move) both;
+}
+.sc-scene[data-enter='wipeX'] {
+  animation: sc-wipe-in-x calc(var(--pace) * 800ms) var(--sc-ease-move) both;
+}
+.sc-scene[data-enter='wipeCircle'] {
+  animation: sc-wipe-in-circle calc(var(--pace) * 800ms) var(--sc-ease-move) both;
+}
+.sc-scene[data-state='exit'] {
+  animation: sc-exit-zoom calc(var(--pace) * 800ms) var(--sc-ease-move) both !important;
+}
+
+.sc-body {
+  position: absolute;
+  inset: 0;
+  padding: 6em 8em;
+}
+.sc-center-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.6em;
+  text-align: center;
+}
+
+/* ── Utility animation classes (delay via --d, pace-scaled) ───── */
+
+.sc-a-rise {
+  display: inline-block;
+  animation: sc-rise-mask calc(var(--pace) * 900ms) var(--sc-ease-hero) both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+.sc-a-riseSoft {
+  animation: sc-rise-soft calc(var(--pace) * 450ms) var(--sc-ease-settle) both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+.sc-a-pop {
+  animation: sc-pop calc(var(--pace) * 450ms) var(--sc-ease-spring) both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+.sc-a-fade {
+  animation: sc-fade-in calc(var(--pace) * 450ms) ease-out both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+.sc-a-barx {
+  transform-origin: left center;
+  animation: sc-bar-x calc(var(--pace) * 700ms) var(--sc-ease-settle) both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+.sc-a-bary {
+  transform-origin: center bottom;
+  animation: sc-bar-y calc(var(--pace) * 700ms) var(--sc-ease-settle) both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+.sc-a-bary.sc-spring {
+  animation-timing-function: var(--sc-ease-spring);
+}
+.sc-a-bloom {
+  animation: sc-glow-bloom calc(var(--pace) * 900ms) ease-out both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+
+/* ── Kinetic text ────────────────────────────────────────────── */
+
+.sc-masktext {
+  display: inline-block;
+}
+.sc-mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding-bottom: 0.06em; /* keep descenders inside the mask */
+  margin-bottom: -0.06em;
+}
+
+.sc-sweep {
+  background: linear-gradient(var(--sc-accent2), var(--sc-accent2)) no-repeat left 92% / 0% 0.14em;
+  animation: sc-sweep calc(var(--pace) * 600ms) var(--sc-ease-settle) both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+  padding-bottom: 0.08em;
+}
+
+/* ── Typography ──────────────────────────────────────────────── */
+
+.sc-kicker {
+  font-size: 1.35em;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--sc-muted);
+}
+.sc-sub {
+  font-size: 1.3em;
+  font-weight: 500;
+  color: var(--sc-muted);
+}
+
+.sc-year {
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 700;
+  font-size: 17em;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  background: linear-gradient(115deg, var(--sc-ink) 30%, var(--sc-accent) 78%, var(--sc-accent2) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.sc-team {
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 700;
+  font-size: 4.5em;
+  line-height: 1.05;
+}
+.sc-section-word {
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 700;
+  font-size: 9.5em;
+  line-height: 1;
+  letter-spacing: -0.015em;
+}
+.sc-poster-title {
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 700;
+  font-size: 5em;
+  line-height: 1.05;
+}
+
+.sc-underline {
+  display: block;
+  width: 9em;
+  height: 0.42em;
+  border-radius: 999px;
+  background: var(--sc-accent);
+}
+
+/* ── Chips ───────────────────────────────────────────────────── */
+
+.sc-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: inherit;
+  gap: 0.8em;
+}
+.sc-center-col .sc-chip-row {
+  justify-content: center;
+}
+.sc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.5em 1.1em;
+  border-radius: 999px;
+  background: var(--sc-card);
+  border: 1px solid var(--sc-bar-track);
+  color: var(--sc-ink);
+  font-size: 1.25em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sc-chip-quiet {
+  color: var(--sc-muted);
+  font-weight: 500;
+}
+.sc-chip-quiet strong {
+  color: var(--sc-ink);
+  font-weight: 700;
+}
+.sc-chip-size {
+  color: #fff;
+  border: none;
+}
+
+/* ── Project scenes ──────────────────────────────────────────── */
+
+.sc-project-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.1em;
+  text-align: left;
+}
+.sc-project-name {
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 700;
+  font-size: 4.8em;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sc-project-assets {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+  margin-top: 0.4em;
+}
+.sc-stat-number {
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 700;
+  font-size: 6.6em;
+  line-height: 1;
+  color: var(--sc-ink);
+}
+.sc-stat-label {
+  font-size: 1.35em;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--sc-muted);
+}
+.sc-stat-text {
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 700;
+  font-size: 3.4em;
+  line-height: 1.1;
+}
+
+/* Ken Burns hero (single image) */
+.sc-kb-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.sc-kb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  will-change: transform;
+  animation-duration: 16s;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+.sc-kb-a { animation-name: sc-kb-a; }
+.sc-kb-b { animation-name: sc-kb-b; }
+.sc-kb-c { animation-name: sc-kb-c; }
+.sc-kb-d { animation-name: sc-kb-d; }
+
+.sc-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--sc-bg) 4%, transparent 62%);
+}
+.sc-project-lower {
+  position: absolute;
+  inset: auto 8em 5em 8em;
+}
+
+/* Collage (2+ images) */
+.sc-project-split {
+  display: grid;
+  grid-template-columns: 46% 54%;
+  align-items: center;
+  gap: 3em;
+}
+.sc-project-left {
+  display: flex;
+  align-items: center;
+}
+.sc-collage {
+  position: relative;
+  height: 100%;
+}
+.sc-collage-card {
+  position: absolute;
+  width: 30em;
+  aspect-ratio: 4 / 3;
+  border-radius: 1.2em;
+  overflow: hidden;
+  box-shadow: 0 1.8em 4em rgba(0, 0, 0, 0.4);
+  border: 0.18em solid rgba(255, 255, 255, 0.08);
+  transform: translate(var(--dx, 0), var(--dy, 0)) rotate(var(--rot, 0deg));
+  /* pop uses the independent `scale`/`opacity` channels; bob uses `translate` —
+     neither touches the static transform above. */
+  animation:
+    sc-pop calc(var(--pace) * 450ms) var(--sc-ease-spring) calc(var(--pace) * var(--d, 0ms)) both,
+    sc-bob 8s ease-in-out var(--bob-delay, 0ms) infinite alternate;
+}
+.sc-collage-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sc-collage-card:nth-child(1) { top: 6%; left: 8%; }
+.sc-collage-card:nth-child(2) { top: 34%; left: 42%; }
+.sc-collage-card:nth-child(3) { top: 55%; left: 4%; }
+.sc-collage-card:nth-child(4) { top: 10%; left: 52%; width: 24em; }
+
+/* Typographic (no images) */
+.sc-project-typo {
+  display: flex;
+  align-items: center;
+}
+.sc-watermark {
+  position: absolute;
+  right: -0.1em;
+  bottom: -0.12em;
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 700;
+  font-size: 22em;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--sc-ink);
+  opacity: 0.055;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ── Stat scenes ─────────────────────────────────────────────── */
+
+.sc-trio {
+  display: grid;
+  gap: 5em;
+  width: 100%;
+  align-items: start;
+}
+.sc-trio-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9em;
+  text-align: center;
+}
+
+.sc-dist-title {
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 700;
+  font-size: 4.2em;
+  line-height: 1.05;
+}
+.sc-dist {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1em;
+  width: 76em;
+  max-width: 100%;
+}
+.sc-dist-row {
+  display: grid;
+  grid-template-columns: 16em 1fr 8em;
+  align-items: center;
+  gap: 1.4em;
+}
+.sc-dist-label {
+  font-size: 1.45em;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sc-dist-track {
+  display: block;
+  height: 1.7em;
+  border-radius: 999px;
+  background: var(--sc-bar-track);
+  overflow: hidden;
+}
+.sc-dist-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--sc-accent);
+}
+.sc-dist-fill.sc-peak {
+  background: linear-gradient(90deg, var(--sc-accent), var(--sc-accent2));
+  box-shadow: 0 0 1.4em var(--sc-glow);
+}
+.sc-dist-value {
+  font-size: 1.7em;
+  font-weight: 700;
+  text-align: left;
+}
+
+/* Monthly variant */
+.sc-months {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.6em;
+  height: 26em;
+}
+.sc-month {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7em;
+  height: 100%;
+}
+.sc-month-track {
+  display: flex;
+  align-items: flex-end;
+  width: 3.2em;
+  flex: 1;
+}
+.sc-month-fill {
+  display: block;
+  width: 100%;
+  border-radius: 0.5em 0.5em 0.2em 0.2em;
+  background: var(--sc-accent);
+  opacity: 0.75;
+}
+.sc-month-fill.sc-peak {
+  opacity: 1;
+  background: linear-gradient(to top, var(--sc-accent), var(--sc-accent2));
+  box-shadow: 0 0 1.6em var(--sc-glow);
+}
+.sc-month-label {
+  font-size: 1.05em;
+  font-weight: 600;
+  color: var(--sc-muted);
+}
+.sc-month-label.sc-peak-label {
+  color: var(--sc-accent2);
+}
+
+/* ── Top-3 podium ────────────────────────────────────────────── */
+
+.sc-podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5em;
+  margin-top: 1em;
+}
+.sc-podium-col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55em;
+  width: 24em;
+}
+.sc-podium-bar {
+  order: 10;
+  width: 100%;
+  border-radius: 1em 1em 0.3em 0.3em;
+  background: var(--sc-card);
+  border: 1px solid var(--sc-bar-track);
+  margin-top: 0.8em;
+}
+.sc-rank-1 .sc-podium-bar {
+  height: 15em;
+  background: linear-gradient(to top, var(--sc-card), var(--sc-glow));
+}
+.sc-rank-2 .sc-podium-bar { height: 10.5em; }
+.sc-rank-3 .sc-podium-bar { height: 8em; }
+
+.sc-medal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3em;
+  height: 3em;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 1.4em;
+  color: #201500;
+}
+.sc-medal-1 { background: #ffb81c; box-shadow: 0 0 1.6em rgba(255, 184, 28, 0.55); }
+.sc-medal-2 { background: #b3b3cf; }
+.sc-medal-3 { background: #f58220; }
+
+.sc-podium-name {
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 700;
+  font-size: 2em;
+  line-height: 1.15;
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sc-gold-name {
+  background: linear-gradient(100deg, var(--sc-ink) 20%, var(--sc-accent2) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.sc-podium-value {
+  font-size: 1.9em;
+  font-weight: 700;
+}
+.sc-podium-unit {
+  font-size: 0.62em;
+  font-weight: 600;
+  color: var(--sc-muted);
+}
+.sc-bloom {
+  position: absolute;
+  left: 50%;
+  bottom: 2em;
+  width: 34em;
+  height: 34em;
+  margin-left: -17em;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--sc-glow), transparent 65%);
+  pointer-events: none;
+}
+
+/* ── Backgrounds: aurora / geometric / grain ─────────────────── */
+
+.sc-aurora {
+  position: absolute;
+  inset: -12%;
+  filter: blur(80px); /* static — blobs move via transform only */
+  pointer-events: none;
+}
+.sc-blob {
+  position: absolute;
+  width: 52em;
+  height: 52em;
+  border-radius: 999px;
+  mix-blend-mode: screen;
+  will-change: transform;
+  opacity: 0.5;
+}
+.sc-blob-1 {
+  top: -10%;
+  left: -6%;
+  background: radial-gradient(circle, var(--sc-blob-1), transparent 62%);
+  animation: sc-drift-1 26s ease-in-out infinite alternate;
+}
+.sc-blob-2 {
+  bottom: -18%;
+  right: -8%;
+  background: radial-gradient(circle, var(--sc-blob-2), transparent 62%);
+  animation: sc-drift-2 31s ease-in-out infinite alternate;
+}
+.sc-blob-3 {
+  top: 30%;
+  left: 44%;
+  width: 38em;
+  height: 38em;
+  background: radial-gradient(circle, var(--sc-blob-3), transparent 62%);
+  animation: sc-drift-3 23s ease-in-out infinite alternate;
+  opacity: 0.34;
+}
+
+.sc-geo {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sc-geo-ring {
+  position: absolute;
+  right: -22em;
+  top: -22em;
+  width: 64em;
+  height: 64em;
+  border-radius: 999px;
+  border: 0.9em solid var(--sc-card);
+}
+.sc-geo-circle {
+  position: absolute;
+  left: -14em;
+  bottom: -18em;
+  width: 44em;
+  height: 44em;
+  border-radius: 999px;
+  background: var(--sc-card);
+}
+
+.sc-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: var(--sc-grain-opacity, 0.045);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Viewer controls ─────────────────────────────────────────── */
+
+.sc-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 7em;
+  height: 7em;
+  border-radius: 999px;
+  background: var(--sc-accent);
+  color: #fff;
+  box-shadow: 0 0 3em var(--sc-glow);
+  transition: transform 200ms var(--sc-ease-settle);
+  cursor: pointer;
+}
+.sc-play:hover {
+  transform: scale(1.07);
+}
+.sc-play-icon {
+  width: 2.6em;
+  height: 2.6em;
+  margin-left: 0.3em;
+}
+.sc-loop {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  font-size: 1.2em;
+  font-weight: 600;
+  color: var(--sc-muted);
+  cursor: pointer;
+}
+.sc-loop-end {
+  position: absolute;
+  bottom: 3em;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.sc-play-again {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 1em 2.2em;
+  border-radius: 999px;
+  background: var(--sc-accent);
+  color: #fff;
+  font-size: 1.5em;
+  font-weight: 700;
+  box-shadow: 0 0 2.4em var(--sc-glow);
+  transition: transform 200ms var(--sc-ease-settle);
+  cursor: pointer;
+}
+.sc-play-again:hover {
+  transform: scale(1.05);
+}
+.sc-icon {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.sc-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.32em;
+  z-index: 45;
+  background: var(--sc-bar-track);
+}
+.sc-progress-fill {
+  height: 100%;
+  background: var(--sc-accent);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+/* ── Keyframe catalog ────────────────────────────────────────── */
+
+@keyframes sc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sc-rise-mask {
+  from { transform: translateY(var(--sc-rise-y)); }
+  to { transform: translateY(0); }
+}
+@keyframes sc-rise-soft {
+  from { opacity: 0; transform: translateY(1.2em); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* Independent `scale` channel so static transforms (collage tilt) survive. */
+@keyframes sc-pop {
+  from { opacity: 0; scale: var(--sc-pop-scale); filter: blur(var(--sc-pop-blur)); }
+  to { opacity: 1; scale: 1; filter: blur(0); }
+}
+@keyframes sc-bar-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes sc-bar-y {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes sc-sweep {
+  to { background-size: 100% 0.14em; }
+}
+@keyframes sc-glow-bloom {
+  0% { opacity: 0; scale: 0.6; }
+  60% { opacity: 1; }
+  100% { opacity: 0.85; scale: 1; }
+}
+/* Independent `translate` channel (composes with static transforms). */
+@keyframes sc-bob {
+  from { translate: 0 -0.35em; }
+  to { translate: 0 0.35em; }
+}
+@keyframes sc-enter-zoom {
+  from { opacity: 0; transform: scale(var(--sc-zoom-from)); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes sc-exit-zoom {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(var(--sc-zoom-to)); }
+}
+@keyframes sc-wipe-in-x {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes sc-wipe-in-circle {
+  from { clip-path: circle(0% at 50% 50%); }
+  to { clip-path: circle(142% at 50% 50%); }
+}
+@keyframes sc-kb-a {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to { transform: scale(1.12) translate3d(-2.5%, -1.5%, 0); }
+}
+@keyframes sc-kb-b {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to { transform: scale(1.12) translate3d(2.5%, -1.5%, 0); }
+}
+@keyframes sc-kb-c {
+  from { transform: scale(1.12) translate3d(-2%, 1.5%, 0); }
+  to { transform: scale(1.02) translate3d(0, 0, 0); }
+}
+@keyframes sc-kb-d {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to { transform: scale(1.12) translate3d(0, 2.2%, 0); }
+}
+@keyframes sc-drift-1 {
+  from { transform: translate3d(-8%, -5%, 0) scale(1); }
+  to { transform: translate3d(11%, 9%, 0) scale(1.22); }
+}
+@keyframes sc-drift-2 {
+  from { transform: translate3d(6%, 4%, 0) scale(1.15); }
+  to { transform: translate3d(-10%, -8%, 0) scale(0.95); }
+}
+@keyframes sc-drift-3 {
+  from { transform: translate3d(-5%, 8%, 0) scale(0.9); }
+  to { transform: translate3d(8%, -7%, 0) scale(1.18); }
+}
+
+/* ── Reduced motion: calm crossfade variant ──────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-stage {
+    --sc-rise-y: 0%;
+    --sc-pop-scale: 1;
+    --sc-pop-blur: 0px;
+    --sc-zoom-from: 1;
+    --sc-zoom-to: 1;
+  }
+  /* Ambient loops off entirely. */
+  .sc-kb,
+  .sc-blob,
+  .sc-collage-card,
+  .sc-bloom {
+    animation: none !important;
+    opacity: 1;
+  }
+  .sc-blob {
+    opacity: 0.4;
+  }
+  /* Bars fade in place instead of growing. */
+  .sc-a-barx,
+  .sc-a-bary {
+    animation-name: sc-fade-in !important;
+  }
+  /* Scene changes become plain crossfades. */
+  .sc-scene[data-enter='wipeX'],
+  .sc-scene[data-enter='wipeCircle'] {
+    animation-name: sc-fade-in !important;
+  }
+}

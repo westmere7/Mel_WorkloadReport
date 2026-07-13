@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   ChevronLeft,
   ChevronRight,
+  Clapperboard,
   LayoutDashboard,
   List,
   Plus,
@@ -21,13 +22,17 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/tasks', label: 'Task List', icon: List },
+  { to: '/showcase', label: 'Showcase', icon: Clapperboard },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
+
+/** Pages that require sign-in — hidden from the nav for anonymous viewers. */
+const EDIT_ONLY = ['/settings', '/showcase']
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
-  const nav = canEdit ? NAV : NAV.filter((item) => item.to !== '/settings')
+  const nav = canEdit ? NAV : NAV.filter((item) => !EDIT_ONLY.includes(item.to))
 
   // Rail mode = icon-only 68px. Always on mobile; on desktop it's the collapsed
   // state. Expanded (desktop, not collapsed) shows the full 240px panel.
@@ -146,7 +151,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 export function MobileNav() {
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
-  const nav = canEdit ? NAV : NAV.filter((item) => item.to !== '/settings')
+  const nav = canEdit ? NAV : NAV.filter((item) => !EDIT_ONLY.includes(item.to))
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-card pb-[env(safe-area-inset-bottom)] md:hidden">

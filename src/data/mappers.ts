@@ -47,6 +47,18 @@ export function rowToTask(row: TaskRow): Task {
   }
 }
 
+/** Convert a full Task into a complete DB row, preserving id/timestamps/creator
+ *  (used by snapshot revert for a faithful restore). */
+export function taskToRow(task: Task): TaskRow {
+  return {
+    ...taskInputToRow(task),
+    id: task.id,
+    created_at: task.createdAt,
+    updated_at: task.updatedAt,
+    created_by: task.createdBy ?? null,
+  }
+}
+
 /** Convert a TaskInput into the DB row shape for insert/update. */
 export function taskInputToRow(input: TaskInput): Omit<TaskRow, 'id' | 'created_at' | 'updated_at' | 'created_by'> {
   return {

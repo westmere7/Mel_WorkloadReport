@@ -1,4 +1,6 @@
 import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
+import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
+import type { ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
 
 /**
  * Storage-agnostic contract for the app's data.
@@ -30,9 +32,33 @@ export interface Repository {
   deleteTask(id: string): Promise<void>
   /** Dev/maintenance: remove every task. */
   deleteAllTasks(): Promise<void>
+  /**
+   * Replace ALL tasks with these exact rows, preserving id/createdAt/createdBy
+   * (used by snapshot revert — the create paths take TaskInput and would reset them).
+   */
+  restoreTasks(tasks: Task[]): Promise<void>
 
   getSettings(): Promise<AppSettings>
   saveSettings(settings: AppSettings): Promise<AppSettings>
+
+  // ── Year snapshots ────────────────────────────────────────────
+  /** List saved snapshot metadata (newest first). */
+  listSnapshots(): Promise<SnapshotMeta[]>
+  /** Persist a snapshot (JSON blob) + its metadata; returns the stored meta. */
+  saveSnapshot(payload: SnapshotPayload): Promise<SnapshotMeta>
+  /** Load a full snapshot payload by id. */
+  loadSnapshot(id: string): Promise<SnapshotPayload>
+  /** Delete a snapshot (blob + metadata). */
+  deleteSnapshot(id: string): Promise<void>
+
+  // ── Showcases (shareable animated year-in-review links) ────────
+  /** List saved showcase metadata (newest first). Missing table → []. */
+  listShowcases(): Promise<ShowcaseMeta[]>
+  /** Persist a generated showcase (config inline); returns the stored meta. */
+  saveShowcase(record: ShowcaseRecord): Promise<ShowcaseMeta>
+  /** Load a full showcase by id. Null when it doesn't exist (expiry NOT enforced here). */
+  getShowcase(id: string): Promise<ShowcaseRecord | null>
+  deleteShowcase(id: string): Promise<void>
 
   /**
    * Rename a value across all tasks (used when a campaign/type/person is

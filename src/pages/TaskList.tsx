@@ -4,6 +4,8 @@ import {
   ArrowDownUp,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   DatabaseBackup,
   Images,
@@ -30,6 +32,9 @@ import type { Half, Task, TaskInput } from '../types'
 
 type SortKey = 'no' | 'code' | 'name' | 'squad' | 'campaign' | 'assetTotal' | 'startDate' | 'half' | 'size'
 
+/** Rows per page in the task list. */
+const PAGE_SIZE = 50
+
 export function TaskList() {
   const { tasks, settings, updateTask, deleteTask } = useStore()
   const { canEdit } = useAuth()
@@ -52,6 +57,7 @@ export function TaskList() {
   const [editing, setEditing] = useState<Task | null>(null)
   const [deleting, setDeleting] = useState<Task | null>(null)
   const [ioOpen, setIoOpen] = useState(false)
+  const [page, setPage] = useState(1)
 
   const years = useMemo(() => taskYears(tasks), [tasks])
   const activeYear = spanYear ?? years[0] ?? 0
@@ -85,6 +91,19 @@ export function TaskList() {
       return String(av ?? '').localeCompare(String(bv ?? '')) * dir
     })
   }, [tasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, sort, addedOrder])
+
+  // Pagination — filter/sort first, then slice into pages of PAGE_SIZE.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  // Clamp so a shrinking result set (e.g. a live update) never strands us on an empty page.
+  const currentPage = Math.min(page, pageCount)
+  const pageStart = (currentPage - 1) * PAGE_SIZE
+  const paged = filtered.slice(pageStart, pageStart + PAGE_SIZE)
+
+  // Jump back to page 1 whenever the filters/search/sort change (but not when the
+  // underlying tasks update — that would yank you off your current page).
+  useEffect(() => {
+    setPage(1)
+  }, [query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, sort])
 
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
@@ -216,7 +235,18 @@ export function TaskList() {
       <Card className="p-0">
         <div className="flex items-center justify-between px-5 py-3 text-xs text-muted">
           <span>
-            Showing <strong className="text-ink">{filtered.length}</strong> of {tasks.length} tasks
+            {filtered.length === 0 ? (
+              <>No tasks</>
+            ) : (
+              <>
+                Showing{' '}
+                <strong className="text-ink">
+                  {pageStart + 1}–{pageStart + paged.length}
+                </strong>{' '}
+                of <strong className="text-ink">{filtered.length}</strong>
+                {filtered.length !== tasks.length ? ` (filtered from ${tasks.length})` : ''} tasks
+              </>
+            )}
           </span>
           <span className="hidden sm:inline">
             {canEdit ? 'Click any row to edit' : 'Click any row to view · sign in to edit'}
@@ -242,7 +272,7 @@ export function TaskList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {filtered.map((t) => (
+              {paged.map((t) => (
                 <tr
                   key={t.id}
                   className="group cursor-pointer transition-colors hover:bg-subtle"
@@ -342,6 +372,14 @@ export function TaskList() {
             </tbody>
           </table>
         </div>
+        {pageCount > 1 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3">
+            <span className="text-xs text-muted">
+              Page <strong className="text-ink">{currentPage}</strong> of {pageCount}
+            </span>
+            <Pagination page={currentPage} pageCount={pageCount} onPage={setPage} />
+          </div>
+        )}
       </Card>
 
       {/* Edit modal — read-only details for signed-out viewers, editable form otherwise */}
@@ -473,5 +511,64 @@ function Th({
         )}
       </button>
     </th>
+  )
+}
+
+/** Page numbers to show: all when ≤7, else 1 … around-current … N. */
+function pageItems(page: number, total: number): (number | 'gap')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const items: (number | 'gap')[] = [1]
+  const start = Math.max(2, page - 1)
+  const end = Math.min(total - 1, page + 1)
+  if (start > 2) items.push('gap')
+  for (let i = start; i <= end; i++) items.push(i)
+  if (end < total - 1) items.push('gap')
+  items.push(total)
+  return items
+}
+
+function Pagination({
+  page,
+  pageCount,
+  onPage,
+}: {
+  page: number
+  pageCount: number
+  onPage: (p: number) => void
+}) {
+  const go = (p: number) => onPage(Math.min(pageCount, Math.max(1, p)))
+  const arrow =
+    'rounded-lg border border-line p-1.5 text-muted transition hover:border-navy-300 hover:text-ink disabled:opacity-40 disabled:hover:border-line disabled:hover:text-muted'
+  return (
+    <div className="flex items-center gap-1">
+      <button type="button" onClick={() => go(page - 1)} disabled={page <= 1} className={arrow} aria-label="Previous page">
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      {pageItems(page, pageCount).map((it, i) =>
+        it === 'gap' ? (
+          <span key={`gap-${i}`} className="px-1 text-xs text-faint">
+            …
+          </span>
+        ) : (
+          <button
+            key={it}
+            type="button"
+            onClick={() => go(it)}
+            aria-current={it === page}
+            className={cx(
+              'min-w-[2rem] rounded-lg px-2 py-1.5 text-xs font-semibold transition',
+              it === page
+                ? 'bg-rmit-navy text-white dark:bg-navy-300'
+                : 'border border-line text-muted hover:border-navy-300 hover:text-ink',
+            )}
+          >
+            {it}
+          </button>
+        ),
+      )}
+      <button type="button" onClick={() => go(page + 1)} disabled={page >= pageCount} className={arrow} aria-label="Next page">
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
   )
 }

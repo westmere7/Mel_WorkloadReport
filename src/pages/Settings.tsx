@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
-import { AlertTriangle, Check, Lock, Pencil, Plus, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, Archive, Check, ChevronDown, Download, Loader2, Lock, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useStore } from '../data/store'
+import { taskYears } from '../lib/span'
+import { ADMIN_PASSWORD, formatBytes, type SnapshotMeta } from '../lib/snapshot'
 import {
   SIZES,
   SIZE_DESCRIPTIONS,
@@ -13,7 +15,7 @@ import {
   formatDurationDays,
   DEFAULT_SIZE_DURATIONS,
 } from '../constants'
-import { cx } from '../lib/format'
+import { cx, toMessage } from '../lib/format'
 import {
   COMMON_CAMPAIGNS,
   setDashboardPrefs,
@@ -44,67 +46,435 @@ export function SettingsPage() {
       {/* Dashboard display preferences */}
       <DashboardPrefsCard />
 
-      {/* Editable lists */}
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <ListEditor
-          title="Squads"
-          description="Requesting stakeholder teams. DOM & INTON are locked (used by the demand chart)."
-          items={settings.squads}
-          fallback={FALLBACK_ITEM}
-          locked={['DOM', 'INTON']}
-          onAdd={(v) => mutate('squads', [...settings.squads, v])}
-          onRemove={(v) => removeListItem('squads', v)}
-          onRename={(o, n) => renameListItem('squads', o, n)}
-          usage={(v) => usageCount('squads', v)}
-        />
-        <ListEditor
-          title="Campaigns"
-          dotColor="bg-accent-teal"
-          description="Specific campaigns or groups. Used in the task form."
-          items={settings.campaigns}
-          fallback={FALLBACK_ITEM}
-          onAdd={(v) => mutate('campaigns', [...settings.campaigns, v])}
-          onRemove={(v) => removeListItem('campaigns', v)}
-          onRename={(o, n) => renameListItem('campaigns', o, n)}
-          usage={(v) => usageCount('campaigns', v)}
-        />
-        <ListEditor
-          title="Work types"
-          dotColor="bg-accent-gold"
-          description="Categories of design work."
-          items={settings.types}
-          fallback={FALLBACK_ITEM}
-          onAdd={(v) => mutate('types', [...settings.types, v])}
-          onRemove={(v) => removeListItem('types', v)}
-          onRename={(o, n) => renameListItem('types', o, n)}
-          usage={(v) => usageCount('types', v)}
-        />
-        <ListEditor
-          title="Asset types"
-          dotColor="bg-accent-green"
-          description="Deliverable types counted in the asset breakdown."
-          items={settings.assetTypes}
-          fallback={FALLBACK_ITEM}
-          onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
-          onRemove={(v) => removeListItem('assetTypes', v)}
-          onRename={(o, n) => renameListItem('assetTypes', o, n)}
-          usage={(v) => usageCount('assetTypes', v)}
-        />
-        <ListEditor
-          title="People"
-          dotColor="bg-accent-plum"
-          description="Team members who can be assigned."
-          items={settings.people}
-          fallback={FALLBACK_ITEM}
-          onAdd={(v) => mutate('people', [...settings.people, v])}
-          onRemove={(v) => removeListItem('people', v)}
-          onRename={(o, n) => renameListItem('people', o, n)}
-          usage={(v) => usageCount('people', v)}
-        />
-        {/* Editable task-size turnaround durations — sits beside People */}
-        <SizeDurationsCard />
-      </div>
+      {/* Groups — collapsible section holding every editable reference list */}
+      <CollapsibleSection
+        title="Groups"
+        subtitle="Squads, campaigns, work types, asset types, people & size turnarounds used across tasks."
+        storageKey="mwr.settings.groupsOpen"
+      >
+        <PrefRow
+          title="Allow removing groups already associated with tasks"
+          description="Off: an item used by at least one task can’t be removed. On: removing it reassigns those tasks to “Others”."
+        >
+          <Switch
+            checked={settings.allowRemoveUsed}
+            onChange={(v) => saveSettings({ ...settings, allowRemoveUsed: v })}
+            label="Allow removing groups already associated with tasks"
+          />
+        </PrefRow>
+
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <ListEditor
+            title="Squads"
+            description="Requesting stakeholder teams. DOM & INTON are locked (used by the demand chart)."
+            items={settings.squads}
+            fallback={FALLBACK_ITEM}
+            locked={['DOM', 'INTON']}
+            allowRemoveUsed={settings.allowRemoveUsed}
+            onAdd={(v) => mutate('squads', [...settings.squads, v])}
+            onRemove={(v) => removeListItem('squads', v)}
+            onRename={(o, n) => renameListItem('squads', o, n)}
+            usage={(v) => usageCount('squads', v)}
+          />
+          <ListEditor
+            title="Campaigns"
+            dotColor="bg-accent-teal"
+            description="Specific campaigns or groups. Used in the task form."
+            items={settings.campaigns}
+            fallback={FALLBACK_ITEM}
+            allowRemoveUsed={settings.allowRemoveUsed}
+            onAdd={(v) => mutate('campaigns', [...settings.campaigns, v])}
+            onRemove={(v) => removeListItem('campaigns', v)}
+            onRename={(o, n) => renameListItem('campaigns', o, n)}
+            usage={(v) => usageCount('campaigns', v)}
+          />
+          <ListEditor
+            title="Work types"
+            dotColor="bg-accent-gold"
+            description="Categories of design work."
+            items={settings.types}
+            fallback={FALLBACK_ITEM}
+            allowRemoveUsed={settings.allowRemoveUsed}
+            onAdd={(v) => mutate('types', [...settings.types, v])}
+            onRemove={(v) => removeListItem('types', v)}
+            onRename={(o, n) => renameListItem('types', o, n)}
+            usage={(v) => usageCount('types', v)}
+          />
+          <ListEditor
+            title="Asset types"
+            dotColor="bg-accent-green"
+            description="Deliverable types counted in the asset breakdown."
+            items={settings.assetTypes}
+            fallback={FALLBACK_ITEM}
+            allowRemoveUsed={settings.allowRemoveUsed}
+            onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
+            onRemove={(v) => removeListItem('assetTypes', v)}
+            onRename={(o, n) => renameListItem('assetTypes', o, n)}
+            usage={(v) => usageCount('assetTypes', v)}
+          />
+          <ListEditor
+            title="People"
+            dotColor="bg-accent-plum"
+            description="Team members who can be assigned."
+            items={settings.people}
+            fallback={FALLBACK_ITEM}
+            allowRemoveUsed={settings.allowRemoveUsed}
+            onAdd={(v) => mutate('people', [...settings.people, v])}
+            onRemove={(v) => removeListItem('people', v)}
+            onRename={(o, n) => renameListItem('people', o, n)}
+            usage={(v) => usageCount('people', v)}
+          />
+          {/* Editable task-size turnaround durations — sits beside People */}
+          <SizeDurationsCard />
+        </div>
+      </CollapsibleSection>
+
+      {/* Year snapshots — freeze/restore the full workload state */}
+      <SnapshotsCard />
     </div>
+  )
+}
+
+/** Human date+time for a snapshot's timestamp. */
+function formatWhen(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+}
+
+/**
+ * Year snapshots: freeze all tasks + settings + demo images into a self-contained
+ * JSON, and revert / download / delete saved snapshots. Reverting is destructive,
+ * so it's gated by the admin password. Saving/reverting embed or re-upload images,
+ * which is slow — hence the progress spinners.
+ */
+function SnapshotsCard() {
+  const { snapshots, createSnapshot, revertSnapshot, deleteSnapshot, downloadSnapshot, tasks } = useStore()
+
+  const years = useMemo(() => {
+    const set = new Set<number>(taskYears(tasks))
+    set.add(new Date().getFullYear())
+    return Array.from(set).sort((a, b) => b - a)
+  }, [tasks])
+
+  // Create-snapshot modal
+  const [createOpen, setCreateOpen] = useState(false)
+  const [year, setYear] = useState<number>(years[0] ?? new Date().getFullYear())
+  const [name, setName] = useState('')
+  const [comment, setComment] = useState('')
+
+  // Revert (password-gated) + delete modals
+  const [revertTarget, setRevertTarget] = useState<SnapshotMeta | null>(null)
+  const [pw, setPw] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<SnapshotMeta | null>(null)
+
+  // Shared busy/progress + error surface
+  const [busy, setBusy] = useState<{ label: string; done: number; total: number } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const progress = (label: string) => (done: number, total: number) => setBusy({ label, done, total })
+
+  const openCreate = () => {
+    setYear(years[0] ?? new Date().getFullYear())
+    setName('')
+    setComment('')
+    setError(null)
+    setCreateOpen(true)
+  }
+
+  const runCreate = async () => {
+    setError(null)
+    setBusy({ label: 'Freezing state…', done: 0, total: 0 })
+    try {
+      await createSnapshot({ year, name, comment }, progress('Embedding images…'))
+      setCreateOpen(false)
+    } catch (e) {
+      setError(toMessage(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const runRevert = async () => {
+    if (!revertTarget) return
+    if (pw !== ADMIN_PASSWORD) {
+      setError('Incorrect admin password.')
+      return
+    }
+    setError(null)
+    setBusy({ label: 'Restoring…', done: 0, total: 0 })
+    try {
+      await revertSnapshot(revertTarget.id, progress('Restoring images…'))
+      setRevertTarget(null)
+      setPw('')
+    } catch (e) {
+      setError(toMessage(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const runDelete = async () => {
+    if (!deleteTarget) return
+    setError(null)
+    setBusy({ label: 'Deleting…', done: 0, total: 0 })
+    try {
+      await deleteSnapshot(deleteTarget.id)
+      setDeleteTarget(null)
+    } catch (e) {
+      setError(toMessage(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const runDownload = async (id: string) => {
+    setError(null)
+    setBusy({ label: 'Preparing download…', done: 0, total: 0 })
+    try {
+      await downloadSnapshot(id)
+    } catch (e) {
+      setError(toMessage(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const busyText = busy
+    ? busy.total > 0
+      ? `${busy.label} ${busy.done}/${busy.total}`
+      : busy.label
+    : null
+
+  return (
+    <Card>
+      <CardHeader
+        title="Year snapshots"
+        subtitle="Freeze the full workload state (tasks, settings & demo images) into a self-contained JSON you can revert to, download, or delete."
+        action={
+          <button className="btn-primary" onClick={openCreate} disabled={Boolean(busy)}>
+            <Archive className="h-4 w-4" /> Create snapshot
+          </button>
+        }
+      />
+
+      {error && !createOpen && !revertTarget && (
+        <p className="mb-3 rounded-lg bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
+          {error}
+        </p>
+      )}
+      {busy && !createOpen && !revertTarget && !deleteTarget && (
+        <p className="mb-3 inline-flex items-center gap-2 text-sm text-muted">
+          <Loader2 className="h-4 w-4 animate-spin" /> {busyText}
+        </p>
+      )}
+
+      {snapshots.length === 0 ? (
+        <p className="rounded-xl bg-subtle p-4 text-sm text-muted">
+          No snapshots yet. Create one to freeze the current year's data.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {snapshots.map((s) => (
+            <li
+              key={s.id}
+              className="flex flex-col gap-3 rounded-xl border border-line p-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="navy">{s.year}</Badge>
+                  <span className="truncate font-semibold text-ink">{s.name || 'Untitled snapshot'}</span>
+                </div>
+                {s.comment && <p className="mt-1 text-sm text-muted">{s.comment}</p>}
+                <p className="mt-1 text-[11px] text-faint">
+                  {formatWhen(s.createdAt)}
+                  {s.createdBy ? ` · ${s.createdBy}` : ''} · {s.taskCount} tasks · {s.imageCount} images ·{' '}
+                  {formatBytes(s.bytes)}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-muted transition hover:border-navy-300 hover:text-ink disabled:opacity-50"
+                  onClick={() => {
+                    setError(null)
+                    setPw('')
+                    setRevertTarget(s)
+                  }}
+                  disabled={Boolean(busy)}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Revert
+                </button>
+                <button
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-semibold text-muted transition hover:border-navy-300 hover:text-ink disabled:opacity-50"
+                  onClick={() => void runDownload(s.id)}
+                  disabled={Boolean(busy)}
+                >
+                  <Download className="h-3.5 w-3.5" /> JSON
+                </button>
+                <button
+                  className="rounded-lg p-1.5 text-faint transition hover:bg-brand-50 hover:text-rmit-red disabled:opacity-50 dark:hover:bg-brand-500/15"
+                  onClick={() => {
+                    setError(null)
+                    setDeleteTarget(s)
+                  }}
+                  disabled={Boolean(busy)}
+                  title="Delete snapshot"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Create modal */}
+      <Modal
+        open={createOpen}
+        onClose={() => !busy && setCreateOpen(false)}
+        title="Create year snapshot"
+        closeOnBackdrop={false}
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setCreateOpen(false)} disabled={Boolean(busy)}>
+              Cancel
+            </button>
+            <button className="btn-primary" onClick={runCreate} disabled={Boolean(busy)}>
+              {busy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> {busyText}
+                </>
+              ) : (
+                'Save snapshot'
+              )}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-[140px_1fr]">
+            <div>
+              <label className="label">Year</label>
+              <select
+                className="input h-11"
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value))}
+                disabled={Boolean(busy)}
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Name</label>
+              <input
+                className="input h-11"
+                placeholder="e.g. End of 2026"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={Boolean(busy)}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label">Comment</label>
+            <textarea
+              className="input min-h-[80px] resize-y"
+              placeholder="Optional — why you're taking this snapshot."
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              disabled={Boolean(busy)}
+            />
+          </div>
+          <p className="text-xs text-muted">
+            Freezes {tasks.length} tasks and their demo images into a self-contained JSON. Embedding
+            images can take a moment.
+          </p>
+          {error && <p className="text-sm font-medium text-rmit-red">{error}</p>}
+        </div>
+      </Modal>
+
+      {/* Revert (password-gated) modal */}
+      <Modal
+        open={Boolean(revertTarget)}
+        onClose={() => !busy && setRevertTarget(null)}
+        title="Revert to snapshot"
+        closeOnBackdrop={false}
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setRevertTarget(null)} disabled={Boolean(busy)}>
+              Cancel
+            </button>
+            <button
+              className="btn bg-rmit-red text-white hover:bg-brand-600 focus:ring-brand-200"
+              onClick={runRevert}
+              disabled={Boolean(busy) || !pw}
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> {busyText}
+                </>
+              ) : (
+                'Revert'
+              )}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex gap-3 rounded-xl bg-brand-50 p-3 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <p>
+              This <strong>replaces all current tasks and settings</strong> with{' '}
+              <strong>{revertTarget?.name || 'this snapshot'}</strong> ({revertTarget?.taskCount} tasks). Your
+              current data is not kept — snapshot it first if you need it. This can't be undone.
+            </p>
+          </div>
+          <div>
+            <label className="label">Admin password</label>
+            <input
+              type="password"
+              className="input h-11"
+              placeholder="Enter admin password to confirm"
+              value={pw}
+              autoFocus
+              onChange={(e) => setPw(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && pw && !busy && void runRevert()}
+              disabled={Boolean(busy)}
+            />
+          </div>
+          {error && <p className="text-sm font-medium text-rmit-red">{error}</p>}
+        </div>
+      </Modal>
+
+      {/* Delete confirm modal */}
+      <Modal
+        open={Boolean(deleteTarget)}
+        onClose={() => !busy && setDeleteTarget(null)}
+        title="Delete snapshot"
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setDeleteTarget(null)} disabled={Boolean(busy)}>
+              Cancel
+            </button>
+            <button
+              className="btn bg-rmit-red text-white hover:bg-brand-600 focus:ring-brand-200"
+              onClick={runDelete}
+              disabled={Boolean(busy)}
+            >
+              {busy ? 'Deleting…' : 'Delete'}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted">
+          Delete <strong className="text-ink">{deleteTarget?.name || 'this snapshot'}</strong> ({deleteTarget?.year})?
+          The saved JSON and its embedded images are removed. This cannot be undone.
+        </p>
+      </Modal>
+    </Card>
   )
 }
 
@@ -143,7 +513,7 @@ function SizeDurationsCard() {
     setDraft(Object.fromEntries(SIZES.map((s) => [s, String(DEFAULT_SIZE_DURATIONS[s])])) as Record<Size, string>)
 
   return (
-    <Card>
+    <Card className="bg-subtle">
       <CardHeader
         title="Task sizes"
         subtitle="Days added to the start date when auto-filling the end date"
@@ -216,7 +586,7 @@ function DashboardPrefsCard() {
   return (
     <Card>
       <CardHeader title="Dashboard" subtitle="How the dashboard charts are displayed" />
-      <div className="divide-y divide-line">
+      <div className="space-y-2">
         <PrefRow
           title="Demand by stakeholders — dimension"
           description="Split the demand chart by asset type or work type."
@@ -268,6 +638,8 @@ function DashboardPrefsCard() {
   )
 }
 
+/** A single setting: a tinted row so controls read as distinct from the (bold)
+ *  card title above them, not like more headings. */
 function PrefRow({
   title,
   description,
@@ -278,13 +650,65 @@ function PrefRow({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-      <div>
-        <p className="text-sm font-semibold text-ink">{title}</p>
+    <div className="flex items-center justify-between gap-4 rounded-xl bg-subtle px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-ink">{title}</p>
         <p className="text-xs text-muted">{description}</p>
       </div>
       <div className="shrink-0">{children}</div>
     </div>
+  )
+}
+
+/** A page-level, collapsible grouping of cards with a bold section header.
+ *  Open state persists in localStorage under `storageKey`. */
+function CollapsibleSection({
+  title,
+  subtitle,
+  storageKey,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  storageKey: string
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(storageKey) !== '0'
+    } catch {
+      return true
+    }
+  })
+  const toggle = () =>
+    setOpen((o) => {
+      const next = !o
+      try {
+        localStorage.setItem(storageKey, next ? '1' : '0')
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+
+  return (
+    <Card>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={open}
+        className={cx('flex w-full items-start justify-between gap-3 text-left', open && 'mb-4')}
+      >
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-ink">{title}</h3>
+          {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
+        </div>
+        <ChevronDown
+          className={cx('mt-0.5 h-5 w-5 shrink-0 text-muted transition-transform', !open && '-rotate-90')}
+        />
+      </button>
+      {open && <div className="space-y-4">{children}</div>}
+    </Card>
   )
 }
 
@@ -329,6 +753,7 @@ function ListEditor({
   usage,
   fallback,
   locked,
+  allowRemoveUsed,
   dotColor = 'bg-rmit-red',
 }: {
   title: string
@@ -341,6 +766,8 @@ function ListEditor({
   fallback?: string
   /** Item names that can't be renamed or removed (shown with a lock, like the fallback). */
   locked?: string[]
+  /** When false, an item used by ≥1 task is blocked from removal (see the Groups toggle). */
+  allowRemoveUsed: boolean
   /** Tailwind bg class for each item's dot — per-panel colour, aesthetics only. */
   dotColor?: string
 }) {
@@ -349,13 +776,17 @@ function ListEditor({
   const [editValue, setEditValue] = useState('')
   // Item pending a delete confirmation (only shown when it has linked tasks).
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
+  // Item whose removal is blocked because it's in use and the setting is off.
+  const [blockedRemove, setBlockedRemove] = useState<string | null>(null)
 
   // Shown alphabetically (matches the task-form order via withFallback).
   const sortedItems = sortAlpha(items)
   const singular = title.toLowerCase().replace(/s$/, '')
 
   const requestRemove = (item: string) => {
-    if (usage(item) > 0) setPendingRemove(item)
+    const count = usage(item)
+    if (count > 0 && !allowRemoveUsed) setBlockedRemove(item)
+    else if (count > 0) setPendingRemove(item)
     else onRemove(item)
   }
 
@@ -389,7 +820,7 @@ function ListEditor({
   }
 
   return (
-    <Card>
+    <Card className="bg-subtle">
       <CardHeader title={title} subtitle={description} />
       <div className="mb-3 flex gap-2">
         <input
@@ -553,6 +984,32 @@ function ListEditor({
               </strong>
               . Removing it will reassign {usage(pendingRemove) === 1 ? 'that task' : 'those tasks'} to{' '}
               <strong>“{fallback ?? FALLBACK_ITEM}”</strong>. This can’t be undone.
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={blockedRemove !== null}
+        onClose={() => setBlockedRemove(null)}
+        title={`Can’t remove ${singular}`}
+        footer={
+          <button className="btn-primary" onClick={() => setBlockedRemove(null)}>
+            OK
+          </button>
+        }
+      >
+        {blockedRemove && (
+          <div className="flex gap-3 rounded-xl bg-subtle p-3 text-sm text-ink">
+            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-muted" />
+            <p>
+              <strong>{blockedRemove}</strong> is used by{' '}
+              <strong>
+                {usage(blockedRemove)} task{usage(blockedRemove) === 1 ? '' : 's'}
+              </strong>
+              , so it can’t be removed. To allow it, turn on{' '}
+              <strong>“Allow removing groups already associated with tasks”</strong> at the top of the
+              Groups section.
             </p>
           </div>
         )}
