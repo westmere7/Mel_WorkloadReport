@@ -35,6 +35,13 @@ function SceneContent({ payload, pace }: { payload: ScenePayload; pace: number }
           showCode={payload.showCode}
           pace={pace}
           layoutVariant={payload.layoutVariant}
+          cameraMove={payload.cameraMove}
+          revealDelay={payload.revealDelay}
+          revealStagger={payload.revealStagger}
+          typoEffect={payload.typoEffect}
+          borderStyle={payload.borderStyle}
+          shadowStyle={payload.shadowStyle}
+          decoShape={payload.decoShape}
           showCampaign={payload.showCampaign}
           showSquad={payload.showSquad}
           showPeople={payload.showPeople}

@@ -32,6 +32,13 @@ export type ScenePayload =
       showCode: boolean
       showImages: boolean
       layoutVariant: number
+      cameraMove: string
+      revealDelay: number
+      revealStagger: number
+      typoEffect: string
+      borderStyle: string
+      shadowStyle: string
+      decoShape: string
       showCampaign: boolean
       showSquad: boolean
       showPeople: boolean

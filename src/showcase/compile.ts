@@ -66,6 +66,14 @@ export function compileScenes(config: ShowcaseConfig): CompiledShowcase {
         // sequence stays deterministic even if showImages is toggled.
         const kb = pick(rng, ['a', 'b', 'c', 'd'] as KenBurnsVariant[])
         const layoutVariant = pick(rng, [0, 1, 2])
+        const cameraMove = pick(rng, ['zoom-in', 'zoom-out', 'pan-left', 'pan-right', 'pan-up-tilt', 'tilt-down-zoom'])
+        const revealDelay = Math.round(range(rng, 100, 350))
+        const revealStagger = Math.round(range(rng, 35, 75))
+        const typoEffect = pick(rng, ['rise', 'slide-fade', 'zoom-fade'])
+        const borderStyle = pick(rng, ['none', 'thin', 'thick'])
+        const shadowStyle = pick(rng, ['sm', 'md', 'lg', 'xl'])
+        const decoShape = pick(rng, ['none', 'circle', 'square', 'dots'])
+
         const collage: CollageSpec[] = Array.from({ length: 4 }, (_, i) => ({
           rot: jitter(rng, 6.5),
           dx: jitter(rng, 3.5),
@@ -82,6 +90,13 @@ export function compileScenes(config: ShowcaseConfig): CompiledShowcase {
           showCode: config.style.showCodes,
           showImages: config.style.showImages,
           layoutVariant,
+          cameraMove,
+          revealDelay,
+          revealStagger,
+          typoEffect,
+          borderStyle,
+          shadowStyle,
+          decoShape,
           showCampaign: config.style.showCampaign ?? true,
           showSquad: config.style.showSquad ?? true,
           showPeople: config.style.showPeople ?? true,

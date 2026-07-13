@@ -2,15 +2,16 @@ import { cx } from '../../lib/format'
 import type { ShowcaseDraft, ColorMode } from '../../lib/showcase'
 import { Switch } from '../ui/Switch'
 import { Segmented, StepHint } from './wizardBits'
+import { Shuffle } from 'lucide-react'
 
 const COLOR_MODE_SWATCHES: {
-  id: ColorMode
-  label: string
-  hint: string
-  bg: string
-  ink: string
-  accent: string
-  accent2: string
+  id: ColorMode;
+  label: string;
+  hint: string;
+  bg: string;
+  ink: string;
+  accent: string;
+  accent2: string;
 }[] = [
   {
     id: 'red',
@@ -167,6 +168,30 @@ export function StepStyle({
             />
           </div>
         )}
+      </div>
+
+      <div className="border-t border-line pt-6">
+        <label className="label">Cinematography Seed</label>
+        <StepHint>
+          The seed generates deterministic variations in camera transitions, staggered timing reveals, layout structures, card borders, shadows, and background shape compositions. Use the same seed to reproduce this exact look.
+        </StepHint>
+        <div className="mt-2.5 flex items-center gap-2 max-w-sm">
+          <input
+            type="number"
+            className="input flex-1 h-10"
+            value={draft.seed}
+            onChange={(e) => patch({ seed: Number(e.target.value) || 0 })}
+            placeholder="Enter seed number..."
+          />
+          <button
+            type="button"
+            onClick={() => patch({ seed: Math.floor(Math.random() * 2 ** 31) })}
+            className="btn-outline h-10 px-3 flex items-center gap-1.5 shrink-0"
+            title="Generate a new random seed"
+          >
+            <Shuffle className="h-3.5 w-3.5" /> Re-roll
+          </button>
+        </div>
       </div>
     </div>
   )

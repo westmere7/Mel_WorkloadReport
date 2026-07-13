@@ -11,19 +11,27 @@ export function ScMaskText({
   delayMs = 0,
   stepMs = 60,
   className,
+  effect = 'rise',
 }: {
   text: string
   per?: 'word' | 'letter'
   delayMs?: number
   stepMs?: number
   className?: string
+  effect?: string
 }) {
   const parts = per === 'letter' ? Array.from(text) : text.split(' ')
+  const effectClass = {
+    rise: 'sc-a-rise',
+    'slide-fade': 'sc-a-slide-fade',
+    'zoom-fade': 'sc-a-zoom-fade',
+  }[effect] || 'sc-a-rise'
+
   return (
     <span className={cx('sc-masktext', className)} role="text" aria-label={text}>
       {parts.map((part, i) => (
         <span key={i} className="sc-mask">
-          <span className="sc-a-rise" style={dly(delayMs + i * stepMs)}>
+          <span className={effectClass} style={dly(delayMs + i * stepMs)}>
             {part === ' ' ? ' ' : part}
             {per === 'word' && i < parts.length - 1 ? ' ' : ''}
           </span>

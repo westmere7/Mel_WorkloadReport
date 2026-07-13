@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Check, Copy, ExternalLink, FolderOpen, Loader2, Pencil, Sparkles, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Check, Copy, ExternalLink, Loader2, Pencil, Sparkles } from 'lucide-react'
 import { useStore } from '../../data/store'
-import { Badge } from '../ui/Badge'
-import { Modal } from '../ui/Modal'
 import { toMessage } from '../../lib/format'
 import {
   EXPIRY_OPTIONS,
@@ -13,12 +11,6 @@ import {
   type ShowcaseMeta,
 } from '../../lib/showcase'
 import { WIZARD_STEPS } from './WizardProgress'
-
-function fmtWhen(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-}
 
 function fmtRuntime(ms: number): string {
   const s = Math.round(ms / 1000)
@@ -56,22 +48,12 @@ export function StepGenerate({
   onJump: (step: number) => void
   onGenerated: () => void
 }) {
-  const { backend, tasks, showcases, refreshShowcases, generateShowcase, deleteShowcase, getShowcase } = useStore()
+  const { backend, generateShowcase } = useStore()
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [generated, setGenerated] = useState<ShowcaseMeta | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState<ShowcaseMeta | null>(null)
-  
-  const [loadingConfig, setLoadingConfig] = useState<string | null>(null)
-  const [missingTasks, setMissingTasks] = useState<{ name: string; code: string }[]>([])
-  const [pendingLoadConfig, setPendingLoadConfig] = useState<any | null>(null)
-
-  // Previous showcases — lazy load + expired purge on mount.
-  useEffect(() => {
-    void refreshShowcases().catch(() => {})
-  }, [refreshShowcases])
 
   const runGenerate = async () => {
     setBusy(true)
@@ -92,68 +74,6 @@ export function StepGenerate({
       setCopied(id)
       setTimeout(() => setCopied(null), 1400)
     })
-  }
-
-  const confirmDelete = async () => {
-    if (!deleting) return
-    try {
-      await deleteShowcase(deleting.id)
-      if (generated?.id === deleting.id) setGenerated(null)
-    } catch (e) {
-      setError(toMessage(e))
-    } finally {
-      setDeleting(null)
-    }
-  }
-
-  const loadConfigIntoDraft = (config: any) => {
-    const existingIds = config.projects
-      .map((p: any) => p.id)
-      .filter((id: string) => tasks.some((t) => t.id === id))
-
-    const newDraft: Partial<ShowcaseDraft> = {
-      step: 0,
-      year: config.year,
-      title: config.title,
-      teamName: config.teamName,
-      staff: config.staff,
-      canvas: config.canvas,
-      pacing: config.pacing,
-      selectedIds: existingIds,
-      randomizeOrder: config.randomizeOrder,
-      seed: config.seed,
-      statIds: config.stats.map((s: any) => s.id),
-      top3Ids: config.top3.map((b: any) => b.id),
-      sectionOrder: config.sectionOrder,
-      theme: config.theme,
-      style: config.style,
-    }
-    patch(newDraft)
-    onJump(0) // Go to step 1
-  }
-
-  const loadShowcaseConfig = async (id: string) => {
-    setLoadingConfig(id)
-    setError(null)
-    try {
-      const record = await getShowcase(id)
-      if (!record) {
-        throw new Error('Showcase configuration not found')
-      }
-      const config = record.config
-      const missing = config.projects.filter((p: any) => !tasks.some((t) => t.id === p.id))
-      
-      if (missing.length > 0) {
-        setMissingTasks(missing.map((p: any) => ({ name: p.name, code: p.code })))
-        setPendingLoadConfig(config)
-      } else {
-        loadConfigIntoDraft(config)
-      }
-    } catch (e) {
-      setError(`Failed to load showcase: ${toMessage(e)}`)
-    } finally {
-      setLoadingConfig(null)
-    }
   }
 
   const sectionsLabel = draft.sectionOrder
@@ -186,6 +106,12 @@ export function StepGenerate({
           <RecapRow
             label="Style"
             value={`${draft.style.colorMode} mode · ${draft.style.background}${draft.style.grain ? ' · grain' : ''}${draft.style.movingGradients ? ' · anim' : ''}`}
+            step={5}
+            onJump={onJump}
+          />
+          <RecapRow
+            label="Seed"
+            value={String(draft.seed)}
             step={5}
             onJump={onJump}
           />
@@ -245,121 +171,6 @@ export function StepGenerate({
           </div>
         </div>
       )}
-
-      {/* Previous showcases */}
-      {showcases.length > 0 && (
-        <div className="space-y-2">
-          <p className="label">Previous showcases</p>
-          <ul className="space-y-2">
-            {showcases.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-line px-3 py-2.5">
-                <Badge tone="navy">{s.year}</Badge>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-ink">{s.title || 'Untitled showcase'}</span>
-                  <span className="block text-[11px] text-faint">
-                    {fmtWhen(s.createdAt)}
-                    {s.createdBy ? ` · ${s.createdBy}` : ''} · {s.taskCount} projects ·{' '}
-                    {s.expiresAt ? `expires ${fmtWhen(s.expiresAt)}` : 'never expires'}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  disabled={loadingConfig !== null}
-                  onClick={() => loadShowcaseConfig(s.id)}
-                  className="btn-ghost h-9 px-2.5 text-xs flex items-center gap-1 hover:text-rmit-red disabled:opacity-40"
-                  title="Load showcase configuration into builder"
-                >
-                  {loadingConfig === s.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <FolderOpen className="h-3.5 w-3.5" />
-                  )}
-                  {loadingConfig === s.id ? 'Loading...' : 'Load'}
-                </button>
-                <button type="button" className="btn-ghost h-9 px-2.5 text-xs" onClick={() => copy(s.id)}>
-                  {copied === s.id ? <Check className="h-3.5 w-3.5 text-accent-green" /> : <Copy className="h-3.5 w-3.5" />}
-                  {copied === s.id ? 'Copied' : 'Copy link'}
-                </button>
-                <a href={showcaseUrl(s.id)} target="_blank" rel="noreferrer" className="btn-ghost h-9 px-2.5 text-xs">
-                  <ExternalLink className="h-3.5 w-3.5" /> Open
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setDeleting(s)}
-                  className="rounded-lg p-1.5 text-faint transition hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
-                  title="Delete showcase link"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Delete confirm */}
-      <Modal
-        open={Boolean(deleting)}
-        onClose={() => setDeleting(null)}
-        title="Delete showcase link"
-        footer={
-          <>
-            <button className="btn-outline" onClick={() => setDeleting(null)}>
-              Cancel
-            </button>
-            <button className="btn-primary" onClick={confirmDelete}>
-              Delete
-            </button>
-          </>
-        }
-      >
-        <p className="text-sm text-muted">
-          Delete <strong className="text-ink">{deleting?.title || 'this showcase'}</strong> ({deleting?.year})? The link
-          stops working immediately. This cannot be undone.
-        </p>
-      </Modal>
-
-      {/* Missing tasks warning */}
-      <Modal
-        open={missingTasks.length > 0}
-        onClose={() => { setMissingTasks([]); setPendingLoadConfig(null); }}
-        title="Missing Tasks in Showcase"
-        footer={
-          <>
-            <button className="btn-outline" onClick={() => { setMissingTasks([]); setPendingLoadConfig(null); }}>
-              Cancel
-            </button>
-            <button
-              className="btn-primary bg-rmit-red hover:bg-red-700 border-none"
-              onClick={() => {
-                if (pendingLoadConfig) {
-                  loadConfigIntoDraft(pendingLoadConfig)
-                }
-                setMissingTasks([])
-                setPendingLoadConfig(null)
-              }}
-            >
-              Load Anyway
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <p className="text-sm text-muted">
-            The showcase you are loading references <strong className="text-ink">{missingTasks.length} task(s)</strong> that no longer exist in the workload report database:
-          </p>
-          <ul className="max-h-[160px] overflow-y-auto rounded-lg bg-subtle p-3 divide-y divide-line text-xs font-mono text-ink">
-            {missingTasks.map((t, idx) => (
-              <li key={idx} className="py-1">
-                {t.code ? `[${t.code}] ` : ''}{t.name}
-              </li>
-            ))}
-          </ul>
-          <p className="text-sm text-muted">
-            If you load this showcase, these missing tasks will be omitted from the selected play order. The rest of the showcase settings will load normally.
-          </p>
-        </div>
-      </Modal>
     </div>
   )
 }

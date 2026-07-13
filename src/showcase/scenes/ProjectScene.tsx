@@ -13,6 +13,41 @@ function fmtDate(iso: string | null): string | null {
   return `${d} ${months[(m ?? 1) - 1]} ${y}`
 }
 
+function getCardStyle(borderStyle: string, shadowStyle: string) {
+  let borderClass = ''
+  if (borderStyle === 'thin') borderClass = 'border border-white/20'
+  else if (borderStyle === 'thick') borderClass = 'border-[6px] border-white/95'
+
+  let shadowClass = 'shadow-md'
+  if (shadowStyle === 'sm') shadowClass = 'shadow-sm'
+  else if (shadowStyle === 'md') shadowClass = 'shadow-md'
+  else if (shadowStyle === 'lg') shadowClass = 'shadow-lg'
+  else if (shadowStyle === 'xl') shadowClass = 'shadow-2xl'
+
+  return `${borderClass} ${shadowClass}`
+}
+
+function RenderDecoShape({ shape }: { shape: string }) {
+  if (shape === 'circle') {
+    return <div className="absolute -left-6 -top-6 w-20 h-20 rounded-full bg-white/10 -z-10 pointer-events-none" />
+  }
+  if (shape === 'square') {
+    return <div className="absolute -right-6 -bottom-6 w-16 h-16 bg-[#ffb81c]/10 rotate-12 -z-10 pointer-events-none" />
+  }
+  if (shape === 'dots') {
+    return (
+      <div
+        className="absolute -right-6 -top-6 w-16 h-16 -z-10 pointer-events-none opacity-25"
+        style={{
+          backgroundImage: 'radial-gradient(circle, #fff 1.5px, transparent 1.5px)',
+          backgroundSize: '8px 8px',
+        }}
+      />
+    )
+  }
+  return null
+}
+
 /** Shared content column: name, meta chips, dates, asset odometer, breakdown. */
 function ProjectContent({
   project,
@@ -20,6 +55,9 @@ function ProjectContent({
   total,
   showCode,
   pace,
+  revealDelay,
+  revealStagger,
+  typoEffect,
   showCampaign,
   showSquad,
   showPeople,
@@ -34,6 +72,9 @@ function ProjectContent({
   total: number
   showCode: boolean
   pace: number
+  revealDelay: number
+  revealStagger: number
+  typoEffect: string
   showCampaign: boolean
   showSquad: boolean
   showPeople: boolean
@@ -56,26 +97,34 @@ function ProjectContent({
 
   const showSub = (showCode && project.code) || showDates
 
+  const baseKicker = revealDelay
+  const baseName = revealDelay + 100
+  const baseChips = baseName + 450
+  const baseSub = baseChips + 250
+  const baseAssets = baseSub + 100
+  const baseBreakdown = baseAssets + 250
+  const baseNote = baseBreakdown + 150
+
   return (
     <div className="sc-project-content">
-      <p className="sc-kicker sc-a-riseSoft" style={dly(150)}>
+      <p className="sc-kicker sc-a-riseSoft" style={dly(baseKicker)}>
         {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
       </p>
       <h2 className="sc-project-name">
-        <ScMaskText text={project.name} per="word" delayMs={250} stepMs={60} />
+        <ScMaskText text={project.name} per="word" delayMs={baseName} stepMs={revealStagger} effect={typoEffect} />
       </h2>
       
       {(chips.length > 0 || showSize) && (
         <div className="sc-chip-row">
           {chips.map((c, i) => (
-            <span key={`${c}-${i}`} className="sc-chip sc-a-pop" style={dly(850 + i * 60)}>
+            <span key={`${c}-${i}`} className="sc-chip sc-a-pop" style={dly(baseChips + i * revealStagger)}>
               {c}
             </span>
           ))}
           {showSize && (
             <span
               className="sc-chip sc-chip-size sc-a-pop"
-              style={{ ...dly(850 + chips.length * 60), background: SIZE_COLORS[project.size] }}
+              style={{ ...dly(baseChips + chips.length * revealStagger), background: SIZE_COLORS[project.size] }}
             >
               {project.size}
             </span>
@@ -84,7 +133,7 @@ function ProjectContent({
       )}
 
       {showSub && (
-        <p className="sc-sub sc-a-riseSoft" style={dly(1150)}>
+        <p className="sc-sub sc-a-riseSoft" style={dly(baseSub)}>
           {showCode && project.code ? `${project.code}` : ''}
           {showCode && project.code && showDates && dates ? ' · ' : ''}
           {showDates ? `${dates}${durationText}` : ''}
@@ -93,10 +142,10 @@ function ProjectContent({
 
       {showAssetTotal && (
         <div className="sc-project-assets">
-          <span className="sc-stat-number sc-a-fade" style={dly(1250)}>
-            <ScCounter value={project.assetTotal} delayMs={1350 * pace} durationMs={900 * pace} />
+          <span className="sc-stat-number sc-a-fade" style={dly(baseAssets)}>
+            <ScCounter value={project.assetTotal} delayMs={(baseAssets + 100) * pace} durationMs={900 * pace} />
           </span>
-          <span className="sc-stat-label sc-a-riseSoft" style={dly(1400)}>
+          <span className="sc-stat-label sc-a-riseSoft" style={dly(baseAssets + 150)}>
             assets
           </span>
         </div>
@@ -105,7 +154,7 @@ function ProjectContent({
       {showAssetBreakdown && breakdown.length > 0 && (
         <div className="sc-chip-row">
           {breakdown.map((b, i) => (
-            <span key={b.name} className="sc-chip sc-chip-quiet sc-a-pop" style={dly(1550 + i * 60)}>
+            <span key={b.name} className="sc-chip sc-chip-quiet sc-a-pop" style={dly(baseBreakdown + i * revealStagger)}>
               <strong>{b.value}</strong> {b.name}
             </span>
           ))}
@@ -113,7 +162,7 @@ function ProjectContent({
       )}
 
       {showNote && project.note && (
-        <p className="sc-project-note sc-a-riseSoft" style={dly(1750)}>
+        <p className="sc-project-note sc-a-riseSoft" style={dly(baseNote)}>
           * “{project.note}”
         </p>
       )}
@@ -130,6 +179,13 @@ export function ProjectScene({
   showCode,
   pace,
   layoutVariant,
+  cameraMove,
+  revealDelay,
+  revealStagger,
+  typoEffect,
+  borderStyle,
+  shadowStyle,
+  decoShape,
   showCampaign,
   showSquad,
   showPeople,
@@ -147,6 +203,13 @@ export function ProjectScene({
   showCode: boolean
   pace: number
   layoutVariant: number
+  cameraMove: string
+  revealDelay: number
+  revealStagger: number
+  typoEffect: string
+  borderStyle: string
+  shadowStyle: string
+  decoShape: string
   showCampaign: boolean
   showSquad: boolean
   showPeople: boolean
@@ -164,6 +227,9 @@ export function ProjectScene({
     total,
     showCode,
     pace,
+    revealDelay,
+    revealStagger,
+    typoEffect,
     showCampaign,
     showSquad,
     showPeople,
@@ -174,15 +240,19 @@ export function ProjectScene({
     showAssetBreakdown,
   }
 
+  const baseName = revealDelay + 100
+  const baseChips = baseName + 450
+  const cardDecorations = getCardStyle(borderStyle, shadowStyle)
+
   // ── No images (Typographic layout variants) ───────────────────
   if (images.length === 0) {
     const isEditorialSplit = layoutVariant % 2 === 1
     if (isEditorialSplit) {
       return (
-        <div className="sc-body sc-project-split-banner">
-          <div className="sc-split-banner-left sc-a-pop" style={dly(100)}>
+        <div className={`sc-body sc-project-split-banner sc-camera-${cameraMove}`}>
+          <div className="sc-split-banner-left sc-a-pop" style={dly(revealDelay)}>
             <div className="sc-banner-inner">
-              <span className="sc-banner-massive-text sc-a-rise" style={dly(200)}>
+              <span className="sc-banner-massive-text sc-a-rise" style={dly(revealDelay + 150)}>
                 {project.size}
               </span>
               <span className="sc-banner-subtitle">PROJECT {String(index + 1).padStart(2, '0')}</span>
@@ -196,7 +266,7 @@ export function ProjectScene({
     }
 
     return (
-      <div className="sc-body sc-project-typo">
+      <div className={`sc-body sc-project-typo sc-camera-${cameraMove}`}>
         <span className="sc-watermark" aria-hidden>
           {showCode && project.code ? project.code : project.campaign}
         </span>
@@ -212,15 +282,16 @@ export function ProjectScene({
       // Editorial layout: details left, tilted floating card right
       const spec = collage[0] || { rot: 3, dx: 0, dy: 0, bobDelay: 0 }
       return (
-        <div className="sc-body sc-project-split sc-floating-layout">
+        <div className={`sc-body sc-project-split sc-floating-layout sc-camera-${cameraMove}`}>
           <div className="sc-project-left">
             <ProjectContent {...contentProps} />
           </div>
-          <div className="sc-floating-card-wrap">
+          <div className="sc-floating-card-wrap relative">
+            <RenderDecoShape shape={decoShape} />
             <div
-              className="sc-single-floating-card sc-a-pop"
+              className={`sc-single-floating-card sc-a-pop ${cardDecorations}`}
               style={{
-                ...dly(120),
+                ...dly(baseChips + 100),
                 ...cssVars({
                   '--rot': `${spec.rot || 3}deg`,
                   '--dx': `0%`,
@@ -239,9 +310,12 @@ export function ProjectScene({
     if (oneImageVar === 2) {
       // Editorial layout: wide vertical image card left, details right
       return (
-        <div className="sc-body sc-project-split sc-asymmetric-layout">
-          <div className="sc-vertical-banner-wrap sc-a-pop" style={dly(200)}>
-            <img src={images[0].url} alt="" className="sc-vertical-banner-img" />
+        <div className={`sc-body sc-project-split sc-asymmetric-layout sc-camera-${cameraMove}`}>
+          <div className="sc-vertical-banner-wrap relative">
+            <RenderDecoShape shape={decoShape} />
+            <div className={`sc-vertical-banner-img-container sc-a-pop ${cardDecorations}`} style={dly(revealDelay + 50)}>
+              <img src={images[0].url} alt="" className="sc-vertical-banner-img" />
+            </div>
           </div>
           <div className="sc-project-right">
             <ProjectContent {...contentProps} />
@@ -252,7 +326,7 @@ export function ProjectScene({
 
     // Default 1-image variant: Full-bleed Ken Burns background
     return (
-      <div className="sc-body">
+      <div className={`sc-body sc-camera-${cameraMove}`}>
         <div className="sc-kb-wrap">
           <img src={images[0].url} alt="" className={`sc-kb sc-kb-${kb}`} />
         </div>
@@ -269,16 +343,17 @@ export function ProjectScene({
   if (multiImageVar === 1) {
     // Layout 1: Grid Collage
     return (
-      <div className="sc-body sc-project-split sc-grid-layout">
+      <div className={`sc-body sc-project-split sc-grid-layout sc-camera-${cameraMove}`}>
         <div className="sc-project-left">
           <ProjectContent {...contentProps} />
         </div>
-        <div className="sc-collage-grid">
+        <div className="sc-collage-grid relative">
+          <RenderDecoShape shape={decoShape} />
           {images.slice(0, 4).map((im, i) => (
             <div
               key={im.url + i}
-              className={`sc-grid-card sc-grid-card-${i + 1} sc-a-pop`}
-              style={dly(i * 150)}
+              className={`sc-grid-card sc-grid-card-${i + 1} sc-a-pop ${cardDecorations}`}
+              style={dly(baseChips + i * revealStagger * 1.5)}
             >
               <img src={im.url} alt="" />
             </div>
@@ -297,21 +372,22 @@ export function ProjectScene({
       { rot: 25, x: 15, y: 10 },
     ]
     return (
-      <div className="sc-body sc-project-split sc-arch-layout">
+      <div className={`sc-body sc-project-split sc-arch-layout sc-camera-${cameraMove}`}>
         <div className="sc-project-left">
           <ProjectContent {...contentProps} />
         </div>
-        <div className="sc-fan-arch">
+        <div className="sc-fan-arch relative">
           <div className="sc-arch-glow sc-a-bloom" />
+          <RenderDecoShape shape={decoShape} />
           {images.slice(0, 4).map((im, i) => {
             const pos = archPositions[i] || archPositions[archPositions.length - 1]
             const spec = collage[i] || { bobDelay: 0 }
             return (
               <div
                 key={im.url + i}
-                className="sc-arch-card sc-a-pop"
+                className={`sc-arch-card sc-a-pop ${cardDecorations}`}
                 style={{
-                  ...dly(i * 120),
+                  ...dly(baseChips + i * revealStagger),
                   ...cssVars({
                     '--rot': `${pos.rot}deg`,
                     '--dx': `${pos.x}em`,
@@ -332,19 +408,20 @@ export function ProjectScene({
 
   // Default 2+ images layout: Left content, right floating collage stack
   return (
-    <div className="sc-body sc-project-split">
+    <div className={`sc-body sc-project-split sc-camera-${cameraMove}`}>
       <div className="sc-project-left">
         <ProjectContent {...contentProps} />
       </div>
-      <div className="sc-collage">
+      <div className="sc-collage relative">
+        <RenderDecoShape shape={decoShape} />
         {images.slice(0, 4).map((im, i) => {
           const spec = collage[i]
           return (
             <div
               key={im.url + i}
-              className="sc-collage-card sc-a-pop"
+              className={`sc-collage-card sc-a-pop ${cardDecorations}`}
               style={{
-                ...dly(i * 120),
+                ...dly(baseChips + i * revealStagger),
                 ...cssVars({
                   '--rot': `${spec.rot}deg`,
                   '--dx': `${spec.dx}%`,
