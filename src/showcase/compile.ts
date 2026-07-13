@@ -65,6 +65,7 @@ export function compileScenes(config: ShowcaseConfig): CompiledShowcase {
         // Draw variance for EVERY project regardless of image count so the
         // sequence stays deterministic even if showImages is toggled.
         const kb = pick(rng, ['a', 'b', 'c', 'd'] as KenBurnsVariant[])
+        const layoutVariant = pick(rng, [0, 1, 2])
         const collage: CollageSpec[] = Array.from({ length: 4 }, (_, i) => ({
           rot: jitter(rng, 6.5),
           dx: jitter(rng, 3.5),
@@ -80,6 +81,15 @@ export function compileScenes(config: ShowcaseConfig): CompiledShowcase {
           collage,
           showCode: config.style.showCodes,
           showImages: config.style.showImages,
+          layoutVariant,
+          showCampaign: config.style.showCampaign ?? true,
+          showSquad: config.style.showSquad ?? true,
+          showPeople: config.style.showPeople ?? true,
+          showSize: config.style.showSize ?? true,
+          showDates: config.style.showDates ?? true,
+          showNote: config.style.showNote ?? true,
+          showAssetTotal: config.style.showAssetTotal ?? true,
+          showAssetBreakdown: config.style.showAssetBreakdown ?? true,
         })
       })
       continue

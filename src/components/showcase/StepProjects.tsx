@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { Check, ChevronDown, ChevronUp, Dices, Images, Shuffle, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Check, GripVertical, Images, Shuffle, X } from 'lucide-react'
 import type { Size, Task } from '../../types'
 import { filterBySpan } from '../../lib/span'
 import { SIZES, SIZE_TONE } from '../../constants'
@@ -25,6 +25,9 @@ export function StepProjects({
   const byId = useMemo(() => new Map(yearTasks.map((t) => [t.id, t])), [yearTasks])
   const selected = new Set(draft.selectedIds)
 
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+
   // Picker shows tasks matching the size filter, plus anything already selected
   // (so a selected task never disappears from view when the filter changes).
   const visible = yearTasks.filter((t) => draft.sizeFilter.includes(t.size) || selected.has(t.id))
@@ -49,12 +52,40 @@ export function StepProjects({
       selectedIds: selected.has(id) ? draft.selectedIds.filter((x) => x !== id) : [...draft.selectedIds, id],
     })
 
-  const move = (index: number, dir: -1 | 1) => {
-    const next = [...draft.selectedIds]
-    const j = index + dir
-    if (j < 0 || j >= next.length) return
-    ;[next[index], next[j]] = [next[j], next[index]]
-    patch({ selectedIds: next })
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index)
+  }
+
+  const handleDragEnter = (index: number) => {
+    if (draggedIndex !== null) {
+      setDragOverIndex(index)
+    }
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDrop = (index: number) => {
+    if (draggedIndex === null) return
+    if (draggedIndex !== index) {
+      const next = [...draft.selectedIds]
+      const [moved] = next.splice(draggedIndex, 1)
+      next.splice(index, 0, moved)
+      patch({ selectedIds: next })
+    }
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const toggleStyleFlag = (key: keyof ShowcaseDraft['style'], val: boolean) => {
+    patch({
+      style: {
+        ...draft.style,
+        [key]: val,
+      },
+    })
   }
 
   // What actually plays: the manual order, or the seeded shuffle preview.
@@ -147,7 +178,7 @@ export function StepProjects({
                   className="inline-flex items-center gap-1 text-xs font-medium text-rmit-red hover:underline"
                   title="Shuffle again with a new seed"
                 >
-                  <Dices className="h-3.5 w-3.5" /> Re-roll
+                  <Shuffle className="h-3.5 w-3.5" /> Re-roll
                 </button>
               )}
               <span className="text-xs text-muted">Randomize</span>
@@ -163,31 +194,41 @@ export function StepProjects({
               const t = byId.get(id)
               if (!t) return null
               const manualIndex = draft.selectedIds.indexOf(id)
+
+              let transform = 'none'
+              if (draggedIndex !== null && dragOverIndex !== null && manualIndex !== draggedIndex) {
+                if (manualIndex > draggedIndex && manualIndex <= dragOverIndex) {
+                  transform = 'translateY(-2.5rem)'
+                } else if (manualIndex < draggedIndex && manualIndex >= dragOverIndex) {
+                  transform = 'translateY(2.5rem)'
+                }
+              }
+
               return (
-                <li key={id} className="flex items-center gap-2 px-3 py-2">
+                <li
+                  key={id}
+                  draggable={!draft.randomizeOrder}
+                  onDragStart={() => !draft.randomizeOrder && handleDragStart(manualIndex)}
+                  onDragEnter={() => !draft.randomizeOrder && handleDragEnter(manualIndex)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDragEnd={handleDragEnd}
+                  onDrop={() => !draft.randomizeOrder && handleDrop(manualIndex)}
+                  style={{
+                    transform,
+                    transition: draggedIndex !== null ? 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
+                  }}
+                  className={cx(
+                    'flex items-center gap-2 px-3 py-2 transition-colors',
+                    draggedIndex === manualIndex ? 'bg-subtle/50 opacity-40' : '',
+                    !draft.randomizeOrder && 'hover:bg-subtle/30',
+                  )}
+                >
                   <span className="w-6 shrink-0 text-right text-xs tabular-nums text-faint">{i + 1}</span>
                   {draft.randomizeOrder ? (
                     <Shuffle className="h-3.5 w-3.5 shrink-0 text-faint" />
                   ) : (
-                    <span className="flex shrink-0 flex-col">
-                      <button
-                        type="button"
-                        onClick={() => move(manualIndex, -1)}
-                        disabled={manualIndex === 0}
-                        className="text-faint transition hover:text-ink disabled:opacity-30"
-                        title="Move up"
-                      >
-                        <ChevronUp className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => move(manualIndex, 1)}
-                        disabled={manualIndex === draft.selectedIds.length - 1}
-                        className="text-faint transition hover:text-ink disabled:opacity-30"
-                        title="Move down"
-                      >
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      </button>
+                    <span className="cursor-grab active:cursor-grabbing text-faint hover:text-ink shrink-0 p-1" title="Drag handle to reorder">
+                      <GripVertical className="h-4 w-4" />
                     </span>
                   )}
                   <span className="min-w-0 flex-1 truncate text-sm text-ink">{t.name}</span>
@@ -195,7 +236,7 @@ export function StepProjects({
                   <button
                     type="button"
                     onClick={() => toggleTask(id)}
-                    className="text-faint transition hover:text-rmit-red"
+                    className="text-faint transition hover:text-rmit-red p-1"
                     title="Remove from showcase"
                   >
                     <X className="h-4 w-4" />
@@ -216,6 +257,86 @@ export function StepProjects({
           {Math.round((draft.selectedIds.length * 6.6) / 60)} min just for projects). Consider trimming.
         </StepHint>
       )}
+
+      {/* Project slide data display toggles */}
+      <div className="border-t border-line pt-4">
+        <label className="label mb-1">Project Slide Data Visibility</label>
+        <StepHint>Pick which information fields are rendered on each project slide.</StepHint>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-subtle px-3 py-2">
+            <span className="text-xs font-medium text-ink">Booking Codes</span>
+            <Switch
+              checked={draft.style.showCodes}
+              onChange={(v) => toggleStyleFlag('showCodes', v)}
+              label="Booking Codes"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-subtle px-3 py-2">
+            <span className="text-xs font-medium text-ink">Campaign Name</span>
+            <Switch
+              checked={draft.style.showCampaign ?? true}
+              onChange={(v) => toggleStyleFlag('showCampaign', v)}
+              label="Campaign Name"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-subtle px-3 py-2">
+            <span className="text-xs font-medium text-ink">Requesting Squad</span>
+            <Switch
+              checked={draft.style.showSquad ?? true}
+              onChange={(v) => toggleStyleFlag('showSquad', v)}
+              label="Requesting Squad"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-subtle px-3 py-2">
+            <span className="text-xs font-medium text-ink">Assignees / People</span>
+            <Switch
+              checked={draft.style.showPeople ?? true}
+              onChange={(v) => toggleStyleFlag('showPeople', v)}
+              label="Assignees / People"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-subtle px-3 py-2">
+            <span className="text-xs font-medium text-ink">T-Shirt Size</span>
+            <Switch
+              checked={draft.style.showSize ?? true}
+              onChange={(v) => toggleStyleFlag('showSize', v)}
+              label="T-Shirt Size"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-subtle px-3 py-2">
+            <span className="text-xs font-medium text-ink">Dates / Timeline</span>
+            <Switch
+              checked={draft.style.showDates ?? true}
+              onChange={(v) => toggleStyleFlag('showDates', v)}
+              label="Dates / Timeline"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-subtle px-3 py-2">
+            <span className="text-xs font-medium text-ink">Project Note</span>
+            <Switch
+              checked={draft.style.showNote ?? true}
+              onChange={(v) => toggleStyleFlag('showNote', v)}
+              label="Project Note"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-subtle px-3 py-2">
+            <span className="text-xs font-medium text-ink">Asset Total</span>
+            <Switch
+              checked={draft.style.showAssetTotal ?? true}
+              onChange={(v) => toggleStyleFlag('showAssetTotal', v)}
+              label="Asset Total"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-subtle px-3 py-2">
+            <span className="text-xs font-medium text-ink">Asset Breakdown</span>
+            <Switch
+              checked={draft.style.showAssetBreakdown ?? true}
+              onChange={(v) => toggleStyleFlag('showAssetBreakdown', v)}
+              label="Asset Breakdown"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

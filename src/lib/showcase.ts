@@ -29,9 +29,28 @@ export const SHOWCASE_CONFIG_VERSION = 1
 
 export type CanvasPreset = '1920x1080' | '1080x1080'
 export type PacingPreset = 'relaxed' | 'normal' | 'fast'
-export type ShowcaseThemeId = 'red' | 'navy' | 'white'
+export type ShowcaseThemeId = 'brand'
 export type BackgroundStyle = 'solid' | 'gradient' | 'geometric'
 export type SectionId = 'intro' | 'projects' | 'globalStats' | 'top3'
+export type ColorMode = 'red' | 'navy' | 'gradient' | 'light'
+
+export interface ShowcaseStyle {
+  background: BackgroundStyle
+  colorMode: ColorMode
+  grain: boolean
+  showCodes: boolean
+  showImages: boolean
+  movingGradients: boolean
+  // Project data visibility:
+  showCampaign: boolean
+  showSquad: boolean
+  showPeople: boolean
+  showSize: boolean
+  showDates: boolean
+  showNote: boolean
+  showAssetTotal: boolean
+  showAssetBreakdown: boolean
+}
 
 export type GlobalStatId =
   | 'totalAssets'
@@ -527,8 +546,23 @@ export function defaultDraft(tasks: Task[], settings: AppSettings): ShowcaseDraf
     statIds: ['totalAssets', 'totalTasks', 'biggestStakeholder', 'busiestMonth', 'assetTypeMix', 'tasksBySize'],
     top3Ids: ['biggestProjects', 'longestProjects', 'topStakeholders'],
     sectionOrder: ['intro', 'projects', 'globalStats', 'top3'],
-    theme: 'red',
-    style: { background: 'gradient', grain: true, showCodes: true, showImages: true },
+    theme: 'brand',
+    style: {
+      background: 'gradient',
+      colorMode: 'red',
+      grain: true,
+      showCodes: true,
+      showImages: true,
+      movingGradients: true,
+      showCampaign: true,
+      showSquad: true,
+      showPeople: true,
+      showSize: true,
+      showDates: true,
+      showNote: true,
+      showAssetTotal: true,
+      showAssetBreakdown: true,
+    },
     expiry: '90d',
   }
 }

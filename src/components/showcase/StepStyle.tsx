@@ -1,11 +1,10 @@
 import { cx } from '../../lib/format'
-import type { ShowcaseDraft, ShowcaseThemeId } from '../../lib/showcase'
+import type { ShowcaseDraft, ColorMode } from '../../lib/showcase'
 import { Switch } from '../ui/Switch'
 import { Segmented, StepHint } from './wizardBits'
 
-/** Mini title-slide mock rendered in each theme's derived palette. */
-const THEME_SWATCHES: {
-  id: ShowcaseThemeId
+const COLOR_MODE_SWATCHES: {
+  id: ColorMode
   label: string
   hint: string
   bg: string
@@ -15,29 +14,38 @@ const THEME_SWATCHES: {
 }[] = [
   {
     id: 'red',
-    label: 'RMIT Red',
-    hint: 'Cinematic dark maroon with red + gold light',
-    bg: '#160309',
-    ink: '#fff6f6',
-    accent: '#E61E2A',
-    accent2: '#FFB81C',
+    label: 'Red Dominant',
+    hint: 'RMIT brand red theme with white ink',
+    bg: '#e61e2a',
+    ink: '#ffffff',
+    accent: '#000054',
+    accent2: '#ffb81c',
   },
   {
     id: 'navy',
-    label: 'RMIT Navy',
-    hint: 'Deep navy night with red + gold accents',
-    bg: '#030318',
-    ink: '#eef0ff',
-    accent: '#FF4D58',
-    accent2: '#FFB81C',
+    label: 'Navy Dominant',
+    hint: 'RMIT brand navy theme with white ink',
+    bg: '#000054',
+    ink: '#ffffff',
+    accent: '#e61e2a',
+    accent2: '#ffb81c',
   },
   {
-    id: 'white',
-    label: 'Gallery White',
-    hint: 'Light gallery with navy ink + red accents',
-    bg: '#f7f7fb',
+    id: 'gradient',
+    label: 'Moving Gradient',
+    hint: 'Subtle animated gradient between brand red and navy',
+    bg: 'linear-gradient(135deg, #e61e2a, #000054)',
+    ink: '#ffffff',
+    accent: '#ffb81c',
+    accent2: '#ffffff',
+  },
+  {
+    id: 'light',
+    label: 'White Gallery',
+    hint: 'Clean white background with navy ink and red accents',
+    bg: '#ffffff',
     ink: '#000054',
-    accent: '#E61E2A',
+    accent: '#e61e2a',
     accent2: '#000054',
   },
 ]
@@ -49,30 +57,43 @@ export function StepStyle({
   draft: ShowcaseDraft
   patch: (p: Partial<ShowcaseDraft>) => void
 }) {
-  const hasImages = true // toggling is harmless even without images
+  const hasImages = true
+
+  const toggleStyleFlag = <K extends keyof ShowcaseDraft['style']>(
+    key: K,
+    val: ShowcaseDraft['style'][K]
+  ) => {
+    patch({
+      style: {
+        ...draft.style,
+        [key]: val,
+      },
+    })
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
-        <label className="label">Main theme</label>
-        <StepHint>The remaining brand colours are derived automatically.</StepHint>
-        <div className="mt-2 grid gap-3 sm:grid-cols-3">
-          {THEME_SWATCHES.map((t) => (
+        <label className="label">RMIT Brand Theme — Color Mode</label>
+        <StepHint>Select how the RMIT brand colors are configured for the showreel.</StepHint>
+        <div className="mt-2 grid gap-3 sm:grid-cols-4">
+          {COLOR_MODE_SWATCHES.map((t) => (
             <button
               key={t.id}
               type="button"
-              onClick={() => patch({ theme: t.id })}
-              aria-pressed={draft.theme === t.id}
+              onClick={() => toggleStyleFlag('colorMode', t.id)}
+              aria-pressed={draft.style.colorMode === t.id}
               className={cx(
                 'overflow-hidden rounded-xl border text-left transition',
-                draft.theme === t.id
+                draft.style.colorMode === t.id
                   ? 'border-rmit-red ring-2 ring-brand-100 dark:ring-brand-500/25'
                   : 'border-line hover:border-navy-300',
               )}
             >
               {/* Mini slide mock */}
-              <div className="flex h-28 flex-col justify-center gap-1.5 px-4" style={{ background: t.bg }}>
+              <div className="flex h-24 flex-col justify-center gap-1 px-4" style={{ background: t.bg }}>
                 <span
-                  className="font-display text-2xl font-bold leading-none"
+                  className="font-display text-xl font-bold leading-none"
                   style={{
                     background: `linear-gradient(90deg, ${t.ink}, ${t.accent})`,
                     WebkitBackgroundClip: 'text',
@@ -82,14 +103,14 @@ export function StepStyle({
                 >
                   {draft.year}
                 </span>
-                <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: t.ink }}>
+                <span className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: t.ink }}>
                   {draft.teamName || 'GCMC'}
                 </span>
-                <span className="h-1 w-10 rounded-full" style={{ background: t.accent2 }} />
+                <span className="h-0.5 w-8 rounded-full" style={{ background: t.accent2 }} />
               </div>
-              <div className="px-4 py-2.5">
-                <p className="text-sm font-semibold text-ink">{t.label}</p>
-                <p className="text-xs text-muted">{t.hint}</p>
+              <div className="px-3 py-2">
+                <p className="text-xs font-semibold text-ink leading-tight">{t.label}</p>
+                <p className="mt-0.5 text-[10px] text-muted leading-tight">{t.hint}</p>
               </div>
             </button>
           ))}
@@ -97,17 +118,17 @@ export function StepStyle({
       </div>
 
       <div>
-        <label className="label">Background</label>
+        <label className="label">Background Shapes / Style</label>
         <Segmented
           options={[
             { id: 'solid', label: 'Solid' },
-            { id: 'gradient', label: 'Aurora gradient' },
-            { id: 'geometric', label: 'Geometric' },
+            { id: 'gradient', label: 'Aurora blobs' },
+            { id: 'geometric', label: 'Geometric shapes' },
           ]}
           value={draft.style.background}
-          onChange={(background) => patch({ style: { ...draft.style, background } })}
+          onChange={(background) => toggleStyleFlag('background', background)}
         />
-        <StepHint>Aurora = slow drifting colour blobs; Geometric = subtle rotating brand shapes.</StepHint>
+        <StepHint>Aurora blobs and geometric shapes rotate slowly in the background.</StepHint>
       </div>
 
       <div className="space-y-2">
@@ -118,19 +139,19 @@ export function StepStyle({
           </div>
           <Switch
             checked={draft.style.grain}
-            onChange={(grain) => patch({ style: { ...draft.style, grain } })}
+            onChange={(grain) => toggleStyleFlag('grain', grain)}
             label="Film grain"
           />
         </div>
         <div className="flex items-center justify-between gap-4 rounded-xl bg-subtle px-4 py-3">
           <div>
-            <p className="text-sm font-medium text-ink">Show task codes</p>
-            <p className="text-xs text-muted">Display booking codes (e.g. 26.0608.A) on project slides.</p>
+            <p className="text-sm font-medium text-ink">Moving gradients</p>
+            <p className="text-xs text-muted">Use subtle, elegant moving background gradient transitions (on Gradient color mode).</p>
           </div>
           <Switch
-            checked={draft.style.showCodes}
-            onChange={(showCodes) => patch({ style: { ...draft.style, showCodes } })}
-            label="Show task codes"
+            checked={draft.style.movingGradients ?? true}
+            onChange={(movingGradients) => toggleStyleFlag('movingGradients', movingGradients)}
+            label="Moving gradients"
           />
         </div>
         {hasImages && (
@@ -141,7 +162,7 @@ export function StepStyle({
             </div>
             <Switch
               checked={draft.style.showImages}
-              onChange={(showImages) => patch({ style: { ...draft.style, showImages } })}
+              onChange={(showImages) => toggleStyleFlag('showImages', showImages)}
               label="Show demo images"
             />
           </div>

@@ -808,6 +808,215 @@
   to { transform: translate3d(8%, -7%, 0) scale(1.18); }
 }
 
+/* ── Moving Gradient Backdrop ────────────────────────────────── */
+.sc-moving-gradient-bg {
+  background: linear-gradient(-45deg, #e61e2a, #000054, #800f15, #00002b) !important;
+  background-size: 400% 400% !important;
+  animation: sc-moving-gradient calc(var(--pace) * 15s) ease infinite !important;
+}
+@keyframes sc-moving-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ── Split Banner Layout (No Images) ─────────────────────────── */
+.sc-project-split-banner {
+  display: grid;
+  grid-template-columns: 46% 54%;
+  align-items: center;
+  gap: 3.5em;
+  width: 100%;
+}
+.sc-split-banner-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 28em;
+  background: var(--sc-bg2);
+  border-radius: 1.5em;
+  box-shadow: 0 1.5em 3.5em rgba(0, 0, 0, 0.35);
+  border: 0.1em solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+.sc-banner-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6em;
+}
+.sc-banner-massive-text {
+  font-family: Museo, Inter, sans-serif;
+  font-weight: 800;
+  font-size: 9.5em;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--sc-ink), var(--sc-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+.sc-banner-subtitle {
+  font-size: 1.3em;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  color: var(--sc-muted);
+  text-transform: uppercase;
+}
+.sc-split-banner-right {
+  display: flex;
+  align-items: center;
+}
+
+/* ── Floating Single Image Card Layout ───────────────────────── */
+.sc-floating-layout {
+  display: grid;
+  grid-template-columns: 48% 52%;
+  align-items: center;
+  gap: 3em;
+}
+.sc-floating-card-wrap {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+.sc-single-floating-card {
+  position: relative;
+  width: 32em;
+  aspect-ratio: 4 / 3;
+  border-radius: 1.5em;
+  overflow: hidden;
+  box-shadow: 0 2em 4.5em rgba(0, 0, 0, 0.45);
+  border: 0.15em solid rgba(255, 255, 255, 0.12);
+  transform: rotate(var(--rot, 3deg)) translate(var(--dx, 0), var(--dy, 0));
+  animation:
+    sc-pop calc(var(--pace) * 450ms) var(--sc-ease-spring) calc(var(--pace) * var(--d, 0ms)) both,
+    sc-bob 8s ease-in-out var(--bob-delay, 0ms) infinite alternate;
+}
+.sc-single-floating-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Asymmetric/Flipped Vertical Banner Layout ───────────────── */
+.sc-asymmetric-layout {
+  display: grid;
+  grid-template-columns: 52% 48%;
+  align-items: center;
+  gap: 3.5em;
+}
+.sc-vertical-banner-wrap {
+  position: relative;
+  height: 38em;
+  border-radius: 1.5em;
+  overflow: hidden;
+  box-shadow: 0 1.8em 4em rgba(0, 0, 0, 0.4);
+  border: 0.15em solid rgba(255, 255, 255, 0.08);
+}
+.sc-vertical-banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sc-project-right {
+  display: flex;
+  align-items: center;
+}
+
+/* ── Grid Collage Layout ─────────────────────────────────────── */
+.sc-grid-layout {
+  display: grid;
+  grid-template-columns: 44% 56%;
+  align-items: center;
+  gap: 3em;
+}
+.sc-collage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5em;
+  width: 100%;
+}
+.sc-grid-card {
+  position: relative;
+  border-radius: 1.2em;
+  overflow: hidden;
+  box-shadow: 0 1.2em 3em rgba(0, 0, 0, 0.35);
+  border: 0.12em solid rgba(255, 255, 255, 0.08);
+  height: 14.5em;
+}
+.sc-grid-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sc-grid-card-1 { transform: rotate(-2.5deg); }
+.sc-grid-card-2 { transform: rotate(2deg); margin-top: 1.5em; }
+.sc-grid-card-3 { transform: rotate(1.5deg); margin-top: -1.5em; }
+.sc-grid-card-4 { transform: rotate(-1.5deg); }
+
+/* ── Arched Fan Layout ───────────────────────────────────────── */
+.sc-arch-layout {
+  display: grid;
+  grid-template-columns: 44% 56%;
+  align-items: center;
+  gap: 3em;
+}
+.sc-fan-arch {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.sc-arch-glow {
+  position: absolute;
+  width: 25em;
+  height: 25em;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--sc-glow), transparent 70%);
+  opacity: 0.65;
+}
+.sc-arch-card {
+  position: absolute;
+  width: 18em;
+  aspect-ratio: 3 / 4;
+  border-radius: 0.8em;
+  overflow: hidden;
+  box-shadow: 0 1.5em 3.5em rgba(0, 0, 0, 0.45);
+  border: 0.15em solid rgba(255, 255, 255, 0.1);
+  transform: translate(var(--dx, 0), var(--dy, 0)) rotate(var(--rot, 0deg));
+  transform-origin: center bottom;
+  animation:
+    sc-pop calc(var(--pace) * 450ms) var(--sc-ease-spring) calc(var(--pace) * var(--d, 0ms)) both,
+    sc-bob 8s ease-in-out var(--bob-delay, 0ms) infinite alternate;
+}
+.sc-arch-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Project note ────────────────────────────────────────────── */
+.sc-project-note {
+  font-style: italic;
+  color: var(--sc-muted);
+  font-size: 1.2em;
+  line-height: 1.45;
+  max-width: 100%;
+  margin-top: 0.6em;
+  border-left: 0.22em solid var(--sc-accent);
+  padding-left: 0.7em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* ── Reduced motion: calm crossfade variant ──────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -822,12 +1031,18 @@
   .sc-kb,
   .sc-blob,
   .sc-collage-card,
-  .sc-bloom {
+  .sc-single-floating-card,
+  .sc-arch-card,
+  .sc-bloom,
+  .sc-moving-gradient-bg {
     animation: none !important;
     opacity: 1;
   }
   .sc-blob {
     opacity: 0.4;
+  }
+  .sc-moving-gradient-bg {
+    background: #000054 !important; /* solid navy */
   }
   /* Bars fade in place instead of growing. */
   .sc-a-barx,

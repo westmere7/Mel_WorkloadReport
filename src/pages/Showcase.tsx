@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, RotateCcw } from 'lucide-react'
+import { ArrowLeft, ArrowRight, RotateCcw, Smartphone } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { useStore } from '../data/store'
 import {
@@ -27,6 +27,16 @@ function initialDraft(tasksIds: Set<string>, fallback: () => ShowcaseDraft): Sho
 
 export function ShowcasePage() {
   const { tasks, settings } = useStore()
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent))
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   const [draft, setDraft] = useState<ShowcaseDraft>(() =>
     initialDraft(new Set(tasks.map((t) => t.id)), () => defaultDraft(tasks, settings)),
@@ -86,6 +96,18 @@ export function ShowcasePage() {
     <StepStyle key="style" draft={draft} patch={patch} />,
     <StepGenerate key="generate" draft={draft} patch={patch} onJump={jump} onGenerated={clearDraft} />,
   ]
+
+  if (isMobile) {
+    return (
+      <Card className="flex flex-col items-center justify-center text-center p-8 space-y-3">
+        <Smartphone className="h-10 w-10 text-rmit-red" />
+        <h3 className="text-lg font-bold text-ink">Showcase Builder Disabled</h3>
+        <p className="text-sm text-muted max-w-md">
+          Creating and editing showcases is optimized for desktop displays. Please open this page on a desktop screen to build or customize a showreel.
+        </p>
+      </Card>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">

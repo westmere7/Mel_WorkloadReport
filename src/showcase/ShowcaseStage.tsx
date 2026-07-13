@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { BackgroundStyle, CanvasPreset, ShowcaseThemeId } from '../lib/showcase'
+import type { CanvasPreset, ShowcaseStyle } from '../lib/showcase'
 import { CANVAS, showcaseTheme } from './theme'
 import { cssVars } from './bits/anim'
 import type { StageDecor } from './types'
@@ -12,18 +12,14 @@ import type { StageDecor } from './types'
  */
 export function ShowcaseStage({
   canvas,
-  theme,
-  background,
-  grain,
+  style,
   decor,
   pace,
   paused,
   children,
 }: {
   canvas: CanvasPreset
-  theme: ShowcaseThemeId
-  background: BackgroundStyle
-  grain: boolean
+  style: ShowcaseStyle
   decor: StageDecor
   pace: number
   paused: boolean
@@ -39,35 +35,37 @@ export function ShowcaseStage({
     return () => window.removeEventListener('resize', fit)
   }, [w, h])
 
+  const isMovingGradient = style.colorMode === 'gradient' && style.movingGradients
+
   return (
     <div className="sc-viewport">
       <div
-        className="sc-stage"
+        className={`sc-stage ${isMovingGradient ? 'sc-moving-gradient-bg' : ''}`}
         data-paused={paused || undefined}
         style={{
           width: w,
           height: h,
           fontSize: `${w / 100}px`,
           transform: `scale(${scale})`,
-          ...showcaseTheme(theme),
+          ...showcaseTheme(style.colorMode, style.background),
           ...cssVars({ '--pace': pace }),
         }}
       >
-        {background === 'gradient' && (
+        {style.background === 'gradient' && !isMovingGradient && (
           <div className="sc-aurora" aria-hidden>
             <span className="sc-blob sc-blob-1" style={{ animationDelay: `${decor.blobDelays[0]}s` }} />
             <span className="sc-blob sc-blob-2" style={{ animationDelay: `${decor.blobDelays[1]}s` }} />
             <span className="sc-blob sc-blob-3" style={{ animationDelay: `${decor.blobDelays[2]}s` }} />
           </div>
         )}
-        {background === 'geometric' && (
+        {style.background === 'geometric' && (
           <div className="sc-geo" aria-hidden>
             <span className="sc-geo-ring" style={{ transform: `rotate(${decor.ringOffset}deg)` }} />
             <span className="sc-geo-circle" />
           </div>
         )}
         {children}
-        {grain && <div className="sc-grain" aria-hidden />}
+        {style.grain && <div className="sc-grain" aria-hidden />}
       </div>
     </div>
   )

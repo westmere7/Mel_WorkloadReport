@@ -30,6 +30,7 @@ import {
   isExpired,
   type ShowcaseDraft,
   type ShowcaseMeta,
+  type ShowcaseRecord,
 } from '../lib/showcase'
 
 interface StoreValue {
@@ -82,6 +83,7 @@ interface StoreValue {
   /** Freeze the draft against current data and persist it; returns the meta (link id). */
   generateShowcase: (draft: ShowcaseDraft) => Promise<ShowcaseMeta>
   deleteShowcase: (id: string) => Promise<void>
+  getShowcase: (id: string) => Promise<ShowcaseRecord | null>
   /** True while a live (realtime/cross-tab) subscription is active. */
   live: boolean
 }
@@ -334,6 +336,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [repo],
   )
 
+  const getShowcase = useCallback(
+    async (id: string) => {
+      return repo.getShowcase(id)
+    },
+    [repo],
+  )
+
   const renameListItem = useCallback(
     async (key: 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes', oldValue: string, newValue: string) => {
       const trimmed = newValue.trim()
@@ -413,6 +422,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refreshShowcases,
       generateShowcase,
       deleteShowcase,
+      getShowcase,
       live,
     }),
     [
@@ -444,6 +454,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refreshShowcases,
       generateShowcase,
       deleteShowcase,
+      getShowcase,
     ],
   )
 

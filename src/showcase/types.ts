@@ -31,6 +31,15 @@ export type ScenePayload =
       collage: CollageSpec[]
       showCode: boolean
       showImages: boolean
+      layoutVariant: number
+      showCampaign: boolean
+      showSquad: boolean
+      showPeople: boolean
+      showSize: boolean
+      showDates: boolean
+      showNote: boolean
+      showAssetTotal: boolean
+      showAssetBreakdown: boolean
     }
   | { kind: 'statTrio'; stats: ShowcaseStat[] }
   | { kind: 'statDist'; stat: ShowcaseStat }

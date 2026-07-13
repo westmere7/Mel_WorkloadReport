@@ -34,6 +34,15 @@ function SceneContent({ payload, pace }: { payload: ScenePayload; pace: number }
           collage={payload.collage}
           showCode={payload.showCode}
           pace={pace}
+          layoutVariant={payload.layoutVariant}
+          showCampaign={payload.showCampaign}
+          showSquad={payload.showSquad}
+          showPeople={payload.showPeople}
+          showSize={payload.showSize}
+          showDates={payload.showDates}
+          showNote={payload.showNote}
+          showAssetTotal={payload.showAssetTotal}
+          showAssetBreakdown={payload.showAssetBreakdown}
         />
       )
     case 'statTrio':
@@ -99,9 +108,7 @@ export function ShowcasePlayerView({ config }: { config: ShowcaseConfig }) {
   return (
     <ShowcaseStage
       canvas={config.canvas}
-      theme={config.theme}
-      background={config.style.background}
-      grain={config.style.grain}
+      style={config.style}
       decor={decor}
       pace={pace}
       paused={player.paused}

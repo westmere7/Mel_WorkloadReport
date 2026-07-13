@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Clapperboard, Hourglass, Loader2 } from 'lucide-react'
+import { Clapperboard, Hourglass, Loader2, Smartphone } from 'lucide-react'
 import { createRepository } from '../data/store'
 import { isExpired, SHOWCASE_CONFIG_VERSION, type ShowcaseRecord } from '../lib/showcase'
 import { ShowcasePlayerView } from '../showcase/ShowcasePlayerView'
@@ -35,9 +35,20 @@ export function ShowcaseViewerPage() {
   // One repository instance for this page; no StoreProvider involved.
   const repo = useMemo(createRepository, [])
   const [state, setState] = useState<ViewerState>({ kind: 'loading' })
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent))
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
+    if (isMobile) return
     if (!id) {
       setState({ kind: 'notFound' })
       return
@@ -70,6 +81,16 @@ export function ShowcaseViewerPage() {
       document.body.style.overflow = prevOverflow
     }
   }, [state])
+
+  if (isMobile) {
+    return (
+      <Screen
+        icon={<Smartphone className="h-8 w-8 text-rmit-red" />}
+        title="Mobile Viewing Disabled"
+        sub="This showreel presentation is optimized for large, high-resolution desktop screens. Please open this link on a desktop computer to view the showcase."
+      />
+    )
+  }
 
   switch (state.kind) {
     case 'loading':
