@@ -842,7 +842,7 @@ function ListEditor({
           return (
             <li
               key={item}
-              className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2"
+              className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 bg-card/40 hover:bg-card/80 transition-all duration-200"
             >
               {isLocked ? (
                 <>
@@ -934,7 +934,7 @@ function ListEditor({
           )
         })}
         {fallback && (
-          <li className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-line px-3 py-2">
+          <li className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-line px-3 py-2 bg-card/20 hover:bg-card/40 transition-all duration-200">
             <span className="flex min-w-0 items-center gap-2 text-sm">
               <span className="h-2 w-2 shrink-0 rounded-full bg-faint" />
               <span className="truncate text-ink">{fallback}</span>
