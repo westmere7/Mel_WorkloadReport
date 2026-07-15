@@ -585,23 +585,46 @@ link `/showcase/<id>` playing a deterministic, pure-CSS animated presentation.
   size-filter chips select/deselect that size's tasks; reorder arrows disable when the
   **Randomize** switch is on (live `seededShuffle` preview; Re-roll mints a new seed); changing
   year resets the selection. `ui/Switch.tsx` was extracted for reuse (Settings still has its
-  local copy).
-- **Engine:** `src/showcase/` (viewer-only; `showcase.css` imported by `ShowcasePlayerView`).
-  `compileScenes(config)` bakes ALL variance (Ken Burns variant, collage tilts, wipe alternation,
-  blob phases) from `mulberry32(config.seed)` into payloads — no Math.random/Date.now in render.
-  `useShowcasePlayer` = single rAF over `performance.now()`, scenes overlap by `TRANSITION_MS`
-  (800ms; exit z-1 under enter z-2, ≤2 mounted), state updates only on phase change,
-  `visibilitychange` pauses (JS clock + `[data-paused] * {animation-play-state:paused}`), loop =
-  cycle-prefixed keys + clock wrap. **Pacing** `PACE {fast .85, normal 1, relaxed 1.25}` consumed
-  by JS boundaries AND CSS via `--pace` (`calc(var(--pace) * Xms)`); per-element staggers via the
-  `--d` custom prop (`bits/anim.ts dly()`). Stage is authored at true canvas px, root
-  `font-size = width/100` so all `em` sizes scale on both canvases, `transform: scale(fit)`.
-  Themes (`showcaseTheme`) are cinematic: red `#160309` / navy `#030318` rooms with brand-colour
-  light; white = gallery. **CSS gotcha:** `sc-pop` animates the independent `scale` channel and
-  `sc-bob` the independent `translate` channel so the collage cards' static
-  `transform: translate() rotate()` tilt survives concurrent animations. Reduced motion: a var
-  block zeroes `--sc-rise-y/--sc-pop-*/--sc-zoom-*` (everything degrades to crossfades), ambient
-  loops disabled, bars fade instead of growing.
+  local copy). **Desktop-only:** the Showcase route is filtered out of the mobile tab bar
+  (`MOBILE_HIDDEN` in `Sidebar.tsx` `MobileNav`), and both the wizard (`Showcase.tsx`) and the
+  public viewer render a "not on mobile" screen below 768px / on mobile UA.
+- **Engine (2025-storyboard rework):** `src/showcase/` (viewer-only; `showcase.css` imported by
+  `ShowcasePlayerView`). `compileScenes(config)` bakes ALL variance from `mulberry32(config.seed)`
+  into payloads — no Math.random/Date.now in render. Core anti-uniformity device is a **seeded
+  shuffle-bag** (`makeBag`): deals each item once (shuffled) before repeating and never repeats
+  across the refill boundary — used for backgrounds, scene enters, stat variants, and per-image-
+  count layout archetypes so consecutive scenes differ. `useShowcasePlayer` = single rAF over
+  `performance.now()`, scenes overlap by `TRANSITION_MS` (**640ms**; exit z-1 under enter z-2, ≤2
+  mounted), `visibilitychange` pauses (JS clock + `[data-paused] * {animation-play-state:paused}`),
+  loop = cycle-prefixed keys + clock wrap. **Pacing** `PACE {fast .85, normal 1, relaxed 1.25}` via
+  `--pace`; per-element staggers via `--d` (`bits/anim.ts dly()`). Stage authored at true canvas
+  px, root `font-size = width/100`, `transform: scale(fit)`.
+  - **Per-scene brand panels** — the big change. There is NO fixed stage backdrop / `showcaseTheme`
+    rooms / aurora blobs / geometric decor / `StageDecor` anymore (all removed). Every scene owns a
+    `bg: SceneBgId` (`red|redGrad|navy|navyGrad|duoGrad|white|split`) painted by a `.sc-bg-*` class
+    that sets the panel's `--sc-ink/-muted/-accent/-pixel/-grad-text` vars. `makeBgPicker` walks a
+    weighted per-mode pool with a **no-adjacent-family rule** (`bgFamily`); forced panels (intro,
+    split) call `.note()` to keep the rule intact. White panels carry `data-ink` (seeded red/navy).
+    **Brand lock:** only `#e61e2a`, `#000054`, white + their gradients (no gold).
+  - **Style = background MIX profile.** The wizard's 4 cards are now `colorMode`
+    `gradient`=Signature / `red` / `navy` / `light`, each a weighted panel pool. `ShowcaseStyle.background`
+    is **deprecated/ignored** (kept so old stored configs parse); the shapes selector was removed.
+  - **Scenes** (`scenes/*`): `statSolo` (NEW — one bold figure per panel: `counter|ticker|gradient|
+    typewriter|split`, replacing the 3-up `StatTrioScene` which was deleted); `top3` is a **cycling
+    spotlight list** (focus walks 3→2→1 via seeded `--fa/--fd`, pixel arrow) — the podium is gone;
+    `project` picks strongly-distinct archetypes per image-count with seeded `flip`/`sheen`.
+  - **No camera movement:** the handheld `sc-bob` wiggle and the 4 Ken-Burns pan variants are gone —
+    full-bleed images use ONE slow uniform settle-zoom (`sc-still-zoom`). Settled "still" frames stay
+    alive via in-place ambient (gradient-text shimmer `sc-shimmer`, solid-type sheen `sc-sheen`,
+    pixel shimmer, typewriter caret blink) — none of which move the frame.
+  - **New bits/effects:** `bits/ScPixels.tsx` (RMIT pixel-cluster corner decor from `PixelSpec`),
+    `ScMaskText` gains `ticker` (slide-through) + `type` (typewriter) effects; transitions are
+    `wipeX|wipeUp|push|zoom` (hard cuts, no circle wipe). **Fonts:** Museo on all display type
+    (`.sc-display` + headline classes), Helvetica for body/small text (stage default family).
+  - **CSS gotcha (unchanged):** `sc-pop` animates the independent `scale`/`filter` channels so a
+    card's static `transform: translate()/rotate()` tilt survives the pop. Reduced motion: a var
+    block zeroes the motion vars → crossfades; ambient loops (shimmer/sheen/pixel/caret/still-zoom/
+    focus pulse) disabled; bars & focus rows fade in place.
 - **Viewer:** `ShowcaseViewerPage` — loading / notFound (+local-mode hint) / expired /
   unsupported-version / ready states; controls are ONLY Play (+ Loop switch) and Play-again
   (End scene; Space/Enter also starts/replays). Progress hairline reads the clock via ref (no
