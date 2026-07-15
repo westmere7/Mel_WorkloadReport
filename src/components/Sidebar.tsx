@@ -29,6 +29,10 @@ const NAV: NavItem[] = [
 /** Pages that require sign-in — hidden from the nav for anonymous viewers. */
 const EDIT_ONLY = ['/settings', '/showcase']
 
+/** Pages hidden from the mobile tab bar — the Showcase builder/player are
+    desktop-only (both routes already show a "not on mobile" screen). */
+const MOBILE_HIDDEN = ['/showcase']
+
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
@@ -151,7 +155,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 export function MobileNav() {
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
-  const nav = canEdit ? NAV : NAV.filter((item) => !EDIT_ONLY.includes(item.to))
+  const nav = NAV.filter(
+    (item) => !MOBILE_HIDDEN.includes(item.to) && (canEdit || !EDIT_ONLY.includes(item.to)),
+  )
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line bg-card pb-[env(safe-area-inset-bottom)] md:hidden">
