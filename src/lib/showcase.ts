@@ -30,16 +30,25 @@ export const SHOWCASE_CONFIG_VERSION = 1
 export type CanvasPreset = '1920x1080' | '1080x1080'
 export type PacingPreset = 'relaxed' | 'normal' | 'fast'
 export type ShowcaseThemeId = 'brand'
+/** @deprecated Legacy field — the engine now paints per-scene brand panels. */
 export type BackgroundStyle = 'solid' | 'gradient' | 'geometric'
 export type SectionId = 'intro' | 'projects' | 'globalStats' | 'top3'
+/**
+ * Background MIX profile (the 4-style selector). Scenes cut between red /
+ * navy / white brand panels; the profile weights that rotation:
+ * 'gradient' = Signature Mix (balanced), 'red'/'navy' = that colour leads,
+ * 'light' = white-gallery led.
+ */
 export type ColorMode = 'red' | 'navy' | 'gradient' | 'light'
 
 export interface ShowcaseStyle {
+  /** @deprecated Ignored by the engine (kept so older stored configs parse). */
   background: BackgroundStyle
   colorMode: ColorMode
   grain: boolean
   showCodes: boolean
   showImages: boolean
+  /** Ambient drift on gradient panels (red/navy/duo gradients breathe slowly). */
   movingGradients: boolean
   // Project data visibility:
   showCampaign: boolean
@@ -120,13 +129,6 @@ export interface Top3Block {
   /** Unit word shown after values, e.g. "assets", "days", "images". */
   unit: string
   entries: Top3Entry[] // 1–3, rank order
-}
-
-export interface ShowcaseStyle {
-  background: BackgroundStyle
-  grain: boolean
-  showCodes: boolean
-  showImages: boolean
 }
 
 export interface ShowcaseConfig {
@@ -549,7 +551,7 @@ export function defaultDraft(tasks: Task[], settings: AppSettings): ShowcaseDraf
     theme: 'brand',
     style: {
       background: 'gradient',
-      colorMode: 'red',
+      colorMode: 'gradient', // Signature Mix — the storyboard's red/navy/white rotation
       grain: true,
       showCodes: true,
       showImages: true,
@@ -692,12 +694,11 @@ export function buildShowcaseConfig(
 export function estimateRuntimeMs(draft: ShowcaseDraft, statCount: number, top3Count: number): number {
   const pace = draft.pacing === 'fast' ? 0.85 : draft.pacing === 'relaxed' ? 1.25 : 1
   const projects = draft.selectedIds.length
-  const scalarStats = Math.ceil(statCount / 3)
   const base =
     6000 + // intro
-    (projects ? 2800 + projects * 6600 : 0) +
-    (statCount ? 2800 + scalarStats * 5000 : 0) +
-    top3Count * 6200 +
+    (projects ? 2600 + projects * 5800 : 0) +
+    (statCount ? 2600 + statCount * 3100 : 0) + // one fast solo beat per stat
+    top3Count * 6600 + // cycling spotlight list per block
     3000 // end card
   return Math.round(base * pace)
 }

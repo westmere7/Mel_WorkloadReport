@@ -1,6 +1,10 @@
 import { dly } from '../bits/anim'
 import { ScMaskText } from '../bits/ScMaskText'
 
+/**
+ * Title card, storyboard-style: rotated brand tag plate (team name), a giant
+ * year in Museo, the showcase title, then the staff roll.
+ */
 export function IntroScene({
   year,
   title,
@@ -14,18 +18,18 @@ export function IntroScene({
 }) {
   return (
     <div className="sc-body sc-center-col">
-      <ScMaskText text={String(year)} per="letter" delayMs={200} stepMs={45} className="sc-year" />
-      <p className="sc-kicker sc-a-riseSoft" style={dly(950)}>
+      <span className="sc-tag sc-a-pop" style={dly(150)}>
+        {teamName}
+      </span>
+      <h1 className="sc-year sc-sheen">
+        <ScMaskText text={String(year)} per="letter" delayMs={350} stepMs={70} />
+      </h1>
+      <p className="sc-kicker sc-a-riseSoft" style={dly(1150)}>
         {title}
       </p>
-      <h1 className="sc-team">
-        <span className="sc-sweep" style={dly(1900)}>
-          <ScMaskText text={teamName} per="word" delayMs={1300} stepMs={60} />
-        </span>
-      </h1>
       <div className="sc-chip-row" style={{ maxWidth: '72em' }}>
         {staff.map((name, i) => (
-          <span key={name} className="sc-chip sc-a-pop" style={dly(1900 + i * 60)}>
+          <span key={name} className="sc-chip sc-a-pop" style={dly(1600 + i * 60)}>
             {name}
           </span>
         ))}

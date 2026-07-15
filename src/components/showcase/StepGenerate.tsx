@@ -12,6 +12,14 @@ import {
 } from '../../lib/showcase'
 import { WIZARD_STEPS } from './WizardProgress'
 
+/** Display names for the background mix profiles (see StepStyle). */
+const MIX_LABEL: Record<string, string> = {
+  gradient: 'Signature',
+  red: 'Red dominant',
+  navy: 'Navy dominant',
+  light: 'Light gallery',
+}
+
 function fmtRuntime(ms: number): string {
   const s = Math.round(ms / 1000)
   return s < 60 ? `~${s}s` : `~${Math.floor(s / 60)}m ${s % 60}s`
@@ -105,7 +113,7 @@ export function StepGenerate({
           <RecapRow label="Sequence" value={sectionsLabel} step={4} onJump={onJump} />
           <RecapRow
             label="Style"
-            value={`${draft.style.colorMode} mode · ${draft.style.background}${draft.style.grain ? ' · grain' : ''}${draft.style.movingGradients ? ' · anim' : ''}`}
+            value={`${MIX_LABEL[draft.style.colorMode] ?? draft.style.colorMode} mix${draft.style.grain ? ' · grain' : ''}${draft.style.movingGradients ? ' · moving gradients' : ''}`}
             step={5}
             onJump={onJump}
           />

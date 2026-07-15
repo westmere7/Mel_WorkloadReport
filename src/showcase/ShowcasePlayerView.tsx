@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
+import { cx } from '../lib/format'
 import type { ShowcaseConfig } from '../lib/showcase'
 import { compileScenes } from './compile'
 import { PACE } from './theme'
@@ -8,10 +9,11 @@ import { useShowcasePlayer } from './useShowcasePlayer'
 import { useReducedMotion } from './useReducedMotion'
 import { useImagePreload } from './useImagePreload'
 import { Switch } from '../components/ui/Switch'
+import { ScPixels } from './bits/ScPixels'
 import { IntroScene } from './scenes/IntroScene'
 import { SectionScene } from './scenes/SectionScene'
 import { ProjectScene } from './scenes/ProjectScene'
-import { StatTrioScene } from './scenes/StatTrioScene'
+import { StatSoloScene } from './scenes/StatSoloScene'
 import { StatDistScene } from './scenes/StatDistScene'
 import { Top3Scene } from './scenes/Top3Scene'
 import { EndScene } from './scenes/EndScene'
@@ -30,19 +32,18 @@ function SceneContent({ payload, pace }: { payload: ScenePayload; pace: number }
           project={payload.project}
           index={payload.index}
           total={payload.total}
-          kb={payload.kb}
           collage={payload.collage}
           showCode={payload.showCode}
           pace={pace}
           layoutVariant={payload.layoutVariant}
-          fontStyle={payload.fontStyle}
+          flip={payload.flip}
+          sheen={payload.sheen}
           titleWeight={payload.titleWeight}
           revealDelay={payload.revealDelay}
           revealStagger={payload.revealStagger}
           typoEffect={payload.typoEffect}
           borderStyle={payload.borderStyle}
           shadowStyle={payload.shadowStyle}
-          decoShape={payload.decoShape}
           showCampaign={payload.showCampaign}
           showSquad={payload.showSquad}
           showPeople={payload.showPeople}
@@ -53,13 +54,18 @@ function SceneContent({ payload, pace }: { payload: ScenePayload; pace: number }
           showAssetBreakdown={payload.showAssetBreakdown}
         />
       )
-    case 'statTrio':
-      return <StatTrioScene stats={payload.stats} pace={pace} />
+    case 'statSolo':
+      return <StatSoloScene stat={payload.stat} variant={payload.variant} pace={pace} />
     case 'statDist':
       return <StatDistScene stat={payload.stat} pace={pace} />
     case 'top3':
-      return <Top3Scene block={payload.block} pace={pace} />
+      return <Top3Scene block={payload.block} />
   }
+}
+
+/** Scene shell class: brand panel + optional ambient gradient drift. */
+function sceneShellClass(scene: Scene, movingGradients: boolean): string {
+  return cx('sc-scene', `sc-bg-${scene.bg}`, movingGradients && 'sc-anim-grad')
 }
 
 /** Thin progress hairline along the stage bottom (reads the clock via ref — no scene re-renders). */
@@ -90,7 +96,8 @@ function ProgressHairline({ getProgress, active }: { getProgress: () => number; 
 export function ShowcasePlayerView({ config }: { config: ShowcaseConfig }) {
   const reducedMotion = useReducedMotion()
   const pace = PACE[config.pacing]
-  const { scenes, decor } = useMemo(() => compileScenes(config), [config])
+  const { scenes } = useMemo(() => compileScenes(config), [config])
+  const movingGradients = config.style.movingGradients ?? true
 
   const [loop, setLoop] = useState(false)
   const player = useShowcasePlayer(scenes, { loop, pace, reducedMotion })
@@ -114,32 +121,28 @@ export function ShowcasePlayerView({ config }: { config: ShowcaseConfig }) {
   }, [player])
 
   return (
-    <ShowcaseStage
-      canvas={config.canvas}
-      style={config.style}
-      decor={decor}
-      pace={pace}
-      paused={player.paused}
-    >
-      {/* Scenes (≤2 mounted during a transition) */}
+    <ShowcaseStage canvas={config.canvas} style={config.style} pace={pace} paused={player.paused}>
+      {/* Scenes (≤2 mounted during a transition) — each paints its own panel. */}
       {player.status === 'playing' &&
         player.mounted.map((m) => (
           <div
             key={m.key}
-            className="sc-scene"
+            className={sceneShellClass(m.scene, movingGradients)}
             data-enter={m.scene.enter}
             data-state={m.phase}
+            data-ink={m.scene.bg === 'white' ? m.scene.whiteInk : undefined}
             style={{ zIndex: m.z }}
           >
+            {m.scene.pixels && <ScPixels spec={m.scene.pixels} />}
             <SceneContent payload={m.scene.payload} pace={pace} />
           </div>
         ))}
 
-      {/* Idle poster */}
+      {/* Idle poster — navy brand panel. */}
       {player.status === 'idle' && (
-        <div className="sc-scene" style={{ zIndex: 2 }}>
+        <div className="sc-scene sc-bg-navy" style={{ zIndex: 2 }}>
           <div className="sc-body sc-center-col">
-            <p className="sc-kicker sc-a-riseSoft">{config.teamName}</p>
+            <span className="sc-tag sc-a-pop">{config.teamName}</span>
             <h1 className="sc-poster-title sc-a-fade">{config.title || `${config.year} Showcase`}</h1>
             <button type="button" className="sc-play sc-a-pop" onClick={player.play} title="Play showcase">
               <Play className="sc-play-icon" fill="currentColor" />
@@ -152,9 +155,9 @@ export function ShowcasePlayerView({ config }: { config: ShowcaseConfig }) {
         </div>
       )}
 
-      {/* End card (loop off) */}
+      {/* End card (loop off) — red wrap panel. */}
       {player.status === 'ended' && (
-        <div className="sc-scene" data-enter="zoom" style={{ zIndex: 2 }}>
+        <div className="sc-scene sc-bg-red" data-enter="zoom" style={{ zIndex: 2 }}>
           <EndScene teamName={config.teamName} year={config.year} onReplay={player.replay} />
           <label className="sc-loop sc-loop-end">
             <Switch checked={loop} onChange={setLoop} label="Loop showcase" />

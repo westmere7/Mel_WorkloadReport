@@ -1,46 +1,63 @@
 import type { Top3Block } from '../../lib/showcase'
-import { dly } from '../bits/anim'
-import { ScCounter } from '../bits/ScCounter'
+import { cssVars, dly } from '../bits/anim'
 import { ScMaskText } from '../bits/ScMaskText'
 
-/** Podium columns arranged 2–1–3; ranks reveal 3 → 2 → 1 with #1 emphasized. */
-export function Top3Scene({ block, pace }: { block: Top3Block; pace: number }) {
+/** The storyboard's pixel arrow (‹ ▪ ▪) that marks the focused row. */
+function PixelArrow() {
+  return (
+    <span className="sc-pixel-arrow" aria-hidden>
+      <i />
+      <i />
+      <i />
+    </span>
+  )
+}
+
+/**
+ * Top-3 as a cycling spotlight list (the storyboard's project ticker): all
+ * entries rest faded; focus walks 3 → 2 → 1, lifting each row with the pixel
+ * arrow and its value; #1 keeps the spotlight and a shimmering gradient name.
+ * One fast scene per block — no shared-screen podium.
+ */
+export function Top3Scene({ block }: { block: Top3Block }) {
   const entries = block.entries
-  // Visual order (left→right): #2, #1, #3 — classic podium. Missing ranks just skip.
-  const order = [1, 0, 2].filter((rank) => rank < entries.length)
-  const revealAt = [2900, 1800, 900] // by rank index (0 = gold)
+  const FOCUS_MS = 1150 // per-entry focus window (pace-scaled in CSS)
+  const START_MS = 1150 // after the label settles
 
   return (
     <div className="sc-body sc-center-col">
-      <h2 className="sc-dist-title">
-        <ScMaskText text={block.label} per="word" delayMs={200} stepMs={60} />
-      </h2>
-      <div className="sc-podium">
-        {order.map((rank) => {
-          const e = entries[rank]
-          const at = revealAt[rank]
-          return (
-            <div key={rank} className={`sc-podium-col sc-rank-${rank + 1}`}>
-              {rank === 0 && <span className="sc-bloom sc-a-bloom" style={dly(at + 200)} />}
-              <span className={`sc-medal sc-a-pop sc-medal-${rank + 1}`} style={dly(at + 150)}>
-                {rank + 1}
-              </span>
-              <p className={`sc-podium-name sc-a-riseSoft${rank === 0 ? ' sc-gold-name' : ''}`} style={dly(at + 250)}>
-                {e.name}
-              </p>
-              <p className="sc-podium-value sc-a-fade" style={dly(at + 350)}>
-                <ScCounter value={e.value} delayMs={(at + 400) * pace} durationMs={800 * pace} />
-                <span className="sc-podium-unit"> {block.unit}</span>
-              </p>
-              {e.detail && (
-                <p className="sc-sub sc-a-riseSoft" style={dly(at + 500)}>
-                  {e.detail}
-                </p>
-              )}
-              <span className={`sc-podium-bar sc-a-bary${rank === 0 ? ' sc-spring' : ''}`} style={dly(at)} />
-            </div>
-          )
-        })}
+      <p className="sc-kicker sc-a-riseSoft" style={dly(150)}>
+        Top {entries.length} · {block.label}
+      </p>
+      <div className="sc-focus-list">
+        {[...entries]
+          .map((e, rank) => ({ e, rank })) // rank 0 = #1
+          .reverse() // countdown layout: 03 at the top … 01 at the bottom
+          .map(({ e, rank }, row) => {
+            // Focus walks the list downward (#3 first) and ends holding #1.
+            const focusIdx = entries.length - 1 - rank
+            const isFinal = rank === 0
+            const fa = START_MS + focusIdx * FOCUS_MS
+            const fd = isFinal ? FOCUS_MS * 2 : FOCUS_MS
+            return (
+              <div
+                key={rank}
+                className={`sc-focus-row${isFinal ? ' sc-focus-final' : ''}`}
+                style={cssVars({ '--fa': `${fa}ms`, '--fd': `${fd}ms` })}
+              >
+                <span className="sc-focus-rank">{String(rank + 1).padStart(2, '0')}</span>
+                <span className={`sc-focus-name${isFinal ? ' sc-gradtext sc-shimmer' : ''}`}>
+                  <ScMaskText text={e.name} per="word" delayMs={250 + row * 120} stepMs={40} />
+                </span>
+                <span className="sc-focus-arrow">
+                  <PixelArrow />
+                </span>
+                <span className="sc-focus-value">
+                  {e.value.toLocaleString()} <span className="sc-focus-unit">{block.unit}</span>
+                </span>
+              </div>
+            )
+          })}
       </div>
     </div>
   )

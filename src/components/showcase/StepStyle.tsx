@@ -1,53 +1,52 @@
 import { cx } from '../../lib/format'
 import type { ShowcaseDraft, ColorMode } from '../../lib/showcase'
 import { Switch } from '../ui/Switch'
-import { Segmented, StepHint } from './wizardBits'
+import { StepHint } from './wizardBits'
 import { Shuffle } from 'lucide-react'
 
-const COLOR_MODE_SWATCHES: {
-  id: ColorMode;
-  label: string;
-  hint: string;
-  bg: string;
-  ink: string;
-  accent: string;
-  accent2: string;
+const RED = '#e61e2a'
+const NAVY = '#000054'
+const DUO = `linear-gradient(118deg, ${RED}, ${NAVY})`
+
+/**
+ * The four background MIX profiles. Every showcase cuts between solid brand
+ * panels (red / navy / white and their gradients) scene by scene — the
+ * profile sets how that rotation is weighted. The mini-mock shows the rhythm.
+ */
+const MIX_PROFILES: {
+  id: ColorMode
+  label: string
+  hint: string
+  strip: string[]
+  ink: (bg: string) => string
 }[] = [
+  {
+    id: 'gradient',
+    label: 'Signature Mix',
+    hint: 'The storyboard rotation — red, navy and white panels alternating evenly.',
+    strip: [RED, NAVY, '#ffffff', DUO],
+    ink: (bg) => (bg === '#ffffff' ? NAVY : '#fff'),
+  },
   {
     id: 'red',
     label: 'Red Dominant',
-    hint: 'RMIT brand red theme with white ink',
-    bg: '#e61e2a',
-    ink: '#ffffff',
-    accent: '#000054',
-    accent2: '#ffb81c',
+    hint: 'Red leads; navy and white cut in for contrast.',
+    strip: [RED, RED, NAVY, '#ffffff'],
+    ink: (bg) => (bg === '#ffffff' ? RED : '#fff'),
   },
   {
     id: 'navy',
     label: 'Navy Dominant',
-    hint: 'RMIT brand navy theme with white ink',
-    bg: '#000054',
-    ink: '#ffffff',
-    accent: '#e61e2a',
-    accent2: '#ffb81c',
-  },
-  {
-    id: 'gradient',
-    label: 'Moving Gradient',
-    hint: 'Subtle animated gradient between brand red and navy',
-    bg: 'linear-gradient(135deg, #e61e2a, #000054)',
-    ink: '#ffffff',
-    accent: '#ffb81c',
-    accent2: '#ffffff',
+    hint: 'Navy leads; red and white cut in for contrast.',
+    strip: [NAVY, NAVY, RED, '#ffffff'],
+    ink: (bg) => (bg === '#ffffff' ? NAVY : '#fff'),
   },
   {
     id: 'light',
-    label: 'White Gallery',
-    hint: 'Clean white background with navy ink and red accents',
-    bg: '#ffffff',
-    ink: '#000054',
-    accent: '#e61e2a',
-    accent2: '#000054',
+    label: 'Light Gallery',
+    hint: 'White-led gallery look with red and navy punch panels.',
+    strip: ['#ffffff', '#ffffff', RED, NAVY],
+    ink: (bg) => (bg === '#ffffff' ? RED : '#fff'),
   },
 ]
 
@@ -58,8 +57,6 @@ export function StepStyle({
   draft: ShowcaseDraft
   patch: (p: Partial<ShowcaseDraft>) => void
 }) {
-  const hasImages = true
-
   const toggleStyleFlag = <K extends keyof ShowcaseDraft['style']>(
     key: K,
     val: ShowcaseDraft['style'][K]
@@ -75,10 +72,14 @@ export function StepStyle({
   return (
     <div className="space-y-6">
       <div>
-        <label className="label">RMIT Brand Theme — Color Mode</label>
-        <StepHint>Select how the RMIT brand colors are configured for the showreel.</StepHint>
+        <label className="label">Background Mix</label>
+        <StepHint>
+          Scenes cut between solid RMIT brand panels — red, navy and white (plus subtle red↔navy
+          gradients and pixel-pattern accents). Pick which colour leads the rotation; the seed
+          decides the exact scene-by-scene sequence.
+        </StepHint>
         <div className="mt-2 grid gap-3 sm:grid-cols-4">
-          {COLOR_MODE_SWATCHES.map((t) => (
+          {MIX_PROFILES.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -91,23 +92,22 @@ export function StepStyle({
                   : 'border-line hover:border-navy-300',
               )}
             >
-              {/* Mini slide mock */}
-              <div className="flex h-24 flex-col justify-center gap-1 px-4" style={{ background: t.bg }}>
-                <span
-                  className="font-display text-xl font-bold leading-none"
-                  style={{
-                    background: `linear-gradient(90deg, ${t.ink}, ${t.accent})`,
-                    WebkitBackgroundClip: 'text',
-                    backgroundClip: 'text',
-                    color: 'transparent',
-                  }}
-                >
-                  {draft.year}
-                </span>
-                <span className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: t.ink }}>
-                  {draft.teamName || 'GCMC'}
-                </span>
-                <span className="h-0.5 w-8 rounded-full" style={{ background: t.accent2 }} />
+              {/* Mini panel-rotation mock: 4 consecutive "scenes". */}
+              <div className="grid h-24 grid-cols-4">
+                {t.strip.map((bg, i) => (
+                  <div
+                    key={i}
+                    className="flex items-end justify-center pb-2"
+                    style={{ background: bg, borderRight: i < 3 ? '1px solid rgba(0,0,0,0.06)' : undefined }}
+                  >
+                    <span
+                      className="font-display text-sm font-bold leading-none"
+                      style={{ color: t.ink(bg) }}
+                    >
+                      {['65%', '211', 'Aa', String(draft.year).slice(2)][i]}
+                    </span>
+                  </div>
+                ))}
               </div>
               <div className="px-3 py-2">
                 <p className="text-xs font-semibold text-ink leading-tight">{t.label}</p>
@@ -118,25 +118,11 @@ export function StepStyle({
         </div>
       </div>
 
-      <div>
-        <label className="label">Background Shapes / Style</label>
-        <Segmented
-          options={[
-            { id: 'solid', label: 'Solid' },
-            { id: 'gradient', label: 'Aurora blobs' },
-            { id: 'geometric', label: 'Geometric shapes' },
-          ]}
-          value={draft.style.background}
-          onChange={(background) => toggleStyleFlag('background', background)}
-        />
-        <StepHint>Aurora blobs and geometric shapes rotate slowly in the background.</StepHint>
-      </div>
-
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-4 rounded-xl bg-subtle px-4 py-3">
           <div>
             <p className="text-sm font-medium text-ink">Film grain</p>
-            <p className="text-xs text-muted">A faint static grain that makes gradients read filmic.</p>
+            <p className="text-xs text-muted">A faint static grain that makes the panels read filmic.</p>
           </div>
           <Switch
             checked={draft.style.grain}
@@ -147,7 +133,7 @@ export function StepStyle({
         <div className="flex items-center justify-between gap-4 rounded-xl bg-subtle px-4 py-3">
           <div>
             <p className="text-sm font-medium text-ink">Moving gradients</p>
-            <p className="text-xs text-muted">Use subtle, elegant moving background gradient transitions (on Gradient color mode).</p>
+            <p className="text-xs text-muted">Let the gradient panels (red, navy, red↔navy) drift subtly while on screen.</p>
           </div>
           <Switch
             checked={draft.style.movingGradients ?? true}
@@ -155,25 +141,25 @@ export function StepStyle({
             label="Moving gradients"
           />
         </div>
-        {hasImages && (
-          <div className="flex items-center justify-between gap-4 rounded-xl bg-subtle px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-ink">Show demo images</p>
-              <p className="text-xs text-muted">Use attached demo images on project slides (Ken Burns / collage).</p>
-            </div>
-            <Switch
-              checked={draft.style.showImages}
-              onChange={(showImages) => toggleStyleFlag('showImages', showImages)}
-              label="Show demo images"
-            />
+        <div className="flex items-center justify-between gap-4 rounded-xl bg-subtle px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-ink">Show demo images</p>
+            <p className="text-xs text-muted">Use attached demo images on project slides (full-bleed / collage walls).</p>
           </div>
-        )}
+          <Switch
+            checked={draft.style.showImages}
+            onChange={(showImages) => toggleStyleFlag('showImages', showImages)}
+            label="Show demo images"
+          />
+        </div>
       </div>
 
       <div className="border-t border-line pt-6">
         <label className="label">Cinematography Seed</label>
         <StepHint>
-          The seed generates deterministic variations in camera transitions, staggered timing reveals, layout structures, card borders, shadows, and background shape compositions. Use the same seed to reproduce this exact look.
+          The seed drives every deterministic variation — the background rotation, scene
+          transitions, layout archetypes, kinetic-text treatments and pixel-pattern accents.
+          Use the same seed to reproduce this exact cut.
         </StepHint>
         <div className="mt-2.5 flex items-center gap-2 max-w-sm">
           <input

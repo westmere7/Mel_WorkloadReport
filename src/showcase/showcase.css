@@ -1,13 +1,15 @@
 /* ════════════════════════════════════════════════════════════════
-   Showcase runtime styles. Loaded ONLY by the viewer route.
+   Showcase runtime styles — 2025 storyboard system.
    Conventions:
-   - Everything is `sc-` prefixed.
-   - The stage root font-size = canvas-width / 100, so 1em ≈ 1% of the
-     canvas width — all sizes below are em-based and scale on both canvases.
-   - Every duration/delay is multiplied by --pace; staggers come in via the
-     per-element `--d` custom property (see bits/anim.ts `dly()`).
-   - Perf: transform / opacity / clip-path only. The single blur is STATIC
-     (aurora parent). Reduced motion zeroes the motion vars → crossfades.
+   - Everything is `sc-` prefixed; loaded ONLY by the viewer route.
+   - Stage root font-size = canvas-width / 100 → 1em ≈ 1% of canvas width.
+   - Every duration/delay is multiplied by --pace; staggers via `--d`.
+   - Every SCENE paints its own brand panel (`.sc-bg-*`) — cuts move between
+     red / navy / white rooms instead of one fixed backdrop.
+   - Brand lock: #e61e2a, #000054, white (+ their gradients). No gold, no
+     off-palette hues.
+   - Perf: transform / opacity / clip-path / background-position only.
+   - Reduced motion zeroes the motion vars → crossfades.
    ════════════════════════════════════════════════════════════════ */
 
 .sc-viewport {
@@ -16,7 +18,7 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: #050510;
+  background: #06060f;
 }
 
 .sc-stage {
@@ -24,9 +26,10 @@
   flex-shrink: 0;
   overflow: hidden;
   transform-origin: center;
-  background: var(--sc-bg);
-  color: var(--sc-ink);
-  font-family: Inter, system-ui, sans-serif;
+  background: #06060f;
+  color: #fff;
+  /* Helvetica carries small text; Museo carries display type (see .sc-display). */
+  font-family: 'Helvetica Neue', Helvetica, Arial, Inter, sans-serif;
   font-variant-numeric: tabular-nums;
 
   /* Easings */
@@ -41,7 +44,8 @@
   --sc-pop-scale: 0.86;
   --sc-pop-blur: 6px;
   --sc-zoom-from: 0.94;
-  --sc-zoom-to: 1.08;
+  --sc-zoom-to: 1.06;
+  --sc-ticker-x: 55%;
 }
 
 @supports (animation-timing-function: linear(0, 1)) {
@@ -60,6 +64,117 @@
   animation-play-state: paused !important;
 }
 
+/* ── Brand panels: every scene owns a background ─────────────────
+   Vars set per panel:
+   --sc-bg       panel colour (the scene shell paints it)
+   --sc-ink      primary type colour
+   --sc-muted    secondary type
+   --sc-faint    tertiary / ghosted type
+   --sc-accent   the OTHER brand colour (chips, underlines)
+   --sc-card     translucent card fill    --sc-bar-track  track fill
+   --sc-pixel    pixel-decor colour       --sc-grad-text  display gradient */
+
+.sc-bg-red,
+.sc-bg-redGrad {
+  --sc-bg: #e61e2a;
+  --sc-ink: #ffffff;
+  --sc-muted: rgba(255, 255, 255, 0.82);
+  --sc-faint: rgba(255, 255, 255, 0.4);
+  --sc-accent: #000054;
+  --sc-card: rgba(255, 255, 255, 0.1);
+  --sc-bar-track: rgba(255, 255, 255, 0.16);
+  --sc-pixel: rgba(255, 255, 255, 0.75);
+  --sc-grad-text: linear-gradient(100deg, #ffffff 35%, rgba(255, 255, 255, 0.55) 100%);
+  background: #e61e2a;
+  color: var(--sc-ink);
+}
+.sc-bg-redGrad {
+  background: linear-gradient(120deg, #e61e2a 0%, #c01420 55%, #8f0e26 100%);
+  background-size: 160% 160%;
+}
+
+.sc-bg-navy,
+.sc-bg-navyGrad {
+  --sc-bg: #000054;
+  --sc-ink: #ffffff;
+  --sc-muted: rgba(255, 255, 255, 0.8);
+  --sc-faint: rgba(255, 255, 255, 0.35);
+  --sc-accent: #e61e2a;
+  --sc-card: rgba(255, 255, 255, 0.09);
+  --sc-bar-track: rgba(255, 255, 255, 0.14);
+  --sc-pixel: rgba(230, 30, 42, 0.85);
+  --sc-grad-text: linear-gradient(100deg, #ffffff 35%, rgba(255, 255, 255, 0.5) 100%);
+  background: #000054;
+  color: var(--sc-ink);
+}
+.sc-bg-navyGrad {
+  background: linear-gradient(125deg, #000054 0%, #000041 55%, #1a1a6e 100%);
+  background-size: 160% 160%;
+}
+
+.sc-bg-duoGrad {
+  --sc-bg: #7a1040;
+  --sc-ink: #ffffff;
+  --sc-muted: rgba(255, 255, 255, 0.82);
+  --sc-faint: rgba(255, 255, 255, 0.4);
+  --sc-accent: #ffffff;
+  --sc-card: rgba(255, 255, 255, 0.1);
+  --sc-bar-track: rgba(255, 255, 255, 0.16);
+  --sc-pixel: rgba(255, 255, 255, 0.75);
+  --sc-grad-text: linear-gradient(100deg, #ffffff 35%, rgba(255, 255, 255, 0.55) 100%);
+  background: linear-gradient(118deg, #e61e2a 0%, #8f1046 52%, #000054 100%);
+  background-size: 170% 170%;
+  color: var(--sc-ink);
+}
+
+/* White gallery panel — brand ink, seeded red or navy lead. */
+.sc-bg-white {
+  --sc-bg: #ffffff;
+  --sc-ink: #000054;
+  --sc-muted: rgba(0, 0, 84, 0.72);
+  --sc-faint: rgba(0, 0, 84, 0.32);
+  --sc-accent: #e61e2a;
+  --sc-card: rgba(0, 0, 84, 0.05);
+  --sc-bar-track: rgba(0, 0, 84, 0.09);
+  --sc-pixel: rgba(230, 30, 42, 0.8);
+  --sc-grad-text: linear-gradient(100deg, #e61e2a 20%, #000054 90%);
+  background: #ffffff;
+  color: var(--sc-ink);
+}
+.sc-bg-white[data-ink='red'] {
+  --sc-ink: #e61e2a;
+  --sc-muted: rgba(230, 30, 42, 0.8);
+  --sc-faint: rgba(230, 30, 42, 0.35);
+  --sc-accent: #000054;
+  --sc-pixel: rgba(0, 0, 84, 0.75);
+}
+
+/* Split panel — red | navy halves (the storyboard's "65%" frame). */
+.sc-bg-split {
+  --sc-bg: #e61e2a;
+  --sc-ink: #ffffff;
+  --sc-muted: rgba(255, 255, 255, 0.82);
+  --sc-faint: rgba(255, 255, 255, 0.4);
+  --sc-accent: #ffffff;
+  --sc-card: rgba(255, 255, 255, 0.12);
+  --sc-bar-track: rgba(255, 255, 255, 0.18);
+  --sc-pixel: rgba(255, 255, 255, 0.8);
+  --sc-grad-text: linear-gradient(100deg, #ffffff 35%, rgba(255, 255, 255, 0.55) 100%);
+  background: linear-gradient(90deg, #e61e2a 0%, #e61e2a 50%, #000054 50%, #000054 100%);
+  color: var(--sc-ink);
+}
+
+/* Subtle ambient drift on gradient panels (opt-in via movingGradients). */
+.sc-anim-grad.sc-bg-redGrad,
+.sc-anim-grad.sc-bg-navyGrad,
+.sc-anim-grad.sc-bg-duoGrad {
+  animation: sc-grad-drift calc(var(--pace) * 14s) ease-in-out infinite alternate;
+}
+@keyframes sc-grad-drift {
+  from { background-position: 0% 30%; }
+  to { background-position: 100% 70%; }
+}
+
 /* ── Scene shells + transitions ──────────────────────────────── */
 
 .sc-scene {
@@ -68,16 +183,19 @@
   will-change: transform, opacity;
 }
 .sc-scene[data-enter='zoom'] {
-  animation: sc-enter-zoom calc(var(--pace) * 800ms) var(--sc-ease-move) both;
+  animation: sc-enter-zoom calc(var(--pace) * 640ms) var(--sc-ease-move) both;
 }
 .sc-scene[data-enter='wipeX'] {
-  animation: sc-wipe-in-x calc(var(--pace) * 800ms) var(--sc-ease-move) both;
+  animation: sc-wipe-in-x calc(var(--pace) * 640ms) var(--sc-ease-move) both;
 }
-.sc-scene[data-enter='wipeCircle'] {
-  animation: sc-wipe-in-circle calc(var(--pace) * 800ms) var(--sc-ease-move) both;
+.sc-scene[data-enter='wipeUp'] {
+  animation: sc-wipe-in-up calc(var(--pace) * 640ms) var(--sc-ease-move) both;
+}
+.sc-scene[data-enter='push'] {
+  animation: sc-push-in calc(var(--pace) * 640ms) var(--sc-ease-move) both;
 }
 .sc-scene[data-state='exit'] {
-  animation: sc-exit-zoom calc(var(--pace) * 800ms) var(--sc-ease-move) both !important;
+  animation: sc-exit-still calc(var(--pace) * 640ms) ease-out both !important;
 }
 
 .sc-body {
@@ -98,36 +216,54 @@
 
 .sc-a-rise {
   display: inline-block;
-  animation: sc-rise-mask calc(var(--pace) * 900ms) var(--sc-ease-hero) both;
+  animation: sc-rise-mask calc(var(--pace) * 850ms) var(--sc-ease-hero) both;
   animation-delay: calc(var(--pace) * var(--d, 0ms));
 }
 .sc-a-riseSoft {
-  animation: sc-rise-soft calc(var(--pace) * 450ms) var(--sc-ease-settle) both;
+  animation: sc-rise-soft calc(var(--pace) * 420ms) var(--sc-ease-settle) both;
   animation-delay: calc(var(--pace) * var(--d, 0ms));
 }
 .sc-a-pop {
-  animation: sc-pop calc(var(--pace) * 450ms) var(--sc-ease-spring) both;
+  animation: sc-pop calc(var(--pace) * 420ms) var(--sc-ease-spring) both;
   animation-delay: calc(var(--pace) * var(--d, 0ms));
 }
 .sc-a-fade {
-  animation: sc-fade-in calc(var(--pace) * 450ms) ease-out both;
+  animation: sc-fade-in calc(var(--pace) * 420ms) ease-out both;
   animation-delay: calc(var(--pace) * var(--d, 0ms));
 }
 .sc-a-barx {
   transform-origin: left center;
-  animation: sc-bar-x calc(var(--pace) * 700ms) var(--sc-ease-settle) both;
+  animation: sc-bar-x calc(var(--pace) * 650ms) var(--sc-ease-settle) both;
   animation-delay: calc(var(--pace) * var(--d, 0ms));
 }
 .sc-a-bary {
   transform-origin: center bottom;
-  animation: sc-bar-y calc(var(--pace) * 700ms) var(--sc-ease-settle) both;
+  animation: sc-bar-y calc(var(--pace) * 650ms) var(--sc-ease-settle) both;
   animation-delay: calc(var(--pace) * var(--d, 0ms));
 }
 .sc-a-bary.sc-spring {
   animation-timing-function: var(--sc-ease-spring);
 }
-.sc-a-bloom {
-  animation: sc-glow-bloom calc(var(--pace) * 900ms) ease-out both;
+.sc-a-slide-fade {
+  display: inline-block;
+  animation: sc-anim-slide-fade calc(var(--pace) * 650ms) cubic-bezier(0.25, 1, 0.5, 1) both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+.sc-a-zoom-fade {
+  display: inline-block;
+  animation: sc-anim-zoom-fade calc(var(--pace) * 650ms) var(--sc-ease-spring) both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+/* Storyboard ticker: slides through the frame with a trailing fade. */
+.sc-a-ticker {
+  display: inline-block;
+  animation: sc-ticker-in calc(var(--pace) * 850ms) var(--sc-ease-hero) both;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+/* Typewriter: hard appear per letter (steps feel), pairs with sc-caret. */
+.sc-a-type {
+  display: inline-block;
+  animation: sc-appear 1ms steps(1) both;
   animation-delay: calc(var(--pace) * var(--d, 0ms));
 }
 
@@ -144,18 +280,116 @@
   margin-bottom: -0.06em;
 }
 
+/* Blinking I-beam caret (the storyboard's "45,000 words|" cursor). */
+.sc-caret::after {
+  content: '';
+  display: inline-block;
+  width: 0.07em;
+  height: 0.86em;
+  margin-left: 0.08em;
+  background: currentColor;
+  opacity: 0.6;
+  vertical-align: baseline;
+  animation: sc-blink calc(var(--pace) * 1100ms) steps(1) infinite;
+  animation-delay: calc(var(--pace) * var(--d, 0ms));
+}
+
+/* Display gradient fill (duo red→navy on white; white sheen on brand). */
+.sc-gradtext {
+  background: var(--sc-grad-text);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+/* Settled-state shimmer: the gradient band drifts through the letters. */
+.sc-gradtext.sc-shimmer {
+  animation: sc-grad-slide calc(var(--pace) * 5.5s) ease-in-out calc(var(--pace) * 1.4s) infinite alternate;
+}
+
+/* Settled-state sheen for solid type: a soft white band sweeps across. */
+.sc-sheen {
+  position: relative;
+}
+.sc-sheen::after {
+  content: '';
+  position: absolute;
+  inset: -0.1em -0.3em;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.16) 50%, transparent 62%);
+  background-size: 260% 100%;
+  background-position: 130% 0;
+  pointer-events: none;
+  animation: sc-sheen-pass calc(var(--pace) * 4.8s) ease-in-out calc(var(--pace) * 1.8s) infinite;
+}
+.sc-bg-white .sc-sheen::after {
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.55) 50%, transparent 62%);
+  background-size: 260% 100%;
+  background-position: 130% 0;
+}
+
 .sc-sweep {
-  background: linear-gradient(var(--sc-accent2), var(--sc-accent2)) no-repeat left 92% / 0% 0.14em;
-  animation: sc-sweep calc(var(--pace) * 600ms) var(--sc-ease-settle) both;
+  background: linear-gradient(var(--sc-accent), var(--sc-accent)) no-repeat left 92% / 0% 0.14em;
+  animation: sc-sweep calc(var(--pace) * 550ms) var(--sc-ease-settle) both;
   animation-delay: calc(var(--pace) * var(--d, 0ms));
   padding-bottom: 0.08em;
 }
 
+/* ── RMIT pixel-pattern decor ────────────────────────────────── */
+
+.sc-pixels {
+  position: absolute;
+  width: 12em;
+  height: 12em;
+  pointer-events: none;
+  z-index: 1;
+}
+.sc-pixels[data-corner='0'] { top: 3em; left: 3em; }
+.sc-pixels[data-corner='1'] { top: 3em; right: 3em; transform: scaleX(-1); }
+.sc-pixels[data-corner='2'] { bottom: 3em; left: 3em; transform: scaleY(-1); }
+.sc-pixels[data-corner='3'] { bottom: 3em; right: 3em; transform: scale(-1); }
+.sc-pixel {
+  position: absolute;
+  width: 2.1em;
+  height: 2.1em;
+  background: var(--sc-pixel);
+  animation:
+    sc-pixel-in calc(var(--pace) * 420ms) var(--sc-ease-spring) both,
+    sc-pixel-shimmer calc(var(--pace) * 3.6s) ease-in-out calc(var(--pace) * (var(--d, 0ms) + 900ms)) infinite alternate;
+  animation-delay: calc(var(--pace) * var(--d, 0ms)), calc(var(--pace) * (var(--d, 0ms) + 900ms));
+}
+
+/* The storyboard's pixel arrow (‹··) used by the top-3 spotlight list. */
+.sc-pixel-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22em;
+}
+.sc-pixel-arrow i {
+  width: 0.34em;
+  height: 0.34em;
+  background: currentColor;
+}
+.sc-pixel-arrow i:first-child {
+  clip-path: polygon(100% 0, 0 50%, 100% 100%);
+  width: 0.5em;
+  height: 0.5em;
+}
+
 /* ── Typography ──────────────────────────────────────────────── */
+
+.sc-display,
+.sc-year, .sc-team, .sc-section-word, .sc-poster-title,
+.sc-project-name, .sc-stat-number, .sc-stat-text,
+.sc-hero-number, .sc-hero-word,
+.sc-dist-title, .sc-focus-name, .sc-watermark {
+  font-family: Museo, 'Helvetica Neue', Helvetica, Inter, sans-serif;
+  font-weight: 700;
+}
 
 .sc-kicker {
   font-size: 1.35em;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.32em;
   text-transform: uppercase;
   color: var(--sc-muted);
@@ -166,45 +400,66 @@
   color: var(--sc-muted);
 }
 
-.sc-year {
-  font-family: Museo, Inter, sans-serif;
+/* Brand tag chip — the navy "RMIT" plate from the storyboard title card. */
+.sc-tag {
+  display: inline-block;
+  padding: 0.28em 0.85em;
+  background: var(--sc-accent);
+  color: #ffffff;
+  font-family: Museo, 'Helvetica Neue', Helvetica, sans-serif;
   font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+}
+.sc-bg-white .sc-tag { color: #ffffff; }
+
+.sc-year {
   font-size: 17em;
   line-height: 0.95;
   letter-spacing: -0.02em;
-  background: linear-gradient(115deg, var(--sc-ink) 30%, var(--sc-accent) 78%, var(--sc-accent2) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
 }
 .sc-team {
-  font-family: Museo, Inter, sans-serif;
-  font-weight: 700;
   font-size: 4.5em;
   line-height: 1.05;
 }
 .sc-section-word {
-  font-family: Museo, Inter, sans-serif;
-  font-weight: 700;
-  font-size: 9.5em;
+  font-size: 10.5em;
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+}
+.sc-poster-title {
+  font-size: 5em;
+  line-height: 1.05;
+}
+
+/* Giant solo-stat figure — the storyboard's one-number-per-panel hero. */
+.sc-hero-number {
+  font-size: 15em;
+  line-height: 0.95;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+}
+.sc-hero-word {
+  font-size: 7.5em;
   line-height: 1;
   letter-spacing: -0.015em;
 }
-.sc-poster-title {
-  font-family: Museo, Inter, sans-serif;
+.sc-hero-label {
+  font-size: 1.9em;
   font-weight: 700;
-  font-size: 5em;
-  line-height: 1.05;
+  line-height: 1.3;
+  color: var(--sc-muted);
+  letter-spacing: 0.02em;
 }
 
 .sc-underline {
   display: block;
   width: 9em;
   height: 0.42em;
-  border-radius: 999px;
   background: var(--sc-accent);
 }
+.sc-bg-split .sc-underline { background: #ffffff; }
 
 /* ── Chips ───────────────────────────────────────────────────── */
 
@@ -253,8 +508,6 @@
   text-align: left;
 }
 .sc-project-name {
-  font-family: Museo, Inter, sans-serif;
-  font-weight: 700;
   font-size: 4.8em;
   line-height: 1.04;
   letter-spacing: -0.01em;
@@ -271,27 +524,23 @@
   margin-top: 0.4em;
 }
 .sc-stat-number {
-  font-family: Museo, Inter, sans-serif;
-  font-weight: 700;
   font-size: 6.6em;
   line-height: 1;
   color: var(--sc-ink);
 }
 .sc-stat-label {
   font-size: 1.35em;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--sc-muted);
 }
 .sc-stat-text {
-  font-family: Museo, Inter, sans-serif;
-  font-weight: 700;
   font-size: 3.4em;
   line-height: 1.1;
 }
 
-/* Ken Burns hero (single image) */
+/* Full-bleed image (single image) — slow uniform settle zoom, NO pan/wiggle. */
 .sc-kb-wrap {
   position: absolute;
   inset: 0;
@@ -302,32 +551,51 @@
   height: 100%;
   object-fit: cover;
   will-change: transform;
-  animation-duration: 16s;
-  animation-timing-function: linear;
-  animation-fill-mode: both;
+  animation: sc-still-zoom 18s linear both;
 }
-.sc-kb-a { animation-name: sc-kb-a; }
-.sc-kb-b { animation-name: sc-kb-b; }
-.sc-kb-c { animation-name: sc-kb-c; }
-.sc-kb-d { animation-name: sc-kb-d; }
 
 .sc-scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, var(--sc-bg) 4%, transparent 62%);
+  background: linear-gradient(to top, rgba(0, 0, 20, 0.82) 6%, rgba(0, 0, 20, 0.25) 46%, transparent 70%);
 }
 .sc-project-lower {
   position: absolute;
   inset: auto 8em 5em 8em;
+  /* Over imagery the panel ink is always white. */
+  --sc-ink: #ffffff;
+  --sc-muted: rgba(255, 255, 255, 0.82);
+  --sc-faint: rgba(255, 255, 255, 0.4);
+  color: #fff;
 }
 
-/* Collage (2+ images) */
+/* Giant stat overlaid on a full-bleed image (storyboard "9,000+" frames). */
+.sc-overlay-stat {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4em;
+  text-align: center;
+  color: #fff;
+  --sc-ink: #ffffff;
+  --sc-muted: rgba(255, 255, 255, 0.85);
+}
+.sc-overlay-stat .sc-hero-number { font-size: 12em; }
+
+/* Split composition */
 .sc-project-split {
   display: grid;
   grid-template-columns: 46% 54%;
   align-items: center;
   gap: 3em;
 }
+.sc-project-split.sc-flip {
+  grid-template-columns: 54% 46%;
+}
+.sc-project-split.sc-flip > :first-child { order: 2; }
 .sc-project-left {
   display: flex;
   align-items: center;
@@ -342,14 +610,12 @@
   aspect-ratio: 4 / 3;
   border-radius: 1.2em;
   overflow: hidden;
-  box-shadow: 0 1.8em 4em rgba(0, 0, 0, 0.4);
-  border: 0.18em solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1.8em 4em rgba(0, 0, 20, 0.35);
+  border: 0.18em solid rgba(255, 255, 255, 0.1);
   transform: translate(var(--dx, 0), var(--dy, 0)) rotate(var(--rot, 0deg));
-  /* pop uses the independent `scale`/`opacity` channels; bob uses `translate` —
-     neither touches the static transform above. */
-  animation:
-    sc-pop calc(var(--pace) * 450ms) var(--sc-ease-spring) calc(var(--pace) * var(--d, 0ms)) both,
-    sc-bob 8s ease-in-out var(--bob-delay, 0ms) infinite alternate;
+  /* pop uses the independent `scale`/`opacity` channels so the static tilt
+     transform above survives. (No idle bob — camera stays locked.) */
+  animation: sc-pop calc(var(--pace) * 420ms) var(--sc-ease-spring) calc(var(--pace) * var(--d, 0ms)) both;
 }
 .sc-collage-card img {
   width: 100%;
@@ -361,6 +627,42 @@
 .sc-collage-card:nth-child(3) { top: 55%; left: 4%; }
 .sc-collage-card:nth-child(4) { top: 10%; left: 52%; width: 24em; }
 
+/* Tilted wall-of-work (storyboard's rotated collage plane). */
+.sc-wall-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.sc-wall {
+  position: absolute;
+  inset: -18% -12%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.6em;
+  transform: rotate(-8deg);
+  align-content: center;
+}
+.sc-wall-card {
+  border-radius: 0.8em;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  box-shadow: 0 1.2em 3em rgba(0, 0, 20, 0.35);
+  animation: sc-pop calc(var(--pace) * 420ms) var(--sc-ease-spring) calc(var(--pace) * var(--d, 0ms)) both;
+}
+.sc-wall-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sc-wall-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, var(--sc-bg) 30%, transparent 78%);
+}
+.sc-bg-white .sc-wall-scrim {
+  background: linear-gradient(100deg, #ffffff 32%, rgba(255, 255, 255, 0.4) 60%, transparent 80%);
+}
+
 /* Typographic (no images) */
 .sc-project-typo {
   display: flex;
@@ -370,36 +672,71 @@
   position: absolute;
   right: -0.1em;
   bottom: -0.12em;
-  font-family: Museo, Inter, sans-serif;
-  font-weight: 700;
   font-size: 22em;
   line-height: 1;
   letter-spacing: -0.03em;
   color: var(--sc-ink);
-  opacity: 0.055;
+  opacity: 0.06;
   white-space: nowrap;
   pointer-events: none;
 }
 
-/* ── Stat scenes ─────────────────────────────────────────────── */
-
-.sc-trio {
-  display: grid;
-  gap: 5em;
-  width: 100%;
-  align-items: start;
+/* Solid brand side-panel (paired with content on the other half). */
+.sc-side-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.6em;
+  height: 30em;
+  background: var(--sc-accent);
+  color: #ffffff;
+  text-align: center;
+  box-shadow: 0 1.5em 3.5em rgba(0, 0, 20, 0.3);
 }
-.sc-trio-col {
+.sc-side-panel-big {
+  font-family: Museo, 'Helvetica Neue', Helvetica, sans-serif;
+  font-weight: 700;
+  font-size: 10em;
+  line-height: 1;
+}
+.sc-side-panel-sub {
+  font-size: 1.25em;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* ── Solo stat scenes (one bold figure per panel) ────────────── */
+
+.sc-solo {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 1.2em;
+  text-align: center;
+}
+.sc-solo-row {
+  display: flex;
+  align-items: baseline;
   gap: 0.9em;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+/* Label sits beside the figure on wide rows, like "36,000  digital guides". */
+.sc-solo .sc-hero-label {
+  max-width: 26em;
+  text-align: left;
+}
+.sc-solo-center .sc-hero-label {
   text-align: center;
 }
 
+/* ── Stat distribution scenes ────────────────────────────────── */
+
 .sc-dist-title {
-  font-family: Museo, Inter, sans-serif;
-  font-weight: 700;
   font-size: 4.2em;
   line-height: 1.05;
 }
@@ -435,12 +772,13 @@
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: var(--sc-accent);
+  background: var(--sc-ink);
 }
 .sc-dist-fill.sc-peak {
-  background: linear-gradient(90deg, var(--sc-accent), var(--sc-accent2));
-  box-shadow: 0 0 1.4em var(--sc-glow);
+  background: linear-gradient(90deg, var(--sc-accent), var(--sc-ink));
 }
+.sc-bg-white .sc-dist-fill { background: var(--sc-accent); }
+.sc-bg-white .sc-dist-fill.sc-peak { background: linear-gradient(90deg, #e61e2a, #000054); }
 .sc-dist-value {
   font-size: 1.7em;
   font-weight: 700;
@@ -471,408 +809,166 @@
   display: block;
   width: 100%;
   border-radius: 0.5em 0.5em 0.2em 0.2em;
-  background: var(--sc-accent);
-  opacity: 0.75;
+  background: var(--sc-ink);
+  opacity: 0.72;
 }
 .sc-month-fill.sc-peak {
   opacity: 1;
-  background: linear-gradient(to top, var(--sc-accent), var(--sc-accent2));
-  box-shadow: 0 0 1.6em var(--sc-glow);
+  background: linear-gradient(to top, var(--sc-accent), var(--sc-ink));
 }
+.sc-bg-white .sc-month-fill { background: var(--sc-accent); }
+.sc-bg-white .sc-month-fill.sc-peak { background: linear-gradient(to top, #e61e2a, #000054); }
 .sc-month-label {
   font-size: 1.05em;
   font-weight: 600;
   color: var(--sc-muted);
 }
 .sc-month-label.sc-peak-label {
-  color: var(--sc-accent2);
+  color: var(--sc-ink);
+  font-weight: 700;
 }
 
-/* ── Top-3 podium ────────────────────────────────────────────── */
+/* ── Top-3 spotlight list (cycling focus, pixel arrow) ───────── */
 
-.sc-podium {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 5em;
-  margin-top: 1em;
-}
-.sc-podium-col {
-  position: relative;
+.sc-focus-list {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.55em;
-  width: 24em;
-}
-.sc-podium-bar {
-  order: 10;
+  gap: 1.4em;
   width: 100%;
-  border-radius: 1em 1em 0.3em 0.3em;
-  background: var(--sc-card);
-  border: 1px solid var(--sc-bar-track);
-  margin-top: 0.8em;
+  max-width: 88em;
 }
-.sc-rank-1 .sc-podium-bar {
-  height: 15em;
-  background: linear-gradient(to top, var(--sc-card), var(--sc-glow));
-}
-.sc-rank-2 .sc-podium-bar { height: 10.5em; }
-.sc-rank-3 .sc-podium-bar { height: 8em; }
-
-.sc-medal {
+.sc-focus-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 3em;
-  height: 3em;
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: 1.4em;
-  color: #201500;
+  align-items: baseline;
+  gap: 1.2em;
+  /* Rows rest faded; their focus window lifts them (seeded timing via --fa/--fb). */
+  opacity: 0.3;
 }
-.sc-medal-1 { background: #ffb81c; box-shadow: 0 0 1.6em rgba(255, 184, 28, 0.55); }
-.sc-medal-2 { background: #b3b3cf; }
-.sc-medal-3 { background: #f58220; }
-
-.sc-podium-name {
-  font-family: Museo, Inter, sans-serif;
+.sc-focus-rank {
+  font-family: Museo, 'Helvetica Neue', Helvetica, sans-serif;
   font-weight: 700;
   font-size: 2em;
-  line-height: 1.15;
-  max-width: 100%;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  color: var(--sc-muted);
+  min-width: 2.2em;
+}
+.sc-focus-name {
+  font-size: 4.6em;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
-.sc-gold-name {
-  background: linear-gradient(100deg, var(--sc-ink) 20%, var(--sc-accent2) 90%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-.sc-podium-value {
-  font-size: 1.9em;
+.sc-focus-value {
+  font-family: Museo, 'Helvetica Neue', Helvetica, sans-serif;
   font-weight: 700;
+  font-size: 2.6em;
+  white-space: nowrap;
 }
-.sc-podium-unit {
-  font-size: 0.62em;
+.sc-focus-unit {
+  font-size: 0.55em;
   font-weight: 600;
   color: var(--sc-muted);
 }
-.sc-bloom {
-  position: absolute;
-  left: 50%;
-  bottom: 2em;
-  width: 34em;
-  height: 34em;
-  margin-left: -17em;
-  border-radius: 999px;
-  background: radial-gradient(circle, var(--sc-glow), transparent 65%);
-  pointer-events: none;
+.sc-focus-arrow {
+  font-size: 2.2em;
+  color: var(--sc-ink);
+  opacity: 0;
 }
 
-/* ── Backgrounds: aurora / geometric / grain ─────────────────── */
-
-.sc-aurora {
-  position: absolute;
-  inset: -12%;
-  filter: blur(80px); /* static — blobs move via transform only */
-  pointer-events: none;
+/* Focus choreography: each row gets --fa (focus start) and --fd (hold). The
+   last-focused row (#1) keeps the final state (forwards fill on the LAST row
+   is applied via .sc-focus-final). */
+.sc-focus-row {
+  animation: sc-focus-pulse calc(var(--pace) * var(--fd, 1100ms)) ease-in-out calc(var(--pace) * var(--fa, 0ms)) both;
 }
-.sc-blob {
-  position: absolute;
-  width: 52em;
-  height: 52em;
-  border-radius: 999px;
-  mix-blend-mode: screen;
-  will-change: transform;
-  opacity: 0.5;
+.sc-focus-row.sc-focus-final {
+  animation: sc-focus-hold calc(var(--pace) * var(--fd, 1100ms)) ease-out calc(var(--pace) * var(--fa, 0ms)) both;
 }
-.sc-blob-1 {
-  top: -10%;
-  left: -6%;
-  background: radial-gradient(circle, var(--sc-blob-1), transparent 62%);
-  animation: sc-drift-1 26s ease-in-out infinite alternate;
+.sc-focus-row .sc-focus-arrow {
+  animation: sc-focus-arrow calc(var(--pace) * var(--fd, 1100ms)) ease-in-out calc(var(--pace) * var(--fa, 0ms)) both;
 }
-.sc-blob-2 {
-  bottom: -18%;
-  right: -8%;
-  background: radial-gradient(circle, var(--sc-blob-2), transparent 62%);
-  animation: sc-drift-2 31s ease-in-out infinite alternate;
-}
-.sc-blob-3 {
-  top: 30%;
-  left: 44%;
-  width: 38em;
-  height: 38em;
-  background: radial-gradient(circle, var(--sc-blob-3), transparent 62%);
-  animation: sc-drift-3 23s ease-in-out infinite alternate;
-  opacity: 0.34;
+.sc-focus-row.sc-focus-final .sc-focus-arrow {
+  animation: sc-focus-arrow-hold calc(var(--pace) * var(--fd, 1100ms)) ease-out calc(var(--pace) * var(--fa, 0ms)) both;
 }
 
-.sc-geo {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
+@keyframes sc-focus-pulse {
+  0%, 100% { opacity: 0.3; transform: translateX(0); }
+  18%, 82% { opacity: 1; transform: translateX(0.5em); }
 }
-.sc-geo-ring {
-  position: absolute;
-  right: -22em;
-  top: -22em;
-  width: 64em;
-  height: 64em;
-  border-radius: 999px;
-  border: 0.9em solid var(--sc-card);
+@keyframes sc-focus-hold {
+  0% { opacity: 0.3; transform: translateX(0); }
+  18%, 100% { opacity: 1; transform: translateX(0.5em); }
 }
-.sc-geo-circle {
-  position: absolute;
-  left: -14em;
-  bottom: -18em;
-  width: 44em;
-  height: 44em;
-  border-radius: 999px;
-  background: var(--sc-card);
+@keyframes sc-focus-arrow {
+  0%, 100% { opacity: 0; }
+  18%, 82% { opacity: 1; }
+}
+@keyframes sc-focus-arrow-hold {
+  0% { opacity: 0; }
+  18%, 100% { opacity: 1; }
 }
 
-.sc-grain {
-  position: absolute;
-  inset: 0;
-  z-index: 40;
-  pointer-events: none;
-  opacity: var(--sc-grain-opacity, 0.045);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
+/* ── Card chrome + weight helpers ────────────────────────────── */
 
-/* ── Viewer controls ─────────────────────────────────────────── */
+.sc-cardline-thin { border: 1px solid var(--sc-bar-track); }
+.sc-cardline-thick { border: 0.38em solid #ffffff; }
+.sc-w-black { font-weight: 900; letter-spacing: -0.03em; }
 
-.sc-play {
-  display: flex;
+/* ── Project layout archetypes (image compositions) ──────────── */
+
+.sc-floating-layout {
+  display: grid;
+  grid-template-columns: 48% 52%;
   align-items: center;
+  gap: 3em;
+}
+.sc-floating-card-wrap {
+  position: relative;
+  display: flex;
   justify-content: center;
-  width: 7em;
-  height: 7em;
-  border-radius: 999px;
-  background: var(--sc-accent);
-  color: #fff;
-  box-shadow: 0 0 3em var(--sc-glow);
-  transition: transform 200ms var(--sc-ease-settle);
-  cursor: pointer;
-}
-.sc-play:hover {
-  transform: scale(1.07);
-}
-.sc-play-icon {
-  width: 2.6em;
-  height: 2.6em;
-  margin-left: 0.3em;
-}
-.sc-loop {
-  display: flex;
   align-items: center;
-  gap: 0.7em;
-  font-size: 1.2em;
-  font-weight: 600;
-  color: var(--sc-muted);
-  cursor: pointer;
-}
-.sc-loop-end {
-  position: absolute;
-  bottom: 3em;
-  left: 50%;
-  transform: translateX(-50%);
-}
-.sc-play-again {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6em;
-  padding: 1em 2.2em;
-  border-radius: 999px;
-  background: var(--sc-accent);
-  color: #fff;
-  font-size: 1.5em;
-  font-weight: 700;
-  box-shadow: 0 0 2.4em var(--sc-glow);
-  transition: transform 200ms var(--sc-ease-settle);
-  cursor: pointer;
-}
-.sc-play-again:hover {
-  transform: scale(1.05);
-}
-.sc-icon {
-  width: 1.1em;
-  height: 1.1em;
-}
-
-.sc-progress {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 0.32em;
-  z-index: 45;
-  background: var(--sc-bar-track);
-}
-.sc-progress-fill {
   height: 100%;
-  background: var(--sc-accent);
-  transform-origin: left center;
-  transform: scaleX(0);
 }
-
-/* ── Keyframe catalog ────────────────────────────────────────── */
-
-@keyframes sc-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.sc-single-floating-card {
+  position: relative;
+  width: 32em;
+  aspect-ratio: 4 / 3;
+  border-radius: 1.5em;
+  overflow: hidden;
+  box-shadow: 0 2em 4.5em rgba(0, 0, 20, 0.4);
+  transform: rotate(var(--rot, 3deg));
+  animation: sc-pop calc(var(--pace) * 420ms) var(--sc-ease-spring) calc(var(--pace) * var(--d, 0ms)) both;
 }
-@keyframes sc-rise-mask {
-  from { transform: translateY(var(--sc-rise-y)); }
-  to { transform: translateY(0); }
-}
-@keyframes sc-rise-soft {
-  from { opacity: 0; transform: translateY(1.2em); }
-  to { opacity: 1; transform: translateY(0); }
-}
-/* Independent `scale` channel so static transforms (collage tilt) survive. */
-@keyframes sc-pop {
-  from { opacity: 0; scale: var(--sc-pop-scale); filter: blur(var(--sc-pop-blur)); }
-  to { opacity: 1; scale: 1; filter: blur(0); }
-}
-@keyframes sc-bar-x {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
-}
-@keyframes sc-bar-y {
-  from { transform: scaleY(0); }
-  to { transform: scaleY(1); }
-}
-@keyframes sc-sweep {
-  to { background-size: 100% 0.14em; }
-}
-@keyframes sc-glow-bloom {
-  0% { opacity: 0; scale: 0.6; }
-  60% { opacity: 1; }
-  100% { opacity: 0.85; scale: 1; }
-}
-/* Independent `translate` channel (composes with static transforms). */
-@keyframes sc-bob {
-  from { translate: 0 -0.35em; }
-  to { translate: 0 0.35em; }
-}
-@keyframes sc-enter-zoom {
-  from { opacity: 0; transform: scale(var(--sc-zoom-from)); }
-  to { opacity: 1; transform: scale(1); }
-}
-@keyframes sc-exit-zoom {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(var(--sc-zoom-to)); }
-}
-@keyframes sc-wipe-in-x {
-  from { clip-path: inset(0 100% 0 0); }
-  to { clip-path: inset(0 0 0 0); }
-}
-@keyframes sc-wipe-in-circle {
-  from { clip-path: circle(0% at 50% 50%); }
-  to { clip-path: circle(142% at 50% 50%); }
-}
-@keyframes sc-kb-a {
-  from { transform: scale(1.02) translate3d(0, 0, 0); }
-  to { transform: scale(1.12) translate3d(-2.5%, -1.5%, 0); }
-}
-@keyframes sc-kb-b {
-  from { transform: scale(1.02) translate3d(0, 0, 0); }
-  to { transform: scale(1.12) translate3d(2.5%, -1.5%, 0); }
-}
-@keyframes sc-kb-c {
-  from { transform: scale(1.12) translate3d(-2%, 1.5%, 0); }
-  to { transform: scale(1.02) translate3d(0, 0, 0); }
-}
-@keyframes sc-kb-d {
-  from { transform: scale(1.02) translate3d(0, 0, 0); }
-  to { transform: scale(1.12) translate3d(0, 2.2%, 0); }
-}
-@keyframes sc-drift-1 {
-  from { transform: translate3d(-8%, -5%, 0) scale(1); }
-  to { transform: translate3d(11%, 9%, 0) scale(1.22); }
-}
-@keyframes sc-drift-2 {
-  from { transform: translate3d(6%, 4%, 0) scale(1.15); }
-  to { transform: translate3d(-10%, -8%, 0) scale(0.95); }
-}
-@keyframes sc-drift-3 {
-  from { transform: translate3d(-5%, 8%, 0) scale(0.9); }
-  to { transform: translate3d(8%, -7%, 0) scale(1.18); }
-}
-
-/* ── Moving Gradient Backdrop ────────────────────────────────── */
-.sc-moving-gradient-bg {
-  background: linear-gradient(-45deg, #e61e2a, #000054, #800f15, #00002b) !important;
-  background-size: 400% 400% !important;
-  animation: sc-moving-gradient calc(var(--pace) * 15s) ease infinite !important;
-}
-@keyframes sc-moving-gradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-/* ── Typography Overrides ────────────────────────────────────── */
-.sc-font-museo {
-  font-family: Museo, Inter, sans-serif !important;
-}
-.sc-font-helvetica {
-  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
-}
-.sc-weight-bold {
-  font-weight: 700 !important;
-}
-.sc-weight-black {
-  font-weight: 900 !important;
-  letter-spacing: -0.04em !important;
-}
-
-/* ── Polaroid Layout (1 Image) ──────────────────────────────── */
-.sc-polaroid-layout {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2em;
+.sc-single-floating-card img {
   width: 100%;
-}
-.sc-polaroid-frame {
-  background: #ffffff;
-  padding: 1.2em 1.2em 3em 1.2em;
-  box-shadow: 0 1.2em 3.5em rgba(0, 0, 0, 0.25);
-  border-radius: 4px;
-  transform: rotate(-2deg);
-  max-width: 25em;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.sc-polaroid-frame img {
-  width: 100%;
-  aspect-ratio: 1;
+  height: 100%;
   object-fit: cover;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-}
-.sc-polaroid-caption {
-  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-weight: 700;
-  font-size: 1.1em;
-  color: #101010 !important;
-  margin-top: 1em;
-  text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
 }
 
-/* ── Circular Crop Layout (1 Image) ─────────────────────────── */
+.sc-asymmetric-layout {
+  display: grid;
+  grid-template-columns: 52% 48%;
+  align-items: center;
+  gap: 3.5em;
+}
+.sc-vertical-banner-wrap {
+  position: relative;
+  height: 38em;
+  border-radius: 1.5em;
+  overflow: hidden;
+  box-shadow: 0 1.8em 4em rgba(0, 0, 20, 0.35);
+}
+.sc-vertical-banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sc-project-right {
+  display: flex;
+  align-items: center;
+}
+
 .sc-crop-circle-layout {
   display: grid;
   grid-template-columns: 55% 45%;
@@ -880,6 +976,8 @@
   gap: 3em;
   width: 100%;
 }
+.sc-crop-circle-layout.sc-flip { grid-template-columns: 45% 55%; }
+.sc-crop-circle-layout.sc-flip > :first-child { order: 2; }
 .sc-circle-crop-wrap {
   position: relative;
   display: flex;
@@ -892,7 +990,7 @@
   border-radius: 50%;
   overflow: hidden;
   border: 4px solid #ffffff;
-  box-shadow: 0 1.5em 4em rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1.5em 4em rgba(0, 0, 20, 0.3);
 }
 .sc-circle-crop-container img {
   width: 100%;
@@ -900,7 +998,6 @@
   object-fit: cover;
 }
 
-/* ── Masonry Staggered Steps (2+ Images) ─────────────────────── */
 .sc-masonry-layout {
   display: grid;
   grid-template-columns: 45% 55%;
@@ -908,6 +1005,8 @@
   gap: 3em;
   width: 100%;
 }
+.sc-masonry-layout.sc-flip { grid-template-columns: 55% 45%; }
+.sc-masonry-layout.sc-flip > :first-child { order: 2; }
 .sc-masonry-container {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -917,25 +1016,17 @@
 .sc-masonry-card {
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1em 3em rgba(0, 0, 0, 0.25);
-  transition: transform 0.3s ease;
+  box-shadow: 0 1em 3em rgba(0, 0, 20, 0.25);
 }
-.sc-masonry-card-1 {
-  transform: translateY(-1.5em);
-}
-.sc-masonry-card-2 {
-  transform: translateY(1.5em);
-}
-.sc-masonry-card-3 {
-  transform: translateY(-0.5em);
-}
+.sc-masonry-card-1 { transform: translateY(-1.5em); }
+.sc-masonry-card-2 { transform: translateY(1.5em); }
+.sc-masonry-card-3 { transform: translateY(-0.5em); }
 .sc-masonry-card img {
   width: 100%;
   height: 12em;
   object-fit: cover;
 }
 
-/* ── Filmstrip Layout (2+ Images) ────────────────────────────── */
 .sc-filmstrip-layout {
   display: flex;
   flex-direction: column;
@@ -957,7 +1048,7 @@
   flex-shrink: 0;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1em 2.5em rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1em 2.5em rgba(0, 0, 20, 0.25);
 }
 .sc-filmstrip-card img {
   width: 100%;
@@ -965,7 +1056,6 @@
   object-fit: cover;
 }
 
-/* ── Featured Center Split (2+ Images) ───────────────────────── */
 .sc-featured-split-layout {
   display: grid;
   grid-template-columns: 40% 60%;
@@ -973,6 +1063,8 @@
   gap: 3.5em;
   width: 100%;
 }
+.sc-featured-split-layout.sc-flip { grid-template-columns: 60% 40%; }
+.sc-featured-split-layout.sc-flip > :first-child { order: 2; }
 .sc-featured-images-grid {
   display: grid;
   grid-template-columns: 60% 40%;
@@ -983,7 +1075,7 @@
   height: 18em;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1.2em 3em rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1.2em 3em rgba(0, 0, 20, 0.3);
 }
 .sc-featured-main img {
   width: 100%;
@@ -999,7 +1091,7 @@
   height: 8.4em;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 0.8em 2em rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0.8em 2em rgba(0, 0, 20, 0.2);
 }
 .sc-featured-side-card img {
   width: 100%;
@@ -1007,153 +1099,14 @@
   object-fit: cover;
 }
 
-/* ── Additional Kinetic Typography Reveals ───────────────────── */
-.sc-a-slide-fade {
-  animation: sc-anim-slide-fade calc(var(--pace) * 0.7s) cubic-bezier(0.25, 1, 0.5, 1) both;
-  animation-delay: calc(var(--pace) * var(--d));
-  display: inline-block;
-}
-.sc-a-zoom-fade {
-  animation: sc-anim-zoom-fade calc(var(--pace) * 0.7s) cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  animation-delay: calc(var(--pace) * var(--d));
-  display: inline-block;
-}
-
-@keyframes sc-anim-slide-fade {
-  from {
-    opacity: 0;
-    transform: translate3d(-1.5em, 0, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-@keyframes sc-anim-zoom-fade {
-  from {
-    opacity: 0;
-    transform: scale(0.7);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* ── Split Banner Layout (No Images) ─────────────────────────── */
-.sc-project-split-banner {
-  display: grid;
-  grid-template-columns: 46% 54%;
-  align-items: center;
-  gap: 3.5em;
-  width: 100%;
-}
-.sc-split-banner-left {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  height: 28em;
-  background: var(--sc-bg2);
-  border-radius: 1.5em;
-  box-shadow: 0 1.5em 3.5em rgba(0, 0, 0, 0.35);
-  border: 0.1em solid rgba(255, 255, 255, 0.08);
-  text-align: center;
-}
-.sc-banner-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.6em;
-}
-.sc-banner-massive-text {
-  font-family: Museo, Inter, sans-serif;
-  font-weight: 800;
-  font-size: 9.5em;
-  line-height: 1;
-  background: linear-gradient(135deg, var(--sc-ink), var(--sc-accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-.sc-banner-subtitle {
-  font-size: 1.3em;
-  font-weight: 700;
-  letter-spacing: 0.25em;
-  color: var(--sc-muted);
-  text-transform: uppercase;
-}
-.sc-split-banner-right {
-  display: flex;
-  align-items: center;
-}
-
-/* ── Floating Single Image Card Layout ───────────────────────── */
-.sc-floating-layout {
-  display: grid;
-  grid-template-columns: 48% 52%;
-  align-items: center;
-  gap: 3em;
-}
-.sc-floating-card-wrap {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-}
-.sc-single-floating-card {
-  position: relative;
-  width: 32em;
-  aspect-ratio: 4 / 3;
-  border-radius: 1.5em;
-  overflow: hidden;
-  box-shadow: 0 2em 4.5em rgba(0, 0, 0, 0.45);
-  border: 0.15em solid rgba(255, 255, 255, 0.12);
-  transform: rotate(var(--rot, 3deg)) translate(var(--dx, 0), var(--dy, 0));
-  animation:
-    sc-pop calc(var(--pace) * 450ms) var(--sc-ease-spring) calc(var(--pace) * var(--d, 0ms)) both,
-    sc-bob 8s ease-in-out var(--bob-delay, 0ms) infinite alternate;
-}
-.sc-single-floating-card img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* ── Asymmetric/Flipped Vertical Banner Layout ───────────────── */
-.sc-asymmetric-layout {
-  display: grid;
-  grid-template-columns: 52% 48%;
-  align-items: center;
-  gap: 3.5em;
-}
-.sc-vertical-banner-wrap {
-  position: relative;
-  height: 38em;
-  border-radius: 1.5em;
-  overflow: hidden;
-  box-shadow: 0 1.8em 4em rgba(0, 0, 0, 0.4);
-  border: 0.15em solid rgba(255, 255, 255, 0.08);
-}
-.sc-vertical-banner-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.sc-project-right {
-  display: flex;
-  align-items: center;
-}
-
-/* ── Grid Collage Layout ─────────────────────────────────────── */
 .sc-grid-layout {
   display: grid;
   grid-template-columns: 44% 56%;
   align-items: center;
   gap: 3em;
 }
+.sc-grid-layout.sc-flip { grid-template-columns: 56% 44%; }
+.sc-grid-layout.sc-flip > :first-child { order: 2; }
 .sc-collage-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1164,8 +1117,7 @@
   position: relative;
   border-radius: 1.2em;
   overflow: hidden;
-  box-shadow: 0 1.2em 3em rgba(0, 0, 0, 0.35);
-  border: 0.12em solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1.2em 3em rgba(0, 0, 20, 0.3);
   height: 14.5em;
 }
 .sc-grid-card img {
@@ -1177,49 +1129,6 @@
 .sc-grid-card-2 { transform: rotate(2deg); margin-top: 1.5em; }
 .sc-grid-card-3 { transform: rotate(1.5deg); margin-top: -1.5em; }
 .sc-grid-card-4 { transform: rotate(-1.5deg); }
-
-/* ── Arched Fan Layout ───────────────────────────────────────── */
-.sc-arch-layout {
-  display: grid;
-  grid-template-columns: 44% 56%;
-  align-items: center;
-  gap: 3em;
-}
-.sc-fan-arch {
-  position: relative;
-  height: 100%;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.sc-arch-glow {
-  position: absolute;
-  width: 25em;
-  height: 25em;
-  border-radius: 999px;
-  background: radial-gradient(circle, var(--sc-glow), transparent 70%);
-  opacity: 0.65;
-}
-.sc-arch-card {
-  position: absolute;
-  width: 18em;
-  aspect-ratio: 3 / 4;
-  border-radius: 0.8em;
-  overflow: hidden;
-  box-shadow: 0 1.5em 3.5em rgba(0, 0, 0, 0.45);
-  border: 0.15em solid rgba(255, 255, 255, 0.1);
-  transform: translate(var(--dx, 0), var(--dy, 0)) rotate(var(--rot, 0deg));
-  transform-origin: center bottom;
-  animation:
-    sc-pop calc(var(--pace) * 450ms) var(--sc-ease-spring) calc(var(--pace) * var(--d, 0ms)) both,
-    sc-bob 8s ease-in-out var(--bob-delay, 0ms) infinite alternate;
-}
-.sc-arch-card img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
 
 /* ── Project note ────────────────────────────────────────────── */
 .sc-project-note {
@@ -1237,6 +1146,190 @@
   overflow: hidden;
 }
 
+/* ── Grain overlay (kept from the original system) ───────────── */
+
+.sc-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Viewer controls ─────────────────────────────────────────── */
+
+.sc-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 7em;
+  height: 7em;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #e61e2a;
+  box-shadow: 0 0 3em rgba(0, 0, 20, 0.25);
+  transition: transform 200ms var(--sc-ease-settle);
+  cursor: pointer;
+}
+.sc-play:hover {
+  transform: scale(1.07);
+}
+.sc-play-icon {
+  width: 2.6em;
+  height: 2.6em;
+  margin-left: 0.3em;
+}
+.sc-loop {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  font-size: 1.2em;
+  font-weight: 600;
+  color: var(--sc-muted, rgba(255, 255, 255, 0.8));
+  cursor: pointer;
+}
+.sc-loop-end {
+  position: absolute;
+  bottom: 3em;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.sc-play-again {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 1em 2.2em;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #e61e2a;
+  font-size: 1.5em;
+  font-weight: 700;
+  box-shadow: 0 0 2.4em rgba(0, 0, 20, 0.25);
+  transition: transform 200ms var(--sc-ease-settle);
+  cursor: pointer;
+}
+.sc-play-again:hover {
+  transform: scale(1.05);
+}
+.sc-icon {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.sc-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.32em;
+  z-index: 45;
+  background: rgba(255, 255, 255, 0.18);
+}
+.sc-progress-fill {
+  height: 100%;
+  background: #ffffff;
+  mix-blend-mode: difference;
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+/* ── Keyframe catalog ────────────────────────────────────────── */
+
+@keyframes sc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sc-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sc-blink {
+  0%, 49% { opacity: 0.65; }
+  50%, 100% { opacity: 0; }
+}
+@keyframes sc-rise-mask {
+  from { transform: translateY(var(--sc-rise-y)); }
+  to { transform: translateY(0); }
+}
+@keyframes sc-rise-soft {
+  from { opacity: 0; transform: translateY(1.2em); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* Independent `scale` channel so static transforms (collage tilt) survive. */
+@keyframes sc-pop {
+  from { opacity: 0; scale: var(--sc-pop-scale); filter: blur(var(--sc-pop-blur)); }
+  to { opacity: 1; scale: 1; filter: blur(0); }
+}
+@keyframes sc-pixel-in {
+  from { opacity: 0; scale: 0; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes sc-pixel-shimmer {
+  from { opacity: 1; }
+  to { opacity: 0.35; }
+}
+@keyframes sc-bar-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes sc-bar-y {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes sc-sweep {
+  to { background-size: 100% 0.14em; }
+}
+@keyframes sc-anim-slide-fade {
+  from { opacity: 0; transform: translate3d(-1.5em, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes sc-anim-zoom-fade {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes sc-ticker-in {
+  from { opacity: 0; transform: translateX(var(--sc-ticker-x)); }
+  60% { opacity: 1; }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes sc-grad-slide {
+  from { background-position: 0% 0; }
+  to { background-position: 100% 0; }
+}
+@keyframes sc-sheen-pass {
+  0% { background-position: 130% 0; }
+  55%, 100% { background-position: -30% 0; }
+}
+/* Slow settle zoom for full-bleed imagery — a locked-off camera, no pan. */
+@keyframes sc-still-zoom {
+  from { transform: scale(1.09); }
+  to { transform: scale(1.02); }
+}
+
+/* Scene transitions */
+@keyframes sc-enter-zoom {
+  from { opacity: 0; transform: scale(var(--sc-zoom-from)); }
+  to { opacity: 1; transform: scale(1); }
+}
+/* Exit: hold still and dim slightly — the entering panel covers/wipes over it. */
+@keyframes sc-exit-still {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0.92; transform: scale(1); }
+}
+@keyframes sc-wipe-in-x {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes sc-wipe-in-up {
+  from { clip-path: inset(100% 0 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes sc-push-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
 /* ── Reduced motion: calm crossfade variant ──────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -1246,32 +1339,48 @@
     --sc-pop-blur: 0px;
     --sc-zoom-from: 1;
     --sc-zoom-to: 1;
+    --sc-ticker-x: 0%;
   }
   /* Ambient loops off entirely. */
   .sc-kb,
-  .sc-blob,
-  .sc-collage-card,
-  .sc-single-floating-card,
-  .sc-arch-card,
-  .sc-bloom,
-  .sc-moving-gradient-bg {
+  .sc-anim-grad.sc-bg-redGrad,
+  .sc-anim-grad.sc-bg-navyGrad,
+  .sc-anim-grad.sc-bg-duoGrad {
     animation: none !important;
-    opacity: 1;
   }
-  .sc-blob {
-    opacity: 0.4;
+  .sc-gradtext.sc-shimmer {
+    animation: none !important;
   }
-  .sc-moving-gradient-bg {
-    background: #000054 !important; /* solid navy */
+  .sc-sheen::after {
+    animation: none !important;
+    opacity: 0;
+  }
+  .sc-pixel {
+    animation: sc-fade-in calc(var(--pace) * 300ms) ease-out calc(var(--pace) * var(--d, 0ms)) both !important;
+  }
+  .sc-caret::after {
+    animation: none !important;
+    opacity: 0.5;
   }
   /* Bars fade in place instead of growing. */
   .sc-a-barx,
   .sc-a-bary {
     animation-name: sc-fade-in !important;
   }
+  /* Focus list: everything settles visible. */
+  .sc-focus-row,
+  .sc-focus-row.sc-focus-final {
+    animation: sc-fade-in calc(var(--pace) * 400ms) ease-out both !important;
+    opacity: 1;
+  }
+  .sc-focus-row .sc-focus-arrow {
+    animation: none !important;
+    opacity: 0;
+  }
   /* Scene changes become plain crossfades. */
   .sc-scene[data-enter='wipeX'],
-  .sc-scene[data-enter='wipeCircle'] {
+  .sc-scene[data-enter='wipeUp'],
+  .sc-scene[data-enter='push'] {
     animation-name: sc-fade-in !important;
   }
 }
