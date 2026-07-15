@@ -71,17 +71,23 @@ const BG_POOLS: Record<ColorMode, SceneBgId[]> = {
 function makeBgPicker(rng: () => number, mode: ColorMode) {
   const bag = makeBag(rng, BG_POOLS[mode] ?? BG_POOLS.gradient)
   let lastFamily: string | null = null
-  return (): SceneBgId => {
-    // Draw until the family changes (bounded — the bag always contains ≥2 families).
-    for (let tries = 0; tries < 8; tries++) {
-      const bg = bag()
-      if (bgFamily(bg) !== lastFamily) {
-        lastFamily = bgFamily(bg)
-        return bg
+  return {
+    next(): SceneBgId {
+      // Draw until the family changes (bounded — the bag always contains ≥2 families).
+      for (let tries = 0; tries < 8; tries++) {
+        const bg = bag()
+        if (bgFamily(bg) !== lastFamily) {
+          lastFamily = bgFamily(bg)
+          return bg
+        }
       }
-    }
-    lastFamily = null
-    return bag()
+      lastFamily = null
+      return bag()
+    },
+    /** Record a FORCED background (intro / split panels) so the next draw still changes family. */
+    note(bg: SceneBgId) {
+      lastFamily = bgFamily(bg)
+    },
   }
 }
 
@@ -113,7 +119,7 @@ export function compileScenes(config: ShowcaseConfig): CompiledShowcase {
   const scenes: Scene[] = []
 
   const mode: ColorMode = config.style.colorMode ?? 'gradient'
-  const nextBg = makeBgPicker(rng, mode)
+  const bgPicker = makeBgPicker(rng, mode)
   const enterBag = makeBag(rng, ['wipeX', 'wipeUp', 'push', 'zoom'] as SceneEnter[])
   const statVariantBag = makeBag(rng, ['counter', 'ticker', 'gradient', 'split'] as StatSoloVariant[])
   const whiteInkBag = makeBag(rng, ['red', 'navy', 'red', 'navy'] as WhiteInk[])
@@ -131,7 +137,13 @@ export function compileScenes(config: ShowcaseConfig): CompiledShowcase {
     payload: ScenePayload,
     opts?: { bg?: SceneBgId; enter?: SceneEnter; pixelChance?: number },
   ) => {
-    const bg = opts?.bg ?? nextBg()
+    let bg: SceneBgId
+    if (opts?.bg) {
+      bg = opts.bg
+      bgPicker.note(bg) // keep the no-adjacent-family rule intact after forced panels
+    } else {
+      bg = bgPicker.next()
+    }
     const whiteInk = whiteInkBag()
     // Pixel decor on a seeded minority of scenes (drawn ALWAYS to keep the
     // PRNG sequence stable regardless of the chance gate).
