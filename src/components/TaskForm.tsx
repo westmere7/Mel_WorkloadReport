@@ -15,6 +15,8 @@ import { ImageLightbox } from './ui/ImageLightbox'
 import { addDaysISO, cx, toMessage } from '../lib/format'
 import { compressToWebP, ACCEPTED_IMAGE_TYPES } from '../lib/image'
 import { deriveHalf, parseTaskCode } from '../lib/taskCode'
+import { MondayLookup } from './MondayLookup'
+import { isMondayLookupEnabled, type MondayHit } from '../lib/monday'
 
 const MAX_IMAGES = 10
 
@@ -495,6 +497,27 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     }
   }
 
+  // Prefill from a monday.com board item (name, code, timeline → dates, size).
+  // On-demand only; every field stays editable afterwards.
+  const mondayEnabled = useMemo(isMondayLookupEnabled, [])
+  const applyMondayHit = (hit: MondayHit) => {
+    setName(hit.name)
+    if (hit.code) setCode(hit.code)
+    if (hit.startDate) {
+      setStartDate(hit.startDate)
+      setStartDateTouched(true)
+      if (!halfTouched) setHalf(deriveHalf(hit.startDate))
+    } else if (hit.code) {
+      // No timeline on the item — fall back to the code-derived start date.
+      fillDateFromCode(hit.code)
+    }
+    if (hit.endDate) {
+      setEndDate(hit.endDate)
+      setEndDateTouched(true)
+    }
+    if (hit.size) setSize(hit.size)
+  }
+
   // The code is optional; if given, it must still be valid & unique. Everything
   // else — including start and end dates — is required, and total assets must be positive.
   const validate = (): string[] => {
@@ -698,7 +721,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       {/* Code + Name — the task's identity */}
       <div className="grid gap-4 sm:grid-cols-[170px_1fr]">
         <div>
-          <label className="label">Task code</label>
+          <div className="flex items-center justify-between gap-2">
+            <label className="label">Task code</label>
+            {mondayEnabled && <MondayLookup initialQuery={name || code} onPick={applyMondayHit} />}
+          </div>
           <input
             className={cx('input h-11 font-mono', codeError && 'border-rmit-red focus:border-rmit-red')}
             placeholder="26.0608.A"

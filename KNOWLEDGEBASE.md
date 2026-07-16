@@ -631,3 +631,39 @@ link `/showcase/<id>` playing a deterministic, pure-CSS animated presentation.
   scene re-renders).
 - **Migration:** re-run `supabase/schema.sql` (adds `public.showcases` + open RLS). Anon read is
   required — links are public by design.
+
+## 18. monday.com task lookup (on-demand prefill, NOT sync)
+
+A **"Find on monday.com"** button in the New Task dialog's code section (`TaskForm.tsx`, beside
+the "Task code" label). Clicking opens a small **search popover** (`src/components/MondayLookup.tsx`)
+over one configured board; picking an item prefills **name, code (if the item has one), timeline →
+start/end dates, and T-shirt size** (+ derives half). Manual, per-task — there is **no background
+sync**; every field stays editable after.
+
+- **Never calls monday from the browser** (token exposure + monday blocks browser CORS). The client
+  (`src/lib/monday.ts` `searchMonday`) calls a **Supabase Edge Function** `monday-search`
+  (`supabase/functions/monday-search/index.ts`, Deno) via `getSupabase().functions.invoke`. The
+  function holds the token + board config as **secrets** and returns normalized hits
+  `{ id, name, code, startDate, endDate, size }`. Deno function → **not** covered by the app's `tsc`
+  (`@ts-nocheck`).
+- **Gating:** the button shows only when `isMondayLookupEnabled()` = Supabase configured **and**
+  `VITE_MONDAY_LOOKUP=1`. Degrades gracefully: function unset → `{configured:false}` →
+  `MondayNotConfiguredError` ("set the MONDAY_* secrets"); transport error → readable message in the
+  popover (never throws). Size labels map to the app enum in `normalizeSize` (falls back to null).
+- **Code comes from the item NAME, not a column.** monday item names are prefixed like
+  `[26.0716.A] VTAC Social vids…` (the app's own `[code] name` convention). `monday.ts`
+  `splitCodeFromName` pulls the bracketed code out and returns the cleaned name, so the board needs
+  **no code column** — leave `MONDAY_COL_CODE` unset. (`GCMC & Media Demand Tracker`, board
+  `1967557512`: `MONDAY_COL_TIMELINE=timeline__1`, `MONDAY_COL_SIZE=label_mkmfh8ew`, T-shirt labels
+  are single letters `M`/etc.)
+- **Setup (all provided by the operator — Claude never handles the token). Either the Supabase
+  Dashboard (Edge Functions → create `monday-search` in the editor + add Secrets — no CLI/Docker) or
+  the CLI:**
+  1. `supabase secrets set MONDAY_TOKEN=… MONDAY_BOARD_ID=… MONDAY_COL_TIMELINE=… MONDAY_COL_SIZE=…`
+     (code column omitted — parsed from the name; get column ids from the board via the API playground).
+  2. `supabase functions deploy monday-search` (default JWT verify is fine — `functions.invoke` sends
+     the anon key, a valid JWT).
+  3. Set `VITE_MONDAY_LOOKUP=1` in the app build and restart.
+- The function pages the board (up to ~500 items), filters by name/code substring, returns ≤15 hits;
+  Timeline `value` JSON gives `from`/`to`. ⚠️ **Column ids are board-specific** — they must be set as
+  secrets; the board id + ids are still TBD from the team (the button is dark until then).
