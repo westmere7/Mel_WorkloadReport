@@ -87,15 +87,18 @@ Deno.serve(async (req: Request) => {
       }
     }`
 
-  const needle = query.toLowerCase()
-  const hits: Array<Record<string, unknown>> = []
+  // Tokenize the query — a hit matches if ANY token appears in the item's
+  // name+code; we rank by how many tokens matched (then by a shorter name),
+  // so searching by the whole "code + name" from the form surfaces the best
+  // candidates even when the wording isn't identical.
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean)
+  const scored: Array<{ score: number; nameLen: number; item: Record<string, unknown> }> = []
   let cursor: string | null = null
   let scanned = 0
 
   try {
-    // Page through the board, filtering by name/code substring, until we have
-    // enough hits or we've scanned the cap.
-    while (scanned < MAX_SCAN && hits.length < MAX_HITS) {
+    // Page through the board, scoring every item, until we've scanned the cap.
+    while (scanned < MAX_SCAN) {
       const res = await fetch(MONDAY_API, {
         method: 'POST',
         headers: {
@@ -118,19 +121,16 @@ Deno.serve(async (req: Request) => {
         scanned++
         const cvById = new Map<string, any>((it.column_values ?? []).map((c: any) => [c.id, c]))
         const code = colCode ? (cvById.get(colCode)?.text ?? '').trim() : ''
-        const nameMatch = String(it.name ?? '').toLowerCase().includes(needle)
-        const codeMatch = code.toLowerCase().includes(needle)
-        if (!nameMatch && !codeMatch) continue
+        const name = String(it.name ?? '')
+        const haystack = `${name} ${code}`.toLowerCase()
+        const score = tokens.reduce((n, t) => n + (haystack.includes(t) ? 1 : 0), 0)
+        if (score === 0) continue
         const { startDate, endDate } = parseTimeline(cvById.get(colTimeline ?? '')?.value ?? null)
-        hits.push({
-          id: it.id,
-          name: it.name,
-          code,
-          startDate,
-          endDate,
-          size: (cvById.get(colSize ?? '')?.text ?? '').trim() || null,
+        scored.push({
+          score,
+          nameLen: name.length,
+          item: { id: it.id, name, code, startDate, endDate, size: (cvById.get(colSize ?? '')?.text ?? '').trim() || null },
         })
-        if (hits.length >= MAX_HITS) break
       }
       cursor = page?.cursor ?? null
       if (!cursor || items.length === 0) break
@@ -139,7 +139,10 @@ Deno.serve(async (req: Request) => {
     return json({ error: e instanceof Error ? e.message : 'Lookup failed.' }, 502)
   }
 
-  return json({ configured: true, items: hits })
+  // Best matches first (most tokens matched, then the tighter/shorter name).
+  scored.sort((a, b) => b.score - a.score || a.nameLen - b.nameLen)
+  const items = scored.slice(0, MAX_HITS).map((s) => s.item)
+  return json({ configured: true, items })
 })
 
 // ── Setup / deploy ───────────────────────────────────────────────────────────

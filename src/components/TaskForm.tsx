@@ -14,9 +14,8 @@ import { MultiSelect } from './ui/MultiSelect'
 import { ImageLightbox } from './ui/ImageLightbox'
 import { addDaysISO, cx, toMessage } from '../lib/format'
 import { compressToWebP, ACCEPTED_IMAGE_TYPES } from '../lib/image'
-import { deriveHalf, parseTaskCode } from '../lib/taskCode'
-import { MondayLookup } from './MondayLookup'
-import { isMondayLookupEnabled, type MondayHit } from '../lib/monday'
+import { deriveHalf, parseTaskCode, type ParsedCode } from '../lib/taskCode'
+import { isMondayLookupEnabled, searchMonday, type MondayHit } from '../lib/monday'
 
 const MAX_IMAGES = 10
 
@@ -260,6 +259,256 @@ function splitPastedName(value: string): { code?: string; name: string } {
   return { name: value }
 }
 
+/** "12 Mar 26 → 20 Jun 26" style range for a monday result row. */
+function fmtMondayRange(start: string | null, end: string | null): string {
+  const fmt = (iso: string | null) => {
+    if (!iso) return '—'
+    const [y, m, d] = iso.split('-').map(Number)
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    return `${d} ${months[(m ?? 1) - 1]} ${String(y).slice(2)}`
+  }
+  return `${fmt(start)} → ${fmt(end)}`
+}
+
+/**
+ * Combined identity field — one box for the task code + name (replaces the old
+ * two-box row). The code shows as a colour-coded chip on the left (green valid /
+ * amber legacy / red error), the rest is the name. Type or paste "[26.0716.A]
+ * Name" and the leading bracket lifts into the chip; × clears it; clicking the
+ * chip re-opens it for editing.
+ *
+ * When monday lookup is enabled, an "auto-fill" button sits inline on the right.
+ * Clicking it searches monday for whatever is in the field (code + name) and
+ * drops the matches (name · code · timeline · size, plus loading/not-found)
+ * right under the box; picking one fills the task via `onPick`.
+ */
+function CodeNameField({
+  code,
+  name,
+  parsed,
+  codeError,
+  filledIdentity,
+  applyIdentity,
+  setCode,
+  setName,
+  mondayEnabled,
+  onPick,
+}: {
+  code: string
+  name: string
+  parsed: ParsedCode
+  codeError: string | null
+  /** True when name/code were just auto-filled from monday (green dot). */
+  filledIdentity: boolean
+  /** Lift a raw "[code] name" string into code + name (the form's onNameChange). */
+  applyIdentity: (raw: string) => void
+  setCode: (v: string) => void
+  setName: (v: string) => void
+  mondayEnabled: boolean
+  onPick: (hit: MondayHit) => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [editing, setEditing] = useState(false)
+  const hasCode = code.trim().length > 0
+
+  // monday auto-fill dropdown state.
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [hits, setHits] = useState<MondayHit[] | null>(null)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const query = [name.trim(), code.trim()].filter(Boolean).join(' ')
+
+  const runSearch = async () => {
+    setOpen(true)
+    setSearchError(null)
+    setHits(null)
+    setLoading(true)
+    try {
+      setHits(await searchMonday(query))
+    } catch (e) {
+      setSearchError(toMessage(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Close the dropdown on outside click / Escape.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey, true)
+    }
+  }, [open])
+
+  const chipCls = codeError
+    ? 'bg-rmit-red/10 text-rmit-red border-rmit-red/40'
+    : parsed.legacy
+      ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30'
+      : 'bg-accent-green/10 text-accent-green border-accent-green/40'
+  const chipTitle = codeError
+    ? codeError
+    : parsed.valid && parsed.iso
+      ? `${parsed.legacy ? 'Legacy format · ' : ''}Booked ${parsed.iso}`
+      : undefined
+
+  // Re-open the chip as editable "[code] name" text at the front of the field.
+  const editCode = () => {
+    const raw = `[${code}] ${name}`.trimEnd()
+    const codeLen = code.length
+    setEditing(true)
+    setCode('')
+    setName(raw)
+    requestAnimationFrame(() => {
+      const el = inputRef.current
+      if (el) {
+        el.focus()
+        el.setSelectionRange(1, 1 + codeLen) // select the code inside the brackets
+      }
+    })
+  }
+
+  const commitEdit = () => {
+    if (!editing) return
+    applyIdentity(inputRef.current?.value ?? name)
+    setEditing(false)
+  }
+
+  return (
+    <div>
+      <label className={cx('label', filledIdentity && 'is-filled')}>Task code &amp; name</label>
+      <div ref={wrapRef} className="relative">
+        <div
+          className="flex h-12 items-center gap-2 rounded-xl border border-line bg-card px-2.5 transition focus-within:border-rmit-red focus-within:ring-2 focus-within:ring-brand-100 dark:focus-within:ring-brand-500/25"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) inputRef.current?.focus()
+          }}
+        >
+          {hasCode && !editing && (
+            <span
+              className={cx(
+                'inline-flex shrink-0 items-center gap-1 rounded-lg border py-1 pl-2 pr-1 font-mono text-sm font-semibold',
+                chipCls,
+              )}
+              title={chipTitle}
+            >
+              <button type="button" onClick={editCode} className="max-w-[11rem] truncate outline-none" title="Edit code">
+                {code}
+              </button>
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setCode('')}
+                className="rounded p-0.5 opacity-70 transition hover:opacity-100"
+                aria-label="Remove code"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+          <input
+            ref={inputRef}
+            className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-ink outline-none placeholder:font-normal placeholder:text-faint"
+            placeholder={hasCode ? 'Task name' : 'Task name — or paste “[26.0716.A] Name”'}
+            value={name}
+            onChange={(e) => (editing ? setName(e.target.value) : applyIdentity(e.target.value))}
+            onBlur={commitEdit}
+            onKeyDown={(e) => {
+              if (editing && e.key === 'Enter') {
+                e.preventDefault()
+                commitEdit()
+              } else if (!editing && hasCode && e.key === 'Backspace') {
+                const el = e.currentTarget
+                if (el.selectionStart === 0 && el.selectionEnd === 0) {
+                  e.preventDefault()
+                  editCode()
+                }
+              }
+            }}
+          />
+          {mondayEnabled && (
+            <button
+              type="button"
+              onClick={runSearch}
+              disabled={loading || !query}
+              title="Search monday.com for this task and auto-fill"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-xs font-semibold text-ink transition hover:bg-subtle disabled:opacity-40"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <img src="/monday.svg" alt="" className="h-4 w-4" />
+              )}
+              auto-fill
+            </button>
+          )}
+        </div>
+
+        {open && (
+          <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 rounded-xl border border-line bg-card p-1.5 shadow-lg">
+            {loading ? (
+              <p className="flex items-center gap-2 px-2 py-3 text-xs text-muted">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Searching monday…
+              </p>
+            ) : searchError ? (
+              <p className="px-2 py-3 text-xs text-rmit-red">{searchError}</p>
+            ) : hits && hits.length === 0 ? (
+              <p className="px-2 py-3 text-xs text-muted">No matches on the board for “{query}”.</p>
+            ) : hits ? (
+              <ul className="flex max-h-[300px] flex-col gap-0.5 overflow-y-auto">
+                {hits.map((h) => (
+                  <li key={h.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onPick(h)
+                        setOpen(false)
+                      }}
+                      className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-subtle"
+                    >
+                      <span className="line-clamp-1 text-sm font-semibold text-ink">{h.name || 'Untitled item'}</span>
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
+                        {h.code ? (
+                          <span className="font-mono text-ink">{h.code}</span>
+                        ) : (
+                          <span className="text-faint">no code</span>
+                        )}
+                        <span>· {fmtMondayRange(h.startDate, h.endDate)}</span>
+                        {h.size && <span className="rounded bg-subtle px-1.5 py-px font-semibold text-ink">{h.size}</span>}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      {codeError ? (
+        <p className="mt-1.5 text-xs font-medium text-rmit-red">{codeError}</p>
+      ) : parsed.valid && parsed.iso ? (
+        <p className="mt-1.5 text-xs text-accent-green">
+          {parsed.legacy ? 'Legacy format · ' : ''}Booked {parsed.iso}
+        </p>
+      ) : (
+        <p className="mt-1.5 text-xs text-faint">
+          Optional code goes in [brackets] at the front; the rest is the task name.
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** A titled group of form fields, with a divider above (except the first). Can
  *  show an inline action beside the title and be made collapsible. */
 function Section({
@@ -330,6 +579,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   const [half, setHalf] = useState<Half>(initial?.half ?? 'H1')
   const [halfTouched, setHalfTouched] = useState(Boolean(initial))
   const [size, setSize] = useState<Size>(initial?.size ?? 'M')
+  // Which fields were just auto-filled from monday.com (drives the green field dots).
+  // Keys: 'identity' (code+name), 'startDate', 'endDate', 'size'. Cleared when the
+  // user edits that field, so a green dot only means "as auto-filled, untouched".
+  const [filled, setFilled] = useState<Set<string>>(() => new Set())
+  const clearFilled = (key: string) =>
+    setFilled((prev) => {
+      if (!prev.has(key)) return prev
+      const next = new Set(prev)
+      next.delete(key)
+      return next
+    })
   const [note, setNote] = useState(initial?.note ?? '')
   const [images, setImages] = useState<TaskImage[]>(initial?.images ?? [])
   const [uploading, setUploading] = useState(0)
@@ -454,13 +714,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     }
   }
 
-  const onCodeChange = (value: string) => {
-    setCode(value)
-    fillDateFromCode(value)
-  }
-
   // Pasting "[26.0608.A] ISC Roadshow 2026…" pulls the code out and fills it + the date.
+  // Also the single-field parser: a leading "[code]" lifts into the code, the rest is the name.
   const onNameChange = (value: string) => {
+    clearFilled('identity')
     const parts = splitPastedName(value)
     if (parts.code !== undefined) {
       setCode(parts.code)
@@ -472,12 +729,14 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   }
 
   const onStartDateChange = (value: string) => {
+    clearFilled('startDate')
     setStartDate(value)
     setStartDateTouched(true)
     if (!halfTouched) setHalf(deriveHalf(value || null))
   }
 
   const onEndDateChange = (value: string) => {
+    clearFilled('endDate')
     setEndDate(value)
     setEndDateTouched(true)
   }
@@ -516,6 +775,15 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       setEndDateTouched(true)
     }
     if (hit.size) setSize(hit.size)
+    // Green-dot the fields this fill actually populated.
+    setFilled(
+      new Set([
+        'identity',
+        ...(hit.startDate ? ['startDate'] : []),
+        ...(hit.endDate ? ['endDate'] : []),
+        ...(hit.size ? ['size'] : []),
+      ]),
+    )
   }
 
   // The code is optional; if given, it must still be valid & unique. Everything
@@ -718,35 +986,22 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       )}
 
       <Section first>
-      {/* Code + Name — the task's identity */}
-      <div className="grid gap-4 sm:grid-cols-[170px_1fr]">
-        <div>
-          <div className="flex items-center justify-between gap-2">
-            <label className="label">Task code</label>
-            {mondayEnabled && <MondayLookup initialQuery={name || code} onPick={applyMondayHit} />}
-          </div>
-          <input
-            className={cx('input h-11 font-mono', codeError && 'border-rmit-red focus:border-rmit-red')}
-            placeholder="26.0608.A"
-            value={code}
-            onChange={(e) => onCodeChange(e.target.value)}
-          />
-          {codeError ? (
-            <p className="mt-1.5 text-xs font-medium text-rmit-red">{codeError}</p>
-          ) : parsed.valid && parsed.iso ? (
-            <p className="mt-1.5 text-xs text-accent-green">Booked {parsed.iso}</p>
-          ) : null}
-        </div>
-        <div>
-          <label className="label">Task name</label>
-          <input
-            className="input h-12 text-base font-semibold"
-            placeholder="Paste name with [code] here for code auto-fill."
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-          />
-        </div>
-      </div>
+      {/* Code + Name — the task's identity, in one combined field */}
+      <CodeNameField
+        code={code}
+        name={name}
+        parsed={parsed}
+        codeError={codeError}
+        filledIdentity={filled.has('identity')}
+        applyIdentity={onNameChange}
+        setCode={(v) => {
+          setCode(v)
+          clearFilled('identity')
+        }}
+        setName={setName}
+        mondayEnabled={mondayEnabled}
+        onPick={applyMondayHit}
+      />
 
       {/* Squad, Campaign & Task size on one line */}
       <div className="grid gap-4 sm:grid-cols-[1fr_1fr_1.4fr]">
@@ -776,7 +1031,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           </select>
         </div>
         <div>
-          <label className="label">Task size</label>
+          <label className={cx('label', filled.has('size') && 'is-filled')}>Task size</label>
           <div className="grid grid-cols-5 gap-1.5">
             {SIZES.map((s) => {
               const active = size === s
@@ -785,7 +1040,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
                 <button
                   key={s}
                   type="button"
-                  onClick={() => setSize(s)}
+                  onClick={() => {
+                    setSize(s)
+                    clearFilled('size')
+                  }}
                   title={SIZE_DESCRIPTIONS[s]}
                   className={cx(
                     'rounded-lg border px-1 py-1.5 text-xs font-bold transition',
@@ -904,7 +1162,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       {/* Start / End / Half */}
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
-          <label className="label">Start date</label>
+          <label className={cx('label', filled.has('startDate') && 'is-filled')}>Start date</label>
           <input
             type="date"
             className="input h-11"
@@ -927,7 +1185,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           )}
         </div>
         <div>
-          <label className="label">End date</label>
+          <label className={cx('label', filled.has('endDate') && 'is-filled')}>End date</label>
           <input
             type="date"
             className="input h-11"

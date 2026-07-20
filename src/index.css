@@ -114,13 +114,17 @@
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted;
   }
 
-  /* Subtle red dot before each field title inside the task form. */
+  /* Dot before each field title inside the task form: RMIT red by default,
+     green when the field was auto-filled from monday.com (.is-filled). */
   .task-form .label {
     @apply flex items-center gap-1.5;
   }
   .task-form .label::before {
     content: '';
-    @apply h-1.5 w-1.5 shrink-0 rounded-full bg-rmit-red/50;
+    @apply h-1.5 w-1.5 shrink-0 rounded-full bg-rmit-red;
+  }
+  .task-form .label.is-filled::before {
+    @apply bg-accent-green;
   }
 
   .btn {

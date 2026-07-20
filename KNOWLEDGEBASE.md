@@ -634,22 +634,30 @@ link `/showcase/<id>` playing a deterministic, pure-CSS animated presentation.
 
 ## 18. monday.com task lookup (on-demand prefill, NOT sync)
 
-A **"Find on monday.com"** button in the New Task dialog's code section (`TaskForm.tsx`, beside
-the "Task code" label). Clicking opens a small **search popover** (`src/components/MondayLookup.tsx`)
-over one configured board; picking an item prefills **name, code (if the item has one), timeline →
-start/end dates, and T-shirt size** (+ derives half). Manual, per-task — there is **no background
-sync**; every field stays editable after.
+An **"auto-fill" button** (monday.com logo, `public/monday.svg`) sits **inline on the right of the
+combined code+name field** (`CodeNameField` in `TaskForm.tsx`). Clicking it searches the configured
+board for **whatever's in the field (code + name)** and drops the matches **right under the box** —
+each row shows name · code · timeline · size, plus loading / "no matches" states. Picking one
+prefills **name, code (parsed from the name), timeline → start/end dates, and T-shirt size** (+
+derives half). Manual, per-task — **no background sync**; every field stays editable after.
 
+- **Green field dots:** the fields a pick populated get a **green** dot on their label
+  (`.task-form .label.is-filled::before`) instead of the default **RMIT-red** dot; editing a field
+  reverts its dot to red. Tracked by a `filled: Set<string>` in `TaskForm` (`identity`/`startDate`/
+  `endDate`/`size`), set in `applyMondayHit` and cleared in each field's change handler.
 - **Never calls monday from the browser** (token exposure + monday blocks browser CORS). The client
   (`src/lib/monday.ts` `searchMonday`) calls a **Supabase Edge Function** `monday-search`
-  (`supabase/functions/monday-search/index.ts`, Deno) via `getSupabase().functions.invoke`. The
-  function holds the token + board config as **secrets** and returns normalized hits
-  `{ id, name, code, startDate, endDate, size }`. Deno function → **not** covered by the app's `tsc`
-  (`@ts-nocheck`).
+  (`supabase/functions/monday-search/index.ts`, Deno, entry file **`index.ts`**) via
+  `getSupabase().functions.invoke`. The function holds the token + board config as **secrets** and
+  returns normalized hits `{ id, name, code, startDate, endDate, size }`. Deno → **not** covered by
+  the app's `tsc` (`@ts-nocheck`).
+- **Matching (function):** tokenizes the query and scores each item by how many tokens appear in
+  `name + code`, returning the top ~15 ranked (most tokens matched, then shorter name). ⚠️ Changing
+  this file needs a **redeploy** (paste into the Dashboard editor → Deploy).
 - **Gating:** the button shows only when `isMondayLookupEnabled()` = Supabase configured **and**
-  `VITE_MONDAY_LOOKUP=1`. Degrades gracefully: function unset → `{configured:false}` →
-  `MondayNotConfiguredError` ("set the MONDAY_* secrets"); transport error → readable message in the
-  popover (never throws). Size labels map to the app enum in `normalizeSize` (falls back to null).
+  `VITE_MONDAY_LOOKUP=1` (set it in Vercel env + redeploy for production). Degrades gracefully:
+  function unset → `{configured:false}` → `MondayNotConfiguredError`; transport error → readable
+  message in the dropdown (never throws). Size labels map to the app enum in `normalizeSize`.
 - **Code comes from the item NAME, not a column.** monday item names are prefixed like
   `[26.0716.A] VTAC Social vids…` (the app's own `[code] name` convention). `monday.ts`
   `splitCodeFromName` pulls the bracketed code out and returns the cleaned name, so the board needs
