@@ -34,6 +34,15 @@ export function SettingsPage() {
     await saveSettings({ ...settings, [key]: next })
   }
 
+  // Set/clear a person's monday.com user id (used to auto-fill "Persons in charge").
+  const setPersonMondayId = (name: string, id: string) => {
+    const next = { ...settings.peopleMondayIds }
+    const v = id.trim()
+    if (v) next[name] = v
+    else delete next[name]
+    void saveSettings({ ...settings, peopleMondayIds: next })
+  }
+
   const usageCount = (key: ListKey, value: string): number => {
     if (key === 'squads') return tasks.filter((t) => t.squad === value).length
     if (key === 'campaigns') return tasks.filter((t) => t.campaign === value).length
@@ -124,6 +133,8 @@ export function SettingsPage() {
             onRemove={(v) => removeListItem('people', v)}
             onRename={(o, n) => renameListItem('people', o, n)}
             usage={(v) => usageCount('people', v)}
+            mondayIds={settings.peopleMondayIds}
+            onMondayId={setPersonMondayId}
           />
           {/* Editable task-size turnaround durations — sits beside People */}
           <SizeDurationsCard />
@@ -809,6 +820,26 @@ function Switch({
   )
 }
 
+/** Per-person monday user-id input: local while typing, saves on blur/Enter
+ *  (so it doesn't fire a settings write on every keystroke). */
+function MondayIdInput({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(value)
+  useEffect(() => setV(value), [value]) // resync if the stored value changes (e.g. rename)
+  return (
+    <input
+      className="input h-7 w-24 shrink-0 px-2 py-0 text-xs font-mono"
+      placeholder="monday ID"
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => v.trim() !== value.trim() && onCommit(v)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+      }}
+      title="monday.com user id — used to auto-fill this person from a board item"
+    />
+  )
+}
+
 function ListEditor({
   title,
   description,
@@ -821,6 +852,8 @@ function ListEditor({
   locked,
   allowRemoveUsed,
   dotColor = 'bg-rmit-red',
+  mondayIds,
+  onMondayId,
 }: {
   title: string
   description: string
@@ -836,6 +869,9 @@ function ListEditor({
   allowRemoveUsed: boolean
   /** Tailwind bg class for each item's dot — per-panel colour, aesthetics only. */
   dotColor?: string
+  /** When set, each row gets a small monday.com user-id input (People panel only). */
+  mondayIds?: Record<string, string>
+  onMondayId?: (item: string, id: string) => void
 }) {
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
@@ -973,6 +1009,9 @@ function ListEditor({
                     <span className={cx('h-2 w-2 shrink-0 rounded-full', dotColor)} />
                     <span className="truncate text-ink">{item}</span>
                   </button>
+                  {onMondayId && (
+                    <MondayIdInput value={mondayIds?.[item] ?? ''} onCommit={(v) => onMondayId(item, v)} />
+                  )}
                   <span className="flex shrink-0 items-center gap-1">
                     {count > 0 && (
                       <span className="text-[11px] text-muted">

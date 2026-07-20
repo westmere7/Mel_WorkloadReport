@@ -73,6 +73,9 @@ export interface AppSettings {
   sizeDurations: Record<Size, number>
   /** When false, a group item (squad/campaign/type/asset-type/person) used by ≥1 task can't be removed. */
   allowRemoveUsed: boolean
+  /** Map each person NAME → their monday.com user id (string). Used to auto-fill
+   *  the "Persons in charge" from a monday item's Project-team column. */
+  peopleMondayIds: Record<string, string>
 }
 
 /** Empty breakdown helper. */

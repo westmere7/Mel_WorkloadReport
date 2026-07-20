@@ -13,11 +13,12 @@
 //   MONDAY_COL_TIMELINE  column id of the Timeline column (required for dates)
 //   MONDAY_COL_SIZE      column id of the T-shirt size column (required for size)
 //   MONDAY_COL_CODE      column id of the booking-code text column (optional)
+//   MONDAY_COL_PEOPLE    column id of the Project-team people column (optional)
 //   MONDAY_ALLOW_ORIGIN  CORS allow-origin (optional; default '*')
 //
 // Request  (POST JSON):  { "query": "open day" }
 // Response (JSON):       { "configured": true, "items": [{ id, name, code,
-//                          startDate, endDate, size }] }
+//                          startDate, endDate, size, mondayPeopleIds }] }
 //                        or { "configured": false } when secrets are missing.
 
 // @ts-nocheck  (Deno runtime globals; not typechecked by the app's tsc.)
@@ -52,6 +53,19 @@ function parseTimeline(value: string | null): { startDate: string | null; endDat
   }
 }
 
+/** Pull the assigned person monday user-ids (as strings) out of a People column value. */
+function parsePeople(value: string | null): string[] {
+  if (!value) return []
+  try {
+    const v = JSON.parse(value)
+    return (v.personsAndTeams ?? [])
+      .filter((p: { kind?: string }) => p.kind === 'person')
+      .map((p: { id: number | string }) => String(p.id))
+  } catch {
+    return []
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors() })
   if (req.method !== 'POST') return json({ error: 'Use POST.' }, 405)
@@ -61,6 +75,7 @@ Deno.serve(async (req: Request) => {
   const colTimeline = Deno.env.get('MONDAY_COL_TIMELINE')
   const colSize = Deno.env.get('MONDAY_COL_SIZE')
   const colCode = Deno.env.get('MONDAY_COL_CODE') // optional
+  const colPeople = Deno.env.get('MONDAY_COL_PEOPLE') // optional (Project-team column)
   if (!token || !boardId) return json({ configured: false })
 
   let query = ''
@@ -72,7 +87,7 @@ Deno.serve(async (req: Request) => {
   if (!query) return json({ configured: true, items: [] })
 
   // Only ask monday for the columns we map (keeps the payload small).
-  const colIds = [colTimeline, colSize, colCode].filter(Boolean) as string[]
+  const colIds = [colTimeline, colSize, colCode, colPeople].filter(Boolean) as string[]
   const gql = `
     query ($board: [ID!], $cols: [String!], $limit: Int!, $cursor: String) {
       boards(ids: $board) {
@@ -130,12 +145,21 @@ Deno.serve(async (req: Request) => {
         if (matched === 0) continue
         const codeHit = codeTokens.length > 0 && codeTokens.some((t) => haystack.includes(t))
         const { startDate, endDate } = parseTimeline(cvById.get(colTimeline ?? '')?.value ?? null)
+        const mondayPeopleIds = parsePeople(cvById.get(colPeople ?? '')?.value ?? null)
         scored.push({
           matched,
           all: matched === tokens.length,
           codeHit,
           nameLen: name.length,
-          item: { id: it.id, name, code, startDate, endDate, size: (cvById.get(colSize ?? '')?.text ?? '').trim() || null },
+          item: {
+            id: it.id,
+            name,
+            code,
+            startDate,
+            endDate,
+            size: (cvById.get(colSize ?? '')?.text ?? '').trim() || null,
+            mondayPeopleIds,
+          },
         })
       }
       cursor = page?.cursor ?? null

@@ -25,6 +25,8 @@ export interface MondayHit {
   endDate: string | null
   /** T-shirt size mapped to the app's enum (XS–XL), or null when unmapped. */
   size: Size | null
+  /** monday user-ids assigned on the Project-team column (mapped to people via settings). */
+  mondayPeopleIds: string[]
 }
 
 interface SearchResponse {
@@ -36,6 +38,7 @@ interface SearchResponse {
     startDate?: string | null
     endDate?: string | null
     size?: string | null
+    mondayPeopleIds?: string[] | null
   }>
   error?: string
 }
@@ -115,6 +118,29 @@ export async function searchMonday(query: string): Promise<MondayHit[]> {
       startDate: it.startDate || null,
       endDate: it.endDate || null,
       size: normalizeSize(it.size),
+      mondayPeopleIds: (it.mondayPeopleIds ?? []).map(String),
     }
   })
+}
+
+/**
+ * Resolve monday user-ids to the app's people names via the settings map
+ * (name → monday id). Only returns names still present in `people`.
+ */
+export function resolvePeopleFromMonday(
+  mondayIds: string[],
+  peopleMondayIds: Record<string, string>,
+  people: string[],
+): string[] {
+  const idToName = new Map<string, string>()
+  for (const [name, id] of Object.entries(peopleMondayIds)) {
+    if (id) idToName.set(String(id), name)
+  }
+  const known = new Set(people)
+  const out: string[] = []
+  for (const id of mondayIds) {
+    const name = idToName.get(String(id))
+    if (name && known.has(name) && !out.includes(name)) out.push(name)
+  }
+  return out
 }

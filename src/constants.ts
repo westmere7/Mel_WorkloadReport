@@ -108,6 +108,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   assetTypes: DEFAULT_ASSET_TYPES,
   sizeDurations: { ...DEFAULT_SIZE_DURATIONS },
   allowRemoveUsed: false,
+  peopleMondayIds: {},
 }
 
 /** Legacy fixed breakdown keys → their default display names, for migrating old data. */

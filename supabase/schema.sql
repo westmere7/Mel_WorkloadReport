@@ -87,6 +87,10 @@ alter table public.settings
 alter table public.settings
   add column if not exists allow_remove_used boolean not null default false;
 
+-- Map of person NAME → monday.com user id, for auto-filling "Persons in charge".
+alter table public.settings
+  add column if not exists people_monday jsonb not null default '{}'::jsonb;
+
 insert into public.settings (id, campaigns, types, people)
 values (
   'app',

@@ -15,7 +15,7 @@ import { ImageLightbox } from './ui/ImageLightbox'
 import { addDaysISO, cx, toMessage } from '../lib/format'
 import { compressToWebP, ACCEPTED_IMAGE_TYPES } from '../lib/image'
 import { deriveHalf, parseTaskCode, type ParsedCode } from '../lib/taskCode'
-import { isMondayLookupEnabled, searchMonday, type MondayHit } from '../lib/monday'
+import { isMondayLookupEnabled, resolvePeopleFromMonday, searchMonday, type MondayHit } from '../lib/monday'
 
 const MAX_IMAGES = 10
 
@@ -780,6 +780,9 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       setEndDateTouched(true)
     }
     if (hit.size) setSize(hit.size)
+    // Map monday assignees → app people via the Settings monday-id map.
+    const resolvedPeople = resolvePeopleFromMonday(hit.mondayPeopleIds, settings.peopleMondayIds, settings.people)
+    if (resolvedPeople.length) setPeople(resolvedPeople)
     // Green-dot the fields this fill actually populated.
     setFilled(
       new Set([
@@ -787,6 +790,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         ...(hit.startDate ? ['startDate'] : []),
         ...(hit.endDate ? ['endDate'] : []),
         ...(hit.size ? ['size'] : []),
+        ...(resolvedPeople.length ? ['people'] : []),
       ]),
     )
   }
@@ -1141,11 +1145,14 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       {/* People + Note on one line */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="label">Person(s) in charge</label>
+          <label className={cx('label', filled.has('people') && 'is-filled')}>Person(s) in charge</label>
           <MultiSelect
             options={peopleOptions}
             value={people}
-            onChange={setPeople}
+            onChange={(next) => {
+              clearFilled('people')
+              setPeople(next)
+            }}
             placeholder="Assign team members…"
             overflowCollapse
           />

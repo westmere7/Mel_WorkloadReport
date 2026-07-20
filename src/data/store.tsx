@@ -360,7 +360,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const nextList = dupe
           ? list.filter((v) => v !== oldValue)
           : list.map((v) => (v === oldValue ? trimmed : v))
-        const nextSettings = { ...prev, [key]: nextList }
+        let nextSettings = { ...prev, [key]: nextList }
+        // Keep the person → monday-id map aligned when a person is renamed.
+        if (key === 'people' && prev.peopleMondayIds[oldValue] !== undefined) {
+          const ids = { ...prev.peopleMondayIds }
+          if (!dupe) ids[trimmed] = ids[oldValue]
+          delete ids[oldValue]
+          nextSettings = { ...nextSettings, peopleMondayIds: ids }
+        }
         void repo.saveSettings(nextSettings)
         return nextSettings
       })
@@ -382,7 +389,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       // 2. Drop it from the Settings list.
       setSettings((prev) => {
-        const nextSettings = { ...prev, [key]: prev[key].filter((v) => v !== value) }
+        let nextSettings = { ...prev, [key]: prev[key].filter((v) => v !== value) }
+        // Drop the person's monday-id mapping when the person is removed.
+        if (key === 'people' && prev.peopleMondayIds[value] !== undefined) {
+          const ids = { ...prev.peopleMondayIds }
+          delete ids[value]
+          nextSettings = { ...nextSettings, peopleMondayIds: ids }
+        }
         void repo.saveSettings(nextSettings)
         return nextSettings
       })

@@ -125,6 +125,12 @@ function isMissingAllowRemoveColumn(err: unknown): boolean {
   return msg.includes('allow_remove_used') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
+/** True if a Supabase error is complaining about a missing `people_monday` column (pre-migration). */
+function isMissingPeopleMondayColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('people_monday') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
 /** True if a Supabase error is complaining about a missing `created_by` column (pre-migration). */
 function isMissingCreatedByColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
@@ -365,6 +371,7 @@ export class SupabaseRepository implements Repository {
       assetTypes: data.asset_types ?? DEFAULT_SETTINGS.assetTypes,
       sizeDurations: normalizeSizeDurations(data.size_durations),
       allowRemoveUsed: data.allow_remove_used ?? DEFAULT_SETTINGS.allowRemoveUsed,
+      peopleMondayIds: data.people_monday ?? DEFAULT_SETTINGS.peopleMondayIds,
     }
   }
 
@@ -385,9 +392,14 @@ export class SupabaseRepository implements Repository {
       squads: settings.squads,
       size_durations: settings.sizeDurations,
       allow_remove_used: settings.allowRemoveUsed,
+      people_monday: settings.peopleMondayIds,
     }
     let { data, error } = await upsert(payload)
     // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
+    if (error && isMissingPeopleMondayColumn(error)) {
+      delete payload.people_monday
+      ;({ data, error } = await upsert(payload))
+    }
     if (error && isMissingAllowRemoveColumn(error)) {
       delete payload.allow_remove_used
       ;({ data, error } = await upsert(payload))
@@ -409,6 +421,7 @@ export class SupabaseRepository implements Repository {
       assetTypes: data.asset_types ?? settings.assetTypes,
       sizeDurations: normalizeSizeDurations(data.size_durations ?? settings.sizeDurations),
       allowRemoveUsed: data.allow_remove_used ?? settings.allowRemoveUsed,
+      peopleMondayIds: data.people_monday ?? settings.peopleMondayIds,
     }
   }
 

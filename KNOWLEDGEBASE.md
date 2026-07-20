@@ -664,6 +664,16 @@ derives half). Manual, per-task — **no background sync**; every field stays ed
   **no code column** — leave `MONDAY_COL_CODE` unset. (`GCMC & Media Demand Tracker`, board
   `1967557512`: `MONDAY_COL_TIMELINE=timeline__1`, `MONDAY_COL_SIZE=label_mkmfh8ew`, T-shirt labels
   are single letters `M`/etc.)
+- **"Persons in charge" auto-fill (person mapping).** The board's Project-team people column
+  (`people7__1`, secret `MONDAY_COL_PEOPLE`) returns monday **user ids**; the function parses the
+  column `value` (`personsAndTeams`, kind `person`) → `mondayPeopleIds`. Each app person is mapped
+  to their monday user id in **Settings → Groups → People** (a monday-ID input per person; local
+  state, saves on blur), stored in `settings.peopleMondayIds` (name→id, new column `people_monday`
+  jsonb, guarded write; the store keeps it aligned on rename/remove). `applyMondayHit` reverse-maps
+  ids→names via `resolvePeopleFromMonday` (only names still in `settings.people`) and fills the
+  People field + green dot. ⚠️ Needs BOTH: re-run `schema.sql` (adds `people_monday`) AND redeploy
+  the function with `MONDAY_COL_PEOPLE=people7__1`; before the schema migration the IDs won't persist
+  (guarded-dropped on write, read back empty).
 - **Setup (all provided by the operator — Claude never handles the token). Either the Supabase
   Dashboard (Edge Functions → create `monday-search` in the editor + add Secrets — no CLI/Docker) or
   the CLI:**
