@@ -252,10 +252,15 @@ function readableOn(hex: string): string {
   return luminance > 0.6 ? '#1c1c28' : '#ffffff'
 }
 
-/** Split a pasted "[26.0608.A] Some name" into its bracketed code + remaining name. */
+/**
+ * Split a leading "[code] name" ONLY when the bracket holds a code we recognise
+ * (a real task-code date format, per `parseTaskCode`). Misc bracket prefixes
+ * like "[2026 H2 BPX VE] Trades Fleet Car Wrap" aren't codes — the whole string
+ * (bracket included) stays as the name.
+ */
 function splitPastedName(value: string): { code?: string; name: string } {
   const m = value.match(/^\s*\[([^\]]+)\]\s*(.*)$/)
-  if (m) return { code: m[1].trim(), name: m[2] }
+  if (m && parseTaskCode(m[1].trim()).valid) return { code: m[1].trim(), name: m[2] }
   return { name: value }
 }
 

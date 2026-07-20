@@ -87,12 +87,15 @@ Deno.serve(async (req: Request) => {
       }
     }`
 
-  // Tokenize the query — a hit matches if ANY token appears in the item's
-  // name+code; we rank by how many tokens matched (then by a shorter name),
-  // so searching by the whole "code + name" from the form surfaces the best
-  // candidates even when the wording isn't identical.
+  // Tokenize the query. Matching is tiered so a precise query (full name + code)
+  // returns the ONE item, while a rough query still surfaces candidates:
+  //   1. code match  — if the query has a task code and an item's name/code
+  //      contains it, that wins outright (codes are unique).
+  //   2. all-tokens  — else items containing EVERY query word.
+  //   3. any-token   — else the best partial matches, ranked by overlap.
   const tokens = query.toLowerCase().split(/\s+/).filter(Boolean)
-  const scored: Array<{ score: number; nameLen: number; item: Record<string, unknown> }> = []
+  const codeTokens = tokens.filter((t) => /^\d{2}\.\d{2}\d{2}\.[a-z]+$/.test(t) || /^vn\d{2}-\d{4}-[a-z]+$/.test(t))
+  const scored: Array<{ matched: number; all: boolean; codeHit: boolean; nameLen: number; item: Record<string, unknown> }> = []
   let cursor: string | null = null
   let scanned = 0
 
@@ -123,11 +126,14 @@ Deno.serve(async (req: Request) => {
         const code = colCode ? (cvById.get(colCode)?.text ?? '').trim() : ''
         const name = String(it.name ?? '')
         const haystack = `${name} ${code}`.toLowerCase()
-        const score = tokens.reduce((n, t) => n + (haystack.includes(t) ? 1 : 0), 0)
-        if (score === 0) continue
+        const matched = tokens.reduce((n, t) => n + (haystack.includes(t) ? 1 : 0), 0)
+        if (matched === 0) continue
+        const codeHit = codeTokens.length > 0 && codeTokens.some((t) => haystack.includes(t))
         const { startDate, endDate } = parseTimeline(cvById.get(colTimeline ?? '')?.value ?? null)
         scored.push({
-          score,
+          matched,
+          all: matched === tokens.length,
+          codeHit,
           nameLen: name.length,
           item: { id: it.id, name, code, startDate, endDate, size: (cvById.get(colSize ?? '')?.text ?? '').trim() || null },
         })
@@ -139,9 +145,12 @@ Deno.serve(async (req: Request) => {
     return json({ error: e instanceof Error ? e.message : 'Lookup failed.' }, 502)
   }
 
-  // Best matches first (most tokens matched, then the tighter/shorter name).
-  scored.sort((a, b) => b.score - a.score || a.nameLen - b.nameLen)
-  const items = scored.slice(0, MAX_HITS).map((s) => s.item)
+  // Tier 1: a unique code match; Tier 2: items with every word; Tier 3: best partials.
+  let pool = scored.filter((s) => s.codeHit)
+  if (pool.length === 0) pool = scored.filter((s) => s.all)
+  if (pool.length === 0) pool = scored
+  pool.sort((a, b) => b.matched - a.matched || a.nameLen - b.nameLen)
+  const items = pool.slice(0, MAX_HITS).map((s) => s.item)
   return json({ configured: true, items })
 })
 
