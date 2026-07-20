@@ -139,8 +139,13 @@ export function SettingsPage() {
   )
 }
 
-/** App version + release history (data in src/lib/changelog.ts). */
+/**
+ * App version, with the latest release notes tucked behind a collapsed-by-default
+ * "What's new" toggle. Data in src/lib/changelog.ts.
+ */
 function VersionCard() {
+  const [open, setOpen] = useState(false)
+  const latest = CHANGELOG[0]
   const KIND: Record<ChangeKind, { label: string; cls: string }> = {
     new: { label: 'New', cls: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300' },
     improved: { label: 'Improved', cls: 'bg-navy-100 text-navy-700 dark:bg-navy-500/25 dark:text-navy-100' },
@@ -151,43 +156,47 @@ function VersionCard() {
 
   return (
     <Card>
-      <CardHeader title="Version" subtitle="Current release and what’s changed over time." />
-      <div className="flex items-baseline gap-2">
+      <CardHeader title="Version" subtitle="This build of the Workload Report." />
+      <div className="flex items-center gap-3">
         <span className="text-2xl font-bold text-ink">v{APP_VERSION}</span>
         <span className="rounded-full bg-subtle px-2 py-0.5 text-[11px] font-semibold text-muted">Current</span>
+        {latest && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="ml-auto inline-flex items-center gap-1 text-sm font-medium text-muted transition hover:text-ink"
+          >
+            What’s new
+            <ChevronDown className={cx('h-4 w-4 transition-transform', open && 'rotate-180')} />
+          </button>
+        )}
       </div>
 
-      <ol className="mt-4 space-y-4">
-        {CHANGELOG.map((rel) => (
-          <li key={rel.version} className="border-t border-line pt-4 first:border-t-0 first:pt-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="font-semibold text-ink">v{rel.version}</span>
-              {rel.version === APP_VERSION && (
-                <span className="rounded-full bg-rmit-red/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rmit-red">
-                  Latest
+      {open && latest && (
+        <div className="mt-4 border-t border-line pt-4">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-semibold text-ink">v{latest.version}</span>
+            {latest.title && <span className="text-sm text-muted">· {latest.title}</span>}
+            {fmtDate(latest.date) && <span className="ml-auto text-xs text-faint">{fmtDate(latest.date)}</span>}
+          </div>
+          <ul className="mt-2 space-y-1.5">
+            {latest.notes.map((n, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-muted">
+                <span
+                  className={cx(
+                    'mt-[3px] shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                    KIND[n.kind].cls,
+                  )}
+                >
+                  {KIND[n.kind].label}
                 </span>
-              )}
-              {rel.title && <span className="text-sm text-muted">· {rel.title}</span>}
-              {fmtDate(rel.date) && <span className="ml-auto text-xs text-faint">{fmtDate(rel.date)}</span>}
-            </div>
-            <ul className="mt-2 space-y-1.5">
-              {rel.notes.map((n, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-muted">
-                  <span
-                    className={cx(
-                      'mt-[3px] shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
-                      KIND[n.kind].cls,
-                    )}
-                  >
-                    {KIND[n.kind].label}
-                  </span>
-                  <span className="leading-relaxed">{n.text}</span>
-                </li>
-              ))}
-            </ul>
-          </li>
-        ))}
-      </ol>
+                <span className="leading-relaxed">{n.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Card>
   )
 }
