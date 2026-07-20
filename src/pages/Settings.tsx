@@ -16,6 +16,7 @@ import {
   DEFAULT_SIZE_DURATIONS,
 } from '../constants'
 import { cx, toMessage } from '../lib/format'
+import { APP_VERSION, CHANGELOG, type ChangeKind } from '../lib/changelog'
 import {
   COMMON_CAMPAIGNS,
   setDashboardPrefs,
@@ -131,7 +132,63 @@ export function SettingsPage() {
 
       {/* Year snapshots — freeze/restore the full workload state */}
       <SnapshotsCard />
+
+      {/* Version & changelog */}
+      <VersionCard />
     </div>
+  )
+}
+
+/** App version + release history (data in src/lib/changelog.ts). */
+function VersionCard() {
+  const KIND: Record<ChangeKind, { label: string; cls: string }> = {
+    new: { label: 'New', cls: 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300' },
+    improved: { label: 'Improved', cls: 'bg-navy-100 text-navy-700 dark:bg-navy-500/25 dark:text-navy-100' },
+    fixed: { label: 'Fixed', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' },
+  }
+  const fmtDate = (iso?: string) =>
+    iso ? new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : null
+
+  return (
+    <Card>
+      <CardHeader title="Version" subtitle="Current release and what’s changed over time." />
+      <div className="flex items-baseline gap-2">
+        <span className="text-2xl font-bold text-ink">v{APP_VERSION}</span>
+        <span className="rounded-full bg-subtle px-2 py-0.5 text-[11px] font-semibold text-muted">Current</span>
+      </div>
+
+      <ol className="mt-4 space-y-4">
+        {CHANGELOG.map((rel) => (
+          <li key={rel.version} className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="font-semibold text-ink">v{rel.version}</span>
+              {rel.version === APP_VERSION && (
+                <span className="rounded-full bg-rmit-red/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rmit-red">
+                  Latest
+                </span>
+              )}
+              {rel.title && <span className="text-sm text-muted">· {rel.title}</span>}
+              {fmtDate(rel.date) && <span className="ml-auto text-xs text-faint">{fmtDate(rel.date)}</span>}
+            </div>
+            <ul className="mt-2 space-y-1.5">
+              {rel.notes.map((n, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-muted">
+                  <span
+                    className={cx(
+                      'mt-[3px] shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                      KIND[n.kind].cls,
+                    )}
+                  >
+                    {KIND[n.kind].label}
+                  </span>
+                  <span className="leading-relaxed">{n.text}</span>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </Card>
   )
 }
 
