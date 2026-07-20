@@ -164,12 +164,16 @@ happens** (see §6).
   numbers. Labels change to "Assets · {year}" etc.;
   the workload chart overlays the source year as a second line (themed navy, legend
   labels both years — `compare` prop on `AreaTrendChart`); the Asset-mix donut legend
-  gets per-type deltas (`compare` prop); Tasks-by-person/squad intentionally unchanged;
-  the two campaign VBarCharts and the demand StackedBarChart render **split columns**
-  (source faded at 0.45 opacity, left of target) and **hide categories that don't have
-  data in both years** (inner join by name). ⚠️ Recharts gotcha: `legendType="none"` on
-  the faded bars did NOT keep them out of the Legend — the stacked chart passes an
-  explicit `payload` to `<Legend>` in compare mode instead.
+  gets per-type deltas (`compare` prop). **Tasks/Assets-by-squad** (the `RankedBars` cards)
+  now compare too: each row shows a % `TrendDelta` before the value + a thin source-year
+  tick on the bar (subtitle "… (bar)", `squadCompareSuffix`); single-year mode is unchanged.
+  Tasks-by-person is still unchanged. The two campaign VBarCharts and the demand
+  StackedBarChart render **split columns** (source faded 0.45, left of target) and **hide
+  categories not in both years** (inner join). **Match range** (`ytd`, default on) limits
+  BOTH years to Jan 1→today for a fair same-period compare (drives `todayMD`); when on, the
+  workload chart **zooms its x-axis to Jan→now** (`fillToNow`, hides the "Now" line) so the
+  drawn range fills the width. ⚠️ Recharts gotcha: `legendType="none"` did NOT keep faded
+  bars out of the Legend — the stacked chart passes an explicit `payload` to `<Legend>`.
 - **Task List** (`src/pages/TaskList.tsx`): prominent search, span selector, four
   **multi-select** filters (squad/campaign/people/size), sortable columns, row → edit
   modal, per-row delete, a note **hover icon**, and the **Import & Backup** button.
@@ -196,7 +200,10 @@ happens** (see §6).
   toggles); a collapsible **"Groups"** `CollapsibleSection` (open state persisted in
   localStorage `mwr.settings.groupsOpen`) — itself a **master `Card`** whose nested editor
   cards use `className="bg-subtle"` so they read as tiles inside the panel (same big-panel /
-  smaller-panels-inside look as the Dashboard card); and the **Year snapshots** card (§16). Settings/controls render as tinted `PrefRow`s (`bg-subtle`, `font-medium` title)
+  smaller-panels-inside look as the Dashboard card); the **Year snapshots** card (§16); and a
+  **Version** card (current `v{__APP_VERSION__}` + a collapsed-by-default "What's new" toggle
+  showing the latest release notes only — data in `src/lib/changelog.ts` `APP_VERSION`/`CHANGELOG`;
+  to release, bump package.json + prepend an entry). Settings/controls render as tinted `PrefRow`s (`bg-subtle`, `font-medium` title)
   so they read as distinct from the bold `CardHeader`/section titles — don't restyle a setting
   to look like a heading. `PrefRow`/`Switch`/`CollapsibleSection` are the shared building blocks.
 - **Groups section**: five `ListEditor`s (**squads**/campaigns/work types/asset types/people)
@@ -306,9 +313,15 @@ multi-selects, and as an asset-breakdown field) and appears in charts when it ha
 
 ## 8. Task form behaviors (`TaskForm.tsx`)
 
-- **Paste-to-fill**: pasting `"[26.0608.A] Some name"` into the Task name splits out the
-  code, fills it, and auto-fills the start date (and half) from the code.
-- **Code notices**: live "wrong format" / "duplicate code" errors; the code is required.
+- **Combined code+name field** (`CodeNameField`, replaces the old two-box row): ONE box holds
+  the code as a colour-coded **chip** (green valid / amber legacy / red error; × clears, click
+  re-opens for edit) + the name. Typing/pasting `"[26.0608.A] Some name"` lifts the bracket into
+  the chip **only when it's a real code** (`parseTaskCode` valid) — misc prefixes like
+  `[2026 H2 BPX VE]` stay part of the name — and auto-fills the start date (+ half). The monday
+  **auto-fill** button sits inline on the right of this field (see §18).
+- **Code notices**: live "wrong format" / "duplicate code" errors; the code is **optional** (if
+  present it must be valid & unique). Each field's label carries a red dot, turning **green** when
+  auto-filled from monday (`.is-filled`, tracked by `filled: Set` in `TaskForm`; reverts on edit).
 - **End-date auto-fill**: `startDate + SIZE_DURATION_DAYS[size]` fills the end date
   until the user edits it (`endDateTouched`). A green "Auto-set from {size}" note shows;
   a "⚡ Auto-set …" button re-applies it after a manual override.
@@ -419,11 +432,14 @@ to run it**, because a write including an unknown column fails:
   year left sticky in `year` state from a prior "By year" pick doesn't leak in; in
   year/half/compare it follows the selected/target year. A header badge shows that year
   (or `{srcYear} vs {activeYear}` in compare mode). Fill is a red opacity-fade gradient.
-  The line is RMIT red up to
-  the **"Now"** month then **grey afterward** (future) — done via a horizontal stroke
-  gradient (`#workloadStroke`) with a hard stop at `nowMonth/(len-1)`, plus a custom
-  `renderDot` colouring future dots grey. Only applies when `nowMonth` is set (i.e. the
-  active year is the current calendar year); otherwise the whole line stays solid red.
+  When viewing the current (incomplete) year the line is **cut off at "Now"** (nothing drawn
+  past the current month). `fillToNow` (`compare ? ytd : true`) then **zooms the x-axis to
+  Jan→now** (`xMax = nowFrac`, filtered ticks, task dots remapped via `xScaleMax`) and hides
+  the redundant "Now" line, so the elapsed range fills the width. **`useToday()`** (in
+  `Dashboard.tsx`, 60s poll) makes every "today"-relative view — match range, the "Now"
+  month, the current-year default — refresh at **midnight without a reload** (kiosk-safe).
+  `animKey` (compare / `fillToNow` / fitted-scale / data) remounts the areas + dots so their
+  L→R entrance replays on any of those changes.
 - **Long chart x-axis labels wrap** (via `WrappedTick`) rather than angling.
 
 ---
