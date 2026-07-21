@@ -620,10 +620,12 @@ function CodeNameField({
 }
 
 /** A titled group of form fields, with a divider above (except the first). Can
- *  show an inline action beside the title and be made collapsible. */
+ *  show an inline action beside the title and be made collapsible. Pass
+ *  `divider={false}` to keep the top spacing but drop the separator line. */
 function Section({
   title,
   first,
+  divider = true,
   action,
   collapsible = false,
   defaultOpen = true,
@@ -631,6 +633,7 @@ function Section({
 }: {
   title?: string
   first?: boolean
+  divider?: boolean
   action?: ReactNode
   collapsible?: boolean
   defaultOpen?: boolean
@@ -638,7 +641,7 @@ function Section({
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <section className={cx('space-y-4', !first && 'border-t border-line pt-5')}>
+    <section className={cx('space-y-4', !first && (divider ? 'border-t border-line pt-5' : 'pt-5'))}>
       {(title || action) && (
         <div className="flex items-center gap-2.5">
           {collapsible && title ? (
@@ -720,35 +723,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   })
   // Tab whose disable needs confirming because the save would drop its values.
   const [pendingDisable, setPendingDisable] = useState<string | null>(null)
-
-  // Chrome-tab join: the active tab only "opens into" the panel when it sits on
-  // the strip's BOTTOM row. When many functions wrap to a 2nd line and the
-  // active tab lands on an upper row, it falls back to a closed pill (same
-  // colour) so its open bottom never cuts into the row of tabs below it.
-  const tabStripRef = useRef<HTMLDivElement>(null)
-  const activeTabRef = useRef<HTMLDivElement>(null)
-  const [tabJoinsPanel, setTabJoinsPanel] = useState(true)
-  useEffect(() => {
-    const measure = () => {
-      const strip = tabStripRef.current
-      const tab = activeTabRef.current
-      if (!strip || !tab) return
-      const s = strip.getBoundingClientRect()
-      const t = tab.getBoundingClientRect()
-      setTabJoinsPanel(t.bottom >= s.bottom - 6)
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    if (tabStripRef.current) ro.observe(tabStripRef.current)
-    // Also watch the viewport itself (the strip may reflow without its own box
-    // resizing first, and some embedded browsers skip the window resize event).
-    ro.observe(document.documentElement)
-    window.addEventListener('resize', measure)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', measure)
-    }
-  }, [activeFn, functionConfigs, fnDrafts])
 
   const patchDraft = (fnName: string, p: Partial<FnDraft>) =>
     setFnDrafts((prev) => ({ ...prev, [fnName]: { ...(prev[fnName] ?? emptyDraft()), ...p } }))
@@ -1390,59 +1364,33 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             const fcol = functionColor(f.color)
             const isActive = d.enabled && activeFn === f.name
             const tabTotal = sumBreakdown(d.breakdown)
+            // The active tab is a SOLID chip in the function's colour, riding the
+            // top edge of the (untouched, cleanly-rounded) panel — so there's no
+            // shared-outline junction to glitch. Text/knob colour flips for light
+            // fills (e.g. gold) via readableOn.
+            const onFill = isActive ? readableOn(fcol.hex) : null
             return (
               <div
                 key={f.name}
-                ref={isActive ? activeTabRef : undefined}
+                style={isActive ? { backgroundColor: fcol.hex, borderColor: fcol.hex, color: onFill! } : undefined}
                 className={cx(
-                  'flex items-center gap-1.5 py-1 pl-2 pr-1.5 text-xs font-semibold',
+                  'relative flex items-center gap-1.5 border-2 py-1 pl-2 pr-1.5 text-xs font-semibold',
                   isActive
-                    ? // merges into the panel: open bottom, panel bg, shared coloured
-                      // outline — unless it wrapped to an upper row (closed pill then)
-                      cx(
-                        'relative z-10 border-2 bg-card',
-                        fcol.outline,
-                        tabJoinsPanel ? '-mb-0.5 rounded-t-lg border-b-0' : 'rounded-lg',
-                      )
-                    : // a separate pill sitting "outside", above the panel
-                      'rounded-lg border-2 border-line bg-subtle',
+                    ? 'z-10 -mb-0.5 rounded-t-lg' // solid colour fill (inline) rides the panel edge
+                    : 'rounded-lg border-line bg-subtle', // separate pill above the panel
                   !d.enabled && 'opacity-60',
                 )}
               >
-                {/* Fillet corners: concave quarter-arcs where the tab meets the
-                    panel, so the outline turns smoothly instead of a sharp T.
-                    Each span paints (from its arc centre at the top corner):
-                    transparent outside → a 2px stroke arc that merges with the
-                    tab/panel borders → card fill that erases the border stubs
-                    inside the curve. */}
-                {isActive && tabJoinsPanel && (
-                  <>
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute bottom-0 h-2.5 w-2.5"
-                      style={{
-                        left: '-10px',
-                        background: `radial-gradient(circle at 0 0, transparent 7.5px, ${fcol.hex} 8px 10px, var(--card) 10.5px)`,
-                      }}
-                    />
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute bottom-0 h-2.5 w-2.5"
-                      style={{
-                        right: '-10px',
-                        background: `radial-gradient(circle at 100% 0, transparent 7.5px, ${fcol.hex} 8px 10px, var(--card) 10.5px)`,
-                      }}
-                    />
-                  </>
-                )}
                 <button
                   type="button"
                   disabled={!d.enabled}
                   onClick={() => d.enabled && setActiveFn(f.name)}
                   className={cx(
                     'flex items-center gap-1.5 py-1',
-                    d.enabled ? 'cursor-pointer text-ink' : 'cursor-default text-muted',
+                    d.enabled ? 'cursor-pointer' : 'cursor-default',
+                    isActive ? '' : d.enabled ? 'text-ink' : 'text-muted',
                   )}
+                  style={isActive ? { color: onFill! } : undefined}
                   title={
                     d.enabled
                       ? `Edit ${f.name} Team’s workload`
@@ -1451,7 +1399,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                 >
                   {f.name}
                   {d.enabled && tabTotal > 0 && (
-                    <span className="rounded-full bg-card px-1.5 text-[10px] font-bold leading-4 text-ink ring-1 ring-line">
+                    <span
+                      className={cx(
+                        'rounded-full px-1.5 text-[10px] font-bold leading-4',
+                        isActive ? 'bg-white/25' : 'bg-card text-ink ring-1 ring-line',
+                      )}
+                    >
                       {tabTotal}
                     </span>
                   )}
@@ -1462,32 +1415,36 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   aria-checked={d.enabled}
                   onClick={() => requestToggleFn(f.name)}
                   title={d.enabled ? `Exclude ${f.name} Team from this task` : `Include ${f.name} Team on this task`}
+                  // On the coloured active tab a translucent track keeps the switch
+                  // legible; inactive-but-on tabs carry the function's own colour.
+                  style={
+                    isActive
+                      ? { backgroundColor: `${onFill!}59` }
+                      : d.enabled
+                        ? { backgroundColor: fcol.hex }
+                        : undefined
+                  }
                   className={cx(
                     'relative h-4 w-7 shrink-0 rounded-full transition-colors',
-                    // the switch carries the function's own colour when on
-                    d.enabled ? fcol.dot : 'bg-line',
+                    !isActive && !d.enabled && 'bg-line',
                   )}
                 >
                   <span
                     className={cx(
-                      'absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all',
+                      'absolute top-0.5 h-3 w-3 rounded-full shadow transition-all',
                       d.enabled ? 'left-3.5' : 'left-0.5',
                     )}
+                    style={{ backgroundColor: isActive ? onFill! : '#fff' }}
                   />
                 </button>
               </div>
             )
           })
 
-          // The strip sits directly on top of the panel; `items-end` keeps every
-          // tab's bottom on the panel's top edge, and `px-6` insets them clear of
-          // the panel's rounded corners (12px radius) so the active tab AND its
-          // 10px fillet arcs always join on the flat part of the panel border.
-          const tabStrip = (
-            <div ref={tabStripRef} className="flex flex-wrap items-end gap-3 px-6">
-              {tabs}
-            </div>
-          )
+          // Strip sits directly above the panel; `items-end` keeps the active
+          // chip's bottom on the panel's top edge, `px-3` insets it clear of the
+          // panel's rounded corners so the chip rides the flat part of the edge.
+          const tabStrip = <div className="flex flex-wrap items-end gap-1.5 px-3">{tabs}</div>
 
           // Nothing recording yet → show only the tabs (no panel).
           if (!showBody) return tabStrip
@@ -1511,7 +1468,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           return (
             <div>
               {tabStrip}
-              <div className={cx('space-y-4 rounded-xl border-2 bg-card p-4', col.outline)}>
+              <div className="space-y-4 rounded-xl border-2 bg-card p-4" style={{ borderColor: col.hex }}>
                 <div>
                   <label className="label">Work type(s) — {f.name}</label>
                   <div className="flex flex-wrap gap-2">
@@ -1610,7 +1567,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
         })()}
       </Section>
 
-      <Section title="Assignment">
+      <Section title="Assignment" divider={false}>
       {/* People + Note on one line */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
@@ -1639,7 +1596,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       </div>
       </Section>
 
-      <Section title="Timeline">
+      <Section title="Timeline" divider={false}>
       {/* Start / End / Half. The inputs show the ENVELOPE: when an enabled
           function timeline reaches outside the entered master dates, the master
           extends to cover it — highlighted amber so the extension is obvious. */}

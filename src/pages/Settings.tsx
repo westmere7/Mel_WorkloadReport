@@ -1033,7 +1033,10 @@ function FunctionsCard() {
                       onClick={() => setExpanded(isOpen ? null : f.name)}
                       title="Configure this function"
                     >
-                      <span className={cx('h-2 w-2 shrink-0 rounded-full', functionColor(f.color).dot)} />
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ backgroundColor: functionColor(f.color).hex }}
+                      />
                       <span className="truncate text-ink">{f.name}</span>
                       <ChevronDown className={cx('h-3.5 w-3.5 shrink-0 text-faint transition-transform', isOpen && 'rotate-180')} />
                     </button>
@@ -1072,9 +1075,9 @@ function FunctionsCard() {
                       {FUNCTION_COLOR_KEYS.map((k) => (
                         <button
                           key={k}
+                          style={{ backgroundColor: functionColor(k).hex }}
                           className={cx(
                             'h-5 w-5 rounded-full transition-transform',
-                            functionColor(k).dot,
                             f.color === k ? 'ring-2 ring-offset-1 ring-ink/40 scale-110' : 'opacity-60 hover:opacity-100',
                           )}
                           onClick={() => patch(f.name, { color: k })}

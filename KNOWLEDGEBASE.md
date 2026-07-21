@@ -771,28 +771,33 @@ LATER phase; the data is already captured for it.
 - Fixed sections: identity + squad/campaign/size (size stays whole-task), Assignment,
   master Timeline. **Demo Images moved to the footer, left of "Remove task"** (task-level,
   not per-function).
-- "Workload by function" section: **Chrome-style tabs** — the ACTIVE tab visually merges
-  into the settings panel below it (shared `border-2` outline in the function's colour via
-  `functionColor().outline`, same `bg-card`, open bottom: `border-b-0` + `-mb-0.5` 2px overlap
-  + `z-10`) while inactive tabs sit as separate neutral pills (`border-line bg-subtle`)
-  "outside", above the panel. No dots; the per-function on/off **switch carries the function's
-  colour** when on (`functionColor().dot` as its track bg). **Disabled tabs can't be selected**
-  — the name button is `disabled`, only the switch works — and there is NO disabled/dashed
-  "not recording" panel. **When no function is enabled the panel is hidden — only the bare tab
-  pills show.** `activeFn` invariant: only ever an ENABLED function or `''`; `disableFn()`
-  reassigns it when the active one is switched off; enabling a function selects it.
-  **2-row wrap handling:** a measurement effect (`tabStripRef`/`activeTabRef` + ResizeObserver
-  on the strip AND `document.documentElement`, plus window resize) sets `tabJoinsPanel` = active
-  tab sits on the strip's BOTTOM row; when tabs wrap and the active tab lands on an upper row it
-  falls back to a CLOSED pill (same colour) so its open bottom never cuts into the row below.
-  **Fillet corners:** when joined, two 10×10 `span[aria-hidden]` children at the active tab's
-  bottom-left/-right draw concave quarter-arcs via inline `radial-gradient` (circle at the top
-  corner: transparent → 2px stroke in `functionColor().hex` → `var(--card)` fill) so the outline
-  TURNS smoothly into the panel instead of a sharp T — the card fill also erases the straight
-  border stubs inside the curve. Offsets: `left/right: -10px`, `bottom-0` (the stroke band lands
-  exactly on the tab's 2px border and the panel's 2px top border; verified pixel-aligned). The
-  strip uses `px-6` (fillets clear the panel's 12px corner radius) and `gap-3` (fillets extend
-  10px past the tab, so pills need ≥10px separation). `FUNCTION_COLORS` gained `hex` for this.
+- "Workload by function" section: **filled-tab tabs over a clean rounded-rectangle panel.**
+  The panel is an untouched `rounded-xl border-2 bg-card` rectangle outlined in the active
+  function's colour (`functionColor().outline`). The ACTIVE tab is a **solid chip filled with
+  the function's colour** (inline `backgroundColor/borderColor: functionColor().hex`, text/knob
+  colour via `readableOn(hex)` so gold gets dark text) that rides the panel's top edge
+  (`-mb-0.5` 2px overlap, `z-10`, `rounded-t-lg`); because the chip fill and the panel border
+  are the SAME colour, the overlap is seamless — there is NO shared-outline junction to glitch
+  (this replaced an earlier Chrome-shoulder/fillet attempt that glitched at the corners).
+  Inactive tabs are neutral pills (`border-line bg-subtle`), no dots. The per-function on/off
+  **switch carries the function's colour** when on for inactive tabs (`functionColor().dot`);
+  on the active (already-coloured) chip the switch track/knob use a translucent `readableOn`
+  colour so they stay legible. **Disabled tabs can't be selected** — the name button is
+  `disabled`, only the switch works — and there is NO disabled/dashed "not recording" panel.
+  `FUNCTION_COLORS` (constants) is **hex-only** — one deliberately DARKENED/subdued hex per key
+  (red `#C41E2A`, teal `#0E7C99`, gold `#B7791F`, green `#3F8E3A`, plum `#7A4E91`; all luminance
+  < 0.6 so `readableOn` → white on every fill), rendered everywhere via INLINE styles (function
+  dots in Settings + the dashboard filter, the panel border, the filled chip, the on-switch
+  track) — decoupled from the brighter `accent-*` chart palette. Section dividers: the task
+  form's `Section` takes `divider={false}` (keeps top spacing, drops the border line) — used on
+  Assignment and Timeline so there's no separator after Workload-by-function or before Timeline.
+  **When no function is enabled the panel is hidden — only the bare tab pills show.** `activeFn`
+  invariant: only ever an ENABLED function or `''`; `disableFn()` reassigns it when the active
+  one is switched off; enabling a function selects it. **2-row wrap:** with the filled-chip
+  approach no join geometry is needed — the strip is `flex flex-wrap items-end px-3`; on one row
+  the active chip rides the panel edge, and when tabs wrap the chip is still colour-matched to
+  the panel (no fillets, no measurement effect, no glitch). `FUNCTION_COLORS` gained `hex` (raw
+  colour for inline fills).
   ⚠️ The `border-accent-*` outline utilities are new; a running dev server must be RESTARTED for
   Tailwind's JIT to emit them (`border-rmit-red` worked pre-existing, the accent borders didn't
   until restart).

@@ -775,7 +775,8 @@ function FunctionFilter({
               .map((f) => (
                 <span
                   key={f.name}
-                  className={cx('h-2.5 w-2.5 rounded-full ring-2 ring-card', functionColor(f.color).dot)}
+                  className="h-2.5 w-2.5 rounded-full ring-2 ring-card"
+                  style={{ backgroundColor: functionColor(f.color).hex }}
                 />
               ))}
           </span>
@@ -808,7 +809,10 @@ function FunctionFilter({
                   isAll ? 'opacity-50' : on ? 'text-ink' : 'text-muted',
                 )}
               >
-                <span className={cx('h-2 w-2 shrink-0 rounded-full', functionColor(f.color).dot)} />
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: functionColor(f.color).hex }}
+                />
                 <span className="flex-1">{f.name}</span>
                 {on && <Check className="h-4 w-4 shrink-0 text-accent-green" />}
               </button>

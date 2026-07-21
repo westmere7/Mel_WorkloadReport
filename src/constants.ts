@@ -83,32 +83,27 @@ export const DEFAULT_ASSET_TYPES: string[] = ['Image', 'Video', 'Publication', '
 export const LEGACY_FUNCTION = 'Vietnam Design'
 
 /**
- * Preset colour classes for functions — key stored in settings, applied in the
- * task form + Settings. `dot` for legend dots, `tab`/`ring` for tints,
- * `outline` for the solid thick border that joins a function's tab to its
- * canvas (Chrome-tab style), and `hex` for inline styles that CSS classes
- * can't express (the tab fillet-corner gradients). Kept to the app's existing
- * accent families — hexes mirror tailwind.config.js.
+ * Preset function colours — one deliberately DARKENED/subdued hex per key so a
+ * solid fill always reads with white text (see `readableOn` — every hex here has
+ * luminance < 0.6). Rendered via inline styles (dots, the panel outline, the
+ * filled active tab, the on-switch track), so functions stay a distinct family
+ * from the brighter chart accents in tailwind.config.js.
  */
 export interface FunctionColorSet {
-  dot: string
-  tab: string
-  ring: string
-  outline: string
   hex: string
 }
 
 export const FUNCTION_COLORS: Record<string, FunctionColorSet> = {
-  red: { dot: 'bg-rmit-red', tab: 'border-rmit-red/40 bg-rmit-red/5', ring: 'ring-rmit-red/40', outline: 'border-rmit-red', hex: '#E61E2A' },
-  teal: { dot: 'bg-accent-teal', tab: 'border-accent-teal/40 bg-accent-teal/5', ring: 'ring-accent-teal/40', outline: 'border-accent-teal', hex: '#00A9CE' },
-  gold: { dot: 'bg-accent-gold', tab: 'border-accent-gold/40 bg-accent-gold/5', ring: 'ring-accent-gold/40', outline: 'border-accent-gold', hex: '#FFB81C' },
-  green: { dot: 'bg-accent-green', tab: 'border-accent-green/40 bg-accent-green/5', ring: 'ring-accent-green/40', outline: 'border-accent-green', hex: '#5BBA47' },
-  plum: { dot: 'bg-accent-plum', tab: 'border-accent-plum/40 bg-accent-plum/5', ring: 'ring-accent-plum/40', outline: 'border-accent-plum', hex: '#8E5BA6' },
+  red: { hex: '#C41E2A' },
+  teal: { hex: '#0E7C99' },
+  gold: { hex: '#B7791F' },
+  green: { hex: '#3F8E3A' },
+  plum: { hex: '#7A4E91' },
 }
 
 export const FUNCTION_COLOR_KEYS = Object.keys(FUNCTION_COLORS)
 
-/** Look up a function's colour classes, falling back safely for unknown keys. */
+/** Look up a function's colour, falling back safely for unknown keys. */
 export function functionColor(key: string | undefined): FunctionColorSet {
   return FUNCTION_COLORS[key ?? ''] ?? FUNCTION_COLORS.plum
 }
