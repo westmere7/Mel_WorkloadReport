@@ -1,4 +1,4 @@
-import type { Squad, Size, AppSettings } from './types'
+import type { Squad, Size, AppSettings, FunctionConfig, FunctionData, FunctionEntry } from './types'
 
 /**
  * Default squads (stakeholders). Editable in Settings like the other lists — this
@@ -70,6 +70,116 @@ export const DEFAULT_PEOPLE: string[] = [
 /** Default asset (deliverable) types — editable in Settings. */
 export const DEFAULT_ASSET_TYPES: string[] = ['Image', 'Video', 'Publication', 'HTML5 ad', 'GIF / Motion']
 
+// ── GCMC functions (per-function workload slices) ────────────────────────────
+
+/**
+ * Function that owns every task recorded before functions existed. A task with
+ * no `functionData` opens in the form with only this tab enabled, seeded from
+ * its top-level fields; it's upgraded when saved. Renaming the function in
+ * Settings rewrites task keys but legacy (null) tasks keep following the new
+ * name via `AppSettings.functions` order — so this constant tracks the SEED
+ * name only and must match DEFAULT_FUNCTIONS.
+ */
+export const LEGACY_FUNCTION = 'Vietnam Design'
+
+/**
+ * Preset colour classes for functions — key stored in settings, applied in the
+ * task form + Settings. `dot` for legend dots, `tab`/`ring` for tints,
+ * `outline` for the solid thick border that joins a function's tab to its
+ * canvas (Chrome-tab style), and `hex` for inline styles that CSS classes
+ * can't express (the tab fillet-corner gradients). Kept to the app's existing
+ * accent families — hexes mirror tailwind.config.js.
+ */
+export interface FunctionColorSet {
+  dot: string
+  tab: string
+  ring: string
+  outline: string
+  hex: string
+}
+
+export const FUNCTION_COLORS: Record<string, FunctionColorSet> = {
+  red: { dot: 'bg-rmit-red', tab: 'border-rmit-red/40 bg-rmit-red/5', ring: 'ring-rmit-red/40', outline: 'border-rmit-red', hex: '#E61E2A' },
+  teal: { dot: 'bg-accent-teal', tab: 'border-accent-teal/40 bg-accent-teal/5', ring: 'ring-accent-teal/40', outline: 'border-accent-teal', hex: '#00A9CE' },
+  gold: { dot: 'bg-accent-gold', tab: 'border-accent-gold/40 bg-accent-gold/5', ring: 'ring-accent-gold/40', outline: 'border-accent-gold', hex: '#FFB81C' },
+  green: { dot: 'bg-accent-green', tab: 'border-accent-green/40 bg-accent-green/5', ring: 'ring-accent-green/40', outline: 'border-accent-green', hex: '#5BBA47' },
+  plum: { dot: 'bg-accent-plum', tab: 'border-accent-plum/40 bg-accent-plum/5', ring: 'ring-accent-plum/40', outline: 'border-accent-plum', hex: '#8E5BA6' },
+}
+
+export const FUNCTION_COLOR_KEYS = Object.keys(FUNCTION_COLORS)
+
+/** Look up a function's colour classes, falling back safely for unknown keys. */
+export function functionColor(key: string | undefined): FunctionColorSet {
+  return FUNCTION_COLORS[key ?? ''] ?? FUNCTION_COLORS.plum
+}
+
+/**
+ * Default functions. Hidden-type lists start EMPTY = every tab offers the full
+ * master lists; Settings trims per function by adding exclusions.
+ */
+export const DEFAULT_FUNCTIONS: FunctionConfig[] = [
+  { name: 'Vietnam Design', color: 'red', hiddenWorkTypes: [], hiddenAssetTypes: [] },
+  { name: 'Melbourne Design', color: 'teal', hiddenWorkTypes: [], hiddenAssetTypes: [] },
+  { name: 'Production', color: 'gold', hiddenWorkTypes: [], hiddenAssetTypes: [] },
+  { name: 'Contents', color: 'green', hiddenWorkTypes: [], hiddenAssetTypes: [] },
+]
+
+/**
+ * Which function owns tasks with NO functionData (recorded pre-functions).
+ * The seed name if it still exists, else the first configured function — so a
+ * rename of Vietnam Design keeps legacy tasks following it (order is stable).
+ */
+export function legacyOwnerName(functions: FunctionConfig[]): string {
+  return functions.find((f) => f.name === LEGACY_FUNCTION)?.name ?? functions[0]?.name ?? LEGACY_FUNCTION
+}
+
+/** Coerce a stored `functions` value into a valid FunctionConfig[] (defaults on junk). */
+export function normalizeFunctions(raw: unknown): FunctionConfig[] {
+  const cloneDefaults = () =>
+    DEFAULT_FUNCTIONS.map((f) => ({ ...f, hiddenWorkTypes: [...f.hiddenWorkTypes], hiddenAssetTypes: [...f.hiddenAssetTypes] }))
+  if (!Array.isArray(raw)) return cloneDefaults()
+  const out: FunctionConfig[] = []
+  for (const f of raw) {
+    if (!f || typeof f !== 'object') continue
+    const name = typeof (f as FunctionConfig).name === 'string' ? (f as FunctionConfig).name.trim() : ''
+    if (!name || out.some((o) => o.name === name)) continue
+    const strings = (v: unknown): string[] =>
+      Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : []
+    out.push({
+      name,
+      color: typeof (f as FunctionConfig).color === 'string' ? (f as FunctionConfig).color : 'plum',
+      hiddenWorkTypes: strings((f as FunctionConfig).hiddenWorkTypes),
+      hiddenAssetTypes: strings((f as FunctionConfig).hiddenAssetTypes),
+    })
+  }
+  return out.length ? out : cloneDefaults()
+}
+
+/** Empty per-function slice. */
+export function emptyFunctionEntry(): FunctionEntry {
+  return { types: [], assetBreakdown: {}, assetTotal: 0, timelineOn: false, startDate: null, endDate: null }
+}
+
+/** Coerce a stored `function_data` value into a clean FunctionData (or null for legacy). */
+export function normalizeFunctionData(raw: unknown): FunctionData | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const out: FunctionData = {}
+  for (const [name, e] of Object.entries(raw as Record<string, unknown>)) {
+    if (!name.trim() || !e || typeof e !== 'object') continue
+    const entry = e as Partial<FunctionEntry>
+    const breakdown = normalizeBreakdown(entry.assetBreakdown as Record<string, number> | undefined)
+    out[name] = {
+      types: Array.isArray(entry.types) ? entry.types.filter((t): t is string => typeof t === 'string') : [],
+      assetBreakdown: breakdown,
+      assetTotal: Object.values(breakdown).reduce((a, b) => a + b, 0),
+      timelineOn: entry.timelineOn === true,
+      startDate: typeof entry.startDate === 'string' ? entry.startDate : null,
+      endDate: typeof entry.endDate === 'string' ? entry.endDate : null,
+    }
+  }
+  return Object.keys(out).length ? out : null
+}
+
 /**
  * Reserved catch-all present in every editable list (campaigns/types/people/asset
  * types). It can't be edited or removed; deleting a list item that tasks still use
@@ -106,6 +216,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   types: DEFAULT_TYPES,
   people: DEFAULT_PEOPLE,
   assetTypes: DEFAULT_ASSET_TYPES,
+  functions: DEFAULT_FUNCTIONS.map((f) => ({
+    ...f,
+    hiddenWorkTypes: [...f.hiddenWorkTypes],
+    hiddenAssetTypes: [...f.hiddenAssetTypes],
+  })),
   sizeDurations: { ...DEFAULT_SIZE_DURATIONS },
   allowRemoveUsed: false,
   peopleMondayIds: {},

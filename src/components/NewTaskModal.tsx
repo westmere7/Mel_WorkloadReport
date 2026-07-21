@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Modal } from './ui/Modal'
 import { TaskForm } from './TaskForm'
 import { useStore } from '../data/store'
-import type { TaskInput } from '../types'
+import type { Task, TaskInput } from '../types'
 
 interface NewTaskContextValue {
   openNewTask: () => void
@@ -20,7 +20,9 @@ export function useNewTask(): NewTaskContextValue {
 
 export function NewTaskProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
-  const { createTask, tasks } = useStore()
+  // Task opened via "edit the existing task instead" (duplicate-code handoff).
+  const [editTask, setEditTask] = useState<Task | null>(null)
+  const { createTask, updateTask, tasks } = useStore()
   const navigate = useNavigate()
 
   // A new task is the most recent, so it takes the next number at the top of the
@@ -55,7 +57,36 @@ export function NewTaskProvider({ children }: { children: ReactNode }) {
         wide
         closeOnBackdrop={false}
       >
-        <TaskForm submitLabel="Register task" onSubmit={handleSubmit} onCancel={() => setOpen(false)} />
+        <TaskForm
+          submitLabel="Register task"
+          onSubmit={handleSubmit}
+          onCancel={() => setOpen(false)}
+          onOpenExisting={(t) => {
+            setOpen(false)
+            setEditTask(t)
+          }}
+        />
+      </Modal>
+
+      {/* Duplicate-code handoff: edit the task that already owns the code. */}
+      <Modal
+        open={editTask !== null}
+        onClose={() => setEditTask(null)}
+        title="Edit task"
+        wide
+        closeOnBackdrop={false}
+      >
+        {editTask && (
+          <TaskForm
+            initial={editTask}
+            submitLabel="Save changes"
+            onSubmit={async (input) => {
+              await updateTask(editTask.id, input)
+              setEditTask(null)
+            }}
+            onCancel={() => setEditTask(null)}
+          />
+        )}
       </Modal>
     </NewTaskContext.Provider>
   )

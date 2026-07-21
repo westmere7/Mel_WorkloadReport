@@ -3,7 +3,18 @@ import type { Repository } from './repository'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
 import type { ShowcaseConfig, ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
 import { getSupabase } from '../lib/supabaseClient'
-import { DEFAULT_SETTINGS, canonicalAssetName, normalizeSizeDurations } from '../constants'
+import {
+  DEFAULT_SETTINGS,
+  canonicalAssetName,
+  normalizeFunctionData,
+  normalizeFunctions,
+  normalizeSizeDurations,
+} from '../constants'
+import {
+  renameAssetTypeInFunctionData,
+  renameFunctionKey,
+  renameWorkTypeInFunctionData,
+} from '../lib/functionData'
 import { rowToTask, taskInputToRow, taskToRow } from './mappers'
 
 const SETTINGS_ID = 'app'
@@ -155,6 +166,24 @@ function stripImages<T extends { images?: unknown }>(row: T): Omit<T, 'images'> 
   return rest
 }
 
+/** True if a Supabase error is complaining about a missing `function_data` column (pre-migration). */
+function isMissingFunctionDataColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('function_data') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** Drop the `function_data` key from a row (used to retry when the column isn't there yet). */
+function stripFunctionData<T extends { function_data?: unknown }>(row: T): Omit<T, 'function_data'> {
+  const { function_data: _drop, ...rest } = row
+  return rest
+}
+
+/** True if a Supabase error is complaining about a missing `functions` column (pre-migration). */
+function isMissingFunctionsColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('functions') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
 /**
  * Supabase-backed repository. Active automatically when VITE_SUPABASE_URL
  * and VITE_SUPABASE_ANON_KEY are set. Expects the schema in supabase/schema.sql.
@@ -206,6 +235,10 @@ export class SupabaseRepository implements Repository {
       row = stripImages(row)
       ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
     }
+    if (error && isMissingFunctionDataColumn(error)) {
+      row = stripFunctionData(row)
+      ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
+    }
     if (error) throw error
     return rowToTask(data)
   }
@@ -227,18 +260,28 @@ export class SupabaseRepository implements Repository {
       rows = rows.map(stripImages)
       ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
     }
+    if (error && isMissingFunctionDataColumn(error)) {
+      rows = rows.map(stripFunctionData)
+      ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
+    }
     if (error) throw error
     return (data ?? []).map(rowToTask)
   }
 
   async updateTask(id: string, input: TaskInput): Promise<Task> {
-    const row = { ...taskInputToRow(input), updated_at: new Date().toISOString() }
+    let row: Record<string, unknown> = { ...taskInputToRow(input), updated_at: new Date().toISOString() }
     let { data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single()
     if (error && isMissingNoteColumn(error)) {
-      ;({ data, error } = await getSupabase().from('tasks').update(stripNote(row)).eq('id', id).select('*').single())
+      row = stripNote(row)
+      ;({ data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single())
     }
     if (error && isMissingImagesColumn(error)) {
-      ;({ data, error } = await getSupabase().from('tasks').update(stripImages(row)).eq('id', id).select('*').single())
+      row = stripImages(row)
+      ;({ data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single())
+    }
+    if (error && isMissingFunctionDataColumn(error)) {
+      row = stripFunctionData(row)
+      ;({ data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single())
     }
     if (error) throw error
     return rowToTask(data)
@@ -263,7 +306,12 @@ export class SupabaseRepository implements Repository {
     const { error: delErr } = await sb.from('tasks').delete().gte('created_at', '1970-01-01T00:00:00Z')
     if (delErr) throw delErr
     if (tasks.length === 0) return
-    const { error } = await sb.from('tasks').insert(tasks.map(taskToRow))
+    let rows: Record<string, unknown>[] = tasks.map((t) => ({ ...taskToRow(t) }))
+    let { error } = await sb.from('tasks').insert(rows)
+    if (error && isMissingFunctionDataColumn(error)) {
+      rows = rows.map(stripFunctionData)
+      ;({ error } = await sb.from('tasks').insert(rows))
+    }
     if (error) throw error
   }
 
@@ -288,7 +336,7 @@ export class SupabaseRepository implements Repository {
   }
 
   async renameValue(
-    field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown',
+    field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown' | 'functionData',
     oldValue: string,
     newValue: string,
   ): Promise<void> {
@@ -303,26 +351,23 @@ export class SupabaseRepository implements Repository {
       return
     }
 
-    if (field === 'assetBreakdown') {
-      // JSONB column: fetch every task and rename any key that resolves to
-      // oldValue (matches both legacy fixed keys like "html5" and name keys).
-      const { data, error } = await sb.from('tasks').select('id, asset_breakdown')
-      if (error) throw error
+    if (field === 'functionData') {
+      // Rename a FUNCTION: rewrite the per-function map key on every task that
+      // has one. Pre-migration DBs have no function_data column — nothing to do.
+      const { data, error } = await sb.from('tasks').select('id, function_data')
+      if (error) {
+        if (isMissingFunctionDataColumn(error)) return
+        throw error
+      }
       await Promise.all(
         (data ?? [])
           .map((row) => {
-            const raw = (row as { asset_breakdown: Record<string, number> | null }).asset_breakdown
-            if (!raw) return null
-            const keys = Object.keys(raw).filter((k) => canonicalAssetName(k) === oldValue && k !== newValue)
-            if (keys.length === 0) return null
-            const b: Record<string, number> = { ...raw }
-            for (const k of keys) {
-              b[newValue] = (b[newValue] ?? 0) + (b[k] ?? 0)
-              delete b[k]
-            }
+            const fd = normalizeFunctionData((row as { function_data: unknown }).function_data)
+            const next = fd ? renameFunctionKey(fd, oldValue, newValue) : null
+            if (!next) return null
             return sb
               .from('tasks')
-              .update({ asset_breakdown: b, updated_at: new Date().toISOString() })
+              .update({ function_data: next, updated_at: new Date().toISOString() })
               .eq('id', (row as { id: string }).id)
               .then(({ error: e }) => {
                 if (e) throw e
@@ -333,25 +378,76 @@ export class SupabaseRepository implements Repository {
       return
     }
 
-    // Array columns (types/people): fetch affected rows, rewrite each array.
-    const { data, error } = await sb
-      .from('tasks')
-      .select('id, types, people')
-      .contains(field, [oldValue])
+    if (field === 'assetBreakdown') {
+      // JSONB column: fetch every task and rename any key that resolves to
+      // oldValue (matches both legacy fixed keys like "html5" and name keys).
+      // Nested per-function breakdowns follow the rename in the same write.
+      let { data, error } = await sb.from('tasks').select('id, asset_breakdown, function_data')
+      if (error && isMissingFunctionDataColumn(error)) {
+        ;({ data, error } = await sb.from('tasks').select('id, asset_breakdown'))
+      }
+      if (error) throw error
+      await Promise.all(
+        (data ?? [])
+          .map((row) => {
+            const raw = (row as { asset_breakdown: Record<string, number> | null }).asset_breakdown
+            const fd = normalizeFunctionData((row as { function_data?: unknown }).function_data)
+            const nextFd = fd ? renameAssetTypeInFunctionData(fd, oldValue, newValue) : null
+            const keys = raw
+              ? Object.keys(raw).filter((k) => canonicalAssetName(k) === oldValue && k !== newValue)
+              : []
+            if (keys.length === 0 && !nextFd) return null
+            const b: Record<string, number> = { ...(raw ?? {}) }
+            for (const k of keys) {
+              b[newValue] = (b[newValue] ?? 0) + (b[k] ?? 0)
+              delete b[k]
+            }
+            const patch: Record<string, unknown> = { asset_breakdown: b, updated_at: new Date().toISOString() }
+            if (nextFd) patch.function_data = nextFd
+            return sb
+              .from('tasks')
+              .update(patch)
+              .eq('id', (row as { id: string }).id)
+              .then(({ error: e }) => {
+                if (e) throw e
+              })
+          })
+          .filter((p): p is Promise<void> => p !== null),
+      )
+      return
+    }
+
+    // Array columns (types/people): fetch every row and rewrite matches. Work
+    // types also live inside function_data entries, so 'types' scans all rows
+    // (not just `.contains` hits) to catch nested-only occurrences.
+    let { data, error } = await sb.from('tasks').select('id, types, people, function_data')
+    if (error && isMissingFunctionDataColumn(error)) {
+      ;({ data, error } = await sb.from('tasks').select('id, types, people'))
+    }
     if (error) throw error
 
     await Promise.all(
-      (data ?? []).map((row) => {
-        const arr = ((row as Record<string, unknown>)[field] as string[] | null) ?? []
-        const nextArr = Array.from(new Set(arr.map((v) => (v === oldValue ? newValue : v))))
-        return sb
-          .from('tasks')
-          .update({ [field]: nextArr, updated_at: new Date().toISOString() })
-          .eq('id', (row as { id: string }).id)
-          .then(({ error: e }) => {
-            if (e) throw e
-          })
-      }),
+      (data ?? [])
+        .map((row) => {
+          const arr = ((row as Record<string, unknown>)[field] as string[] | null) ?? []
+          const fd =
+            field === 'types'
+              ? normalizeFunctionData((row as { function_data?: unknown }).function_data)
+              : null
+          const nextFd = fd ? renameWorkTypeInFunctionData(fd, oldValue, newValue) : null
+          if (!arr.includes(oldValue) && !nextFd) return null
+          const nextArr = Array.from(new Set(arr.map((v) => (v === oldValue ? newValue : v))))
+          const patch: Record<string, unknown> = { [field]: nextArr, updated_at: new Date().toISOString() }
+          if (nextFd) patch.function_data = nextFd
+          return sb
+            .from('tasks')
+            .update(patch)
+            .eq('id', (row as { id: string }).id)
+            .then(({ error: e }) => {
+              if (e) throw e
+            })
+        })
+        .filter((p): p is Promise<void> => p !== null),
     )
   }
 
@@ -372,6 +468,7 @@ export class SupabaseRepository implements Repository {
       sizeDurations: normalizeSizeDurations(data.size_durations),
       allowRemoveUsed: data.allow_remove_used ?? DEFAULT_SETTINGS.allowRemoveUsed,
       peopleMondayIds: data.people_monday ?? DEFAULT_SETTINGS.peopleMondayIds,
+      functions: normalizeFunctions(data.functions),
     }
   }
 
@@ -393,9 +490,14 @@ export class SupabaseRepository implements Repository {
       size_durations: settings.sizeDurations,
       allow_remove_used: settings.allowRemoveUsed,
       people_monday: settings.peopleMondayIds,
+      functions: settings.functions,
     }
     let { data, error } = await upsert(payload)
     // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
+    if (error && isMissingFunctionsColumn(error)) {
+      delete payload.functions
+      ;({ data, error } = await upsert(payload))
+    }
     if (error && isMissingPeopleMondayColumn(error)) {
       delete payload.people_monday
       ;({ data, error } = await upsert(payload))
@@ -422,6 +524,7 @@ export class SupabaseRepository implements Repository {
       sizeDurations: normalizeSizeDurations(data.size_durations ?? settings.sizeDurations),
       allowRemoveUsed: data.allow_remove_used ?? settings.allowRemoveUsed,
       peopleMondayIds: data.people_monday ?? settings.peopleMondayIds,
+      functions: data.functions ? normalizeFunctions(data.functions) : settings.functions,
     }
   }
 

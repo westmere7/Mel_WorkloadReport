@@ -47,6 +47,14 @@ alter table public.tasks
 alter table public.tasks
   add column if not exists images jsonb not null default '[]'::jsonb;
 
+-- Per-function workload slices (idempotent). Map of function name →
+-- { types, assetBreakdown, assetTotal, timelineOn, startDate, endDate }.
+-- NULL = legacy task recorded before functions existed (treated as belonging
+-- entirely to Vietnam Design; upgraded lazily when next edited). The task's
+-- top-level types/asset_breakdown/asset_total/dates stay the COMBINED roll-up.
+alter table public.tasks
+  add column if not exists function_data jsonb;
+
 create index if not exists tasks_created_at_idx on public.tasks (created_at desc);
 create index if not exists tasks_squad_idx      on public.tasks (squad);
 create index if not exists tasks_campaign_idx   on public.tasks (campaign);
@@ -90,6 +98,18 @@ alter table public.settings
 -- Map of person NAME → monday.com user id, for auto-filling "Persons in charge".
 alter table public.settings
   add column if not exists people_monday jsonb not null default '{}'::jsonb;
+
+-- GCMC functions that record workload (task-form tabs). Array of
+-- { name, color, hiddenWorkTypes, hiddenAssetTypes }; order = tab order. The
+-- hidden lists are EXCLUSIONS (empty = the tab offers every master type), so
+-- the seed needs no copy of the type lists and never drifts from them.
+alter table public.settings
+  add column if not exists functions jsonb not null default '[
+    {"name":"Vietnam Design","color":"red","hiddenWorkTypes":[],"hiddenAssetTypes":[]},
+    {"name":"Melbourne Design","color":"teal","hiddenWorkTypes":[],"hiddenAssetTypes":[]},
+    {"name":"Production","color":"gold","hiddenWorkTypes":[],"hiddenAssetTypes":[]},
+    {"name":"Contents","color":"green","hiddenWorkTypes":[],"hiddenAssetTypes":[]}
+  ]'::jsonb;
 
 insert into public.settings (id, campaigns, types, people)
 values (

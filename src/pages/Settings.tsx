@@ -11,6 +11,8 @@ import {
   SIZE_DESCRIPTIONS,
   SIZE_TONE,
   FALLBACK_ITEM,
+  FUNCTION_COLOR_KEYS,
+  functionColor,
   sortAlpha,
   formatDurationDays,
   DEFAULT_SIZE_DURATIONS,
@@ -23,7 +25,7 @@ import {
   useDashboardPrefs,
   type DemandDim,
 } from '../lib/dashboardPrefs'
-import type { AppSettings, Size } from '../types'
+import type { AppSettings, FunctionConfig, Size } from '../types'
 
 type ListKey = keyof Pick<AppSettings, 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes'>
 
@@ -98,34 +100,49 @@ export function SettingsPage() {
             onRename={(o, n) => renameListItem('campaigns', o, n)}
             usage={(v) => usageCount('campaigns', v)}
           />
-          <ListEditor
-            title="Work types"
-            dotColor="bg-accent-gold"
-            description="Categories of design work."
-            items={settings.types}
-            fallback={FALLBACK_ITEM}
-            allowRemoveUsed={settings.allowRemoveUsed}
-            onAdd={(v) => mutate('types', [...settings.types, v])}
-            onRemove={(v) => removeListItem('types', v)}
-            onRename={(o, n) => renameListItem('types', o, n)}
-            usage={(v) => usageCount('types', v)}
-          />
-          <ListEditor
-            title="Asset types"
-            dotColor="bg-accent-green"
-            description="Deliverable types counted in the asset breakdown."
-            items={settings.assetTypes}
-            fallback={FALLBACK_ITEM}
-            allowRemoveUsed={settings.allowRemoveUsed}
-            onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
-            onRemove={(v) => removeListItem('assetTypes', v)}
-            onRename={(o, n) => renameListItem('assetTypes', o, n)}
-            usage={(v) => usageCount('assetTypes', v)}
-          />
+          {/* Work + asset types share one card — the Functions panel draws from both. */}
+          <Card className="bg-subtle">
+            <CardHeader
+              title="Types"
+              subtitle="Work types and asset (deliverable) types. Each function picks which of these its task-form tab offers."
+            />
+            <div className="space-y-5">
+              <ListEditor
+                bare
+                title="Work types"
+                dotColor="bg-accent-gold"
+                description="Categories of design work."
+                items={settings.types}
+                fallback={FALLBACK_ITEM}
+                allowRemoveUsed={settings.allowRemoveUsed}
+                onAdd={(v) => mutate('types', [...settings.types, v])}
+                onRemove={(v) => removeListItem('types', v)}
+                onRename={(o, n) => renameListItem('types', o, n)}
+                usage={(v) => usageCount('types', v)}
+              />
+              <div className="border-t border-line pt-4">
+                <ListEditor
+                  bare
+                  title="Asset types"
+                  dotColor="bg-accent-green"
+                  description="Deliverable types counted in the asset breakdown."
+                  items={settings.assetTypes}
+                  fallback={FALLBACK_ITEM}
+                  allowRemoveUsed={settings.allowRemoveUsed}
+                  onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
+                  onRemove={(v) => removeListItem('assetTypes', v)}
+                  onRename={(o, n) => renameListItem('assetTypes', o, n)}
+                  usage={(v) => usageCount('assetTypes', v)}
+                />
+              </div>
+            </div>
+          </Card>
+          {/* GCMC functions — per-function task-form tabs (work/asset types + colour) */}
+          <FunctionsCard />
           <ListEditor
             title="People"
             dotColor="bg-accent-plum"
-            description="Team members who can be assigned."
+            description="Team members who can be assigned. The monday ID maps each person to their monday.com account so the auto-fill can assign them."
             items={settings.people}
             fallback={FALLBACK_ITEM}
             allowRemoveUsed={settings.allowRemoveUsed}
@@ -820,23 +837,372 @@ function Switch({
   )
 }
 
-/** Per-person monday user-id input: local while typing, saves on blur/Enter
- *  (so it doesn't fire a settings write on every keystroke). */
+/** monday account slug — user profiles live at https://<slug>.monday.com/users/<id>. */
+const MONDAY_ACCOUNT = 'rmit'
+
+/**
+ * Per-person monday user-id control: edit locally, then **Save** (✓ / Enter),
+ * **Discard** (↩ / Esc, revert to saved), or **Clear** (× when a value is saved).
+ * The monday.com logo links to the user's profile (previews whatever id is typed).
+ */
 function MondayIdInput({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
   const [v, setV] = useState(value)
   useEffect(() => setV(value), [value]) // resync if the stored value changes (e.g. rename)
+  const dirty = v.trim() !== value.trim()
+  const preview = v.trim()
+  const profileUrl = preview ? `https://${MONDAY_ACCOUNT}.monday.com/users/${encodeURIComponent(preview)}` : null
+
   return (
-    <input
-      className="input h-7 w-24 shrink-0 px-2 py-0 text-xs font-mono"
-      placeholder="monday ID"
-      value={v}
-      onChange={(e) => setV(e.target.value)}
-      onBlur={() => v.trim() !== value.trim() && onCommit(v)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur()
-      }}
-      title="monday.com user id — used to auto-fill this person from a board item"
-    />
+    <span className="flex w-full items-center gap-1">
+      {profileUrl ? (
+        <a
+          href={profileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Open monday profile (${preview})`}
+          className="shrink-0 rounded p-0.5 transition hover:bg-subtle"
+        >
+          <img src="/monday.svg" alt="monday" className="h-4 w-4" />
+        </a>
+      ) : (
+        <img src="/monday.svg" alt="" className="h-4 w-4 shrink-0 opacity-30" title="Enter a monday user id" />
+      )}
+      <input
+        className="input h-7 min-w-0 flex-1 px-2 py-0 text-xs font-mono"
+        placeholder="monday ID"
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && dirty) {
+            e.preventDefault()
+            onCommit(v.trim())
+          } else if (e.key === 'Escape') {
+            e.preventDefault()
+            setV(value)
+          }
+        }}
+        title="monday.com user id — used to auto-fill this person from a board item"
+      />
+      {dirty ? (
+        <>
+          <button
+            type="button"
+            onClick={() => onCommit(v.trim())}
+            title="Save"
+            className="rounded p-1 text-accent-green hover:bg-green-50 dark:hover:bg-green-500/15"
+          >
+            <Check className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setV(value)}
+            title="Discard"
+            className="rounded p-1 text-faint hover:bg-subtle"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+        </>
+      ) : value.trim() ? (
+        <button
+          type="button"
+          onClick={() => onCommit('')}
+          title="Clear"
+          className="rounded p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+    </span>
+  )
+}
+
+/**
+ * GCMC functions panel — each function is a tab in the task form, with its own
+ * colour and its own pick of work/asset types. Removal is always blocked while
+ * a function still has tasks with recorded workload (there's no fallback that
+ * could absorb per-function data), independent of the Groups toggle.
+ */
+function FunctionsCard() {
+  const { settings, saveSettings, renameFunction, removeFunction, functionUsage } = useStore()
+  const functions = settings.functions
+  const [draft, setDraft] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [blockedRemove, setBlockedRemove] = useState<string | null>(null)
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null)
+
+  const add = () => {
+    const v = draft.trim()
+    if (!v || functions.some((f) => f.name.toLowerCase() === v.toLowerCase())) {
+      setDraft('')
+      return
+    }
+    // Pick the first preset colour not in use (cycles once all are taken).
+    const used = new Set(functions.map((f) => f.color))
+    const color = FUNCTION_COLOR_KEYS.find((k) => !used.has(k)) ?? FUNCTION_COLOR_KEYS[functions.length % FUNCTION_COLOR_KEYS.length]
+    void saveSettings({
+      ...settings,
+      functions: [...functions, { name: v, color, hiddenWorkTypes: [], hiddenAssetTypes: [] }],
+    })
+    setDraft('')
+  }
+
+  const patch = (name: string, p: Partial<FunctionConfig>) =>
+    void saveSettings({ ...settings, functions: functions.map((f) => (f.name === name ? { ...f, ...p } : f)) })
+
+  // Checked = offered on the tab; the stored list holds the EXCLUSIONS, so new
+  // master types automatically show up on every function's tab.
+  const toggleType = (fn: FunctionConfig, kind: 'hiddenWorkTypes' | 'hiddenAssetTypes', t: string) => {
+    const hidden = fn[kind].includes(t) ? fn[kind].filter((x) => x !== t) : [...fn[kind], t]
+    patch(fn.name, { [kind]: hidden })
+  }
+
+  const saveEdit = (name: string) => {
+    const v = editValue.trim()
+    if (v && v !== name) {
+      void renameFunction(name, v)
+      if (expanded === name) setExpanded(v)
+    }
+    setEditing(null)
+    setEditValue('')
+  }
+
+  const requestRemove = (name: string) => {
+    if (functionUsage(name) > 0) setBlockedRemove(name)
+    else setPendingRemove(name)
+  }
+
+  return (
+    <Card className="bg-subtle">
+      <CardHeader
+        title="Functions"
+        subtitle="GCMC functions that record workload — each gets its own tab in the task form. Expand one to pick its colour and the types its tab offers."
+      />
+      <div className="mb-3 flex gap-2">
+        <input
+          className="input"
+          placeholder="Add function…"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+        />
+        <button className="btn-navy shrink-0 px-3" onClick={add} aria-label="Add function">
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+      <ul className="space-y-1.5">
+        {functions.map((f) => {
+          const count = functionUsage(f.name)
+          const isOpen = expanded === f.name
+          const isEditing = editing === f.name
+          return (
+            <li key={f.name} className="rounded-lg border border-line bg-card/40 transition-all duration-200 hover:bg-card/80">
+              <div className="flex items-center gap-2 px-3 py-2">
+                {isEditing ? (
+                  <>
+                    <input
+                      className="input h-8 flex-1 px-2 py-1 text-sm"
+                      value={editValue}
+                      autoFocus
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          saveEdit(f.name)
+                        } else if (e.key === 'Escape') {
+                          setEditing(null)
+                        }
+                      }}
+                      onBlur={() => saveEdit(f.name)}
+                    />
+                    <button
+                      className="rounded-md p-1 text-accent-green hover:bg-green-50 dark:hover:bg-green-500/15"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => saveEdit(f.name)}
+                      title="Save"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
+                      onClick={() => setExpanded(isOpen ? null : f.name)}
+                      title="Configure this function"
+                    >
+                      <span className={cx('h-2 w-2 shrink-0 rounded-full', functionColor(f.color).dot)} />
+                      <span className="truncate text-ink">{f.name}</span>
+                      <ChevronDown className={cx('h-3.5 w-3.5 shrink-0 text-faint transition-transform', isOpen && 'rotate-180')} />
+                    </button>
+                    <span className="flex shrink-0 items-center gap-1">
+                      {count > 0 && (
+                        <span className="text-[11px] text-muted">
+                          {count} task{count === 1 ? '' : 's'}
+                        </span>
+                      )}
+                      <button
+                        className="rounded-md p-1 text-faint hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white"
+                        onClick={() => {
+                          setEditing(f.name)
+                          setEditValue(f.name)
+                        }}
+                        title="Rename"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        className="rounded-md p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
+                        onClick={() => requestRemove(f.name)}
+                        title="Remove"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </span>
+                  </>
+                )}
+              </div>
+              {isOpen && !isEditing && (
+                <div className="space-y-3 border-t border-line px-3 py-2.5">
+                  <div>
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-faint">Tab colour</div>
+                    <div className="flex items-center gap-1.5">
+                      {FUNCTION_COLOR_KEYS.map((k) => (
+                        <button
+                          key={k}
+                          className={cx(
+                            'h-5 w-5 rounded-full transition-transform',
+                            functionColor(k).dot,
+                            f.color === k ? 'ring-2 ring-offset-1 ring-ink/40 scale-110' : 'opacity-60 hover:opacity-100',
+                          )}
+                          onClick={() => patch(f.name, { color: k })}
+                          title={k}
+                          aria-label={`Colour ${k}`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <TypePicker
+                    label="Work types on this tab"
+                    all={sortAlpha(settings.types)}
+                    hidden={f.hiddenWorkTypes}
+                    onToggle={(t) => toggleType(f, 'hiddenWorkTypes', t)}
+                  />
+                  <TypePicker
+                    label="Asset types on this tab"
+                    all={sortAlpha(settings.assetTypes)}
+                    hidden={f.hiddenAssetTypes}
+                    onToggle={(t) => toggleType(f, 'hiddenAssetTypes', t)}
+                  />
+                  <p className="text-[11px] text-faint">
+                    Unchecked types are only hidden from new entry — values a task already has always stay visible.
+                  </p>
+                </div>
+              )}
+            </li>
+          )
+        })}
+        {functions.length === 0 && <li className="py-2 text-sm text-muted">No functions yet — add one above.</li>}
+      </ul>
+
+      {/* Removal blocked: per-function workload has no fallback to absorb it. */}
+      <Modal
+        open={blockedRemove !== null}
+        onClose={() => setBlockedRemove(null)}
+        title="Can’t remove function"
+        footer={
+          <button className="btn-primary" onClick={() => setBlockedRemove(null)}>
+            OK
+          </button>
+        }
+      >
+        {blockedRemove && (
+          <div className="flex gap-3 rounded-xl bg-subtle p-3 text-sm text-ink">
+            <Lock className="mt-0.5 h-5 w-5 shrink-0 text-muted" />
+            <p>
+              <strong>{blockedRemove}</strong> still has{' '}
+              <strong>
+                {functionUsage(blockedRemove)} task{functionUsage(blockedRemove) === 1 ? '' : 's'}
+              </strong>{' '}
+              with recorded workload. A function’s data has no fallback, so removing it would delete that
+              workload — reassign or edit those tasks first.
+            </p>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={pendingRemove !== null}
+        onClose={() => setPendingRemove(null)}
+        title="Remove function"
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setPendingRemove(null)}>
+              Cancel
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                if (pendingRemove) void removeFunction(pendingRemove).catch(() => {})
+                setPendingRemove(null)
+              }}
+            >
+              Remove
+            </button>
+          </>
+        }
+      >
+        {pendingRemove && (
+          <p className="text-sm text-ink">
+            Remove <strong>{pendingRemove}</strong>? No tasks currently record workload under it, so nothing
+            else changes. Its task-form tab disappears.
+          </p>
+        )}
+      </Modal>
+    </Card>
+  )
+}
+
+/** Compact checkbox-chip picker used by the Functions panel (checked = not hidden). */
+function TypePicker({
+  label,
+  all,
+  hidden,
+  onToggle,
+}: {
+  label: string
+  all: string[]
+  hidden: string[]
+  onToggle: (t: string) => void
+}) {
+  return (
+    <div>
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-faint">{label}</div>
+      <div className="flex flex-wrap gap-1">
+        {all.map((t) => {
+          const on = !hidden.includes(t)
+          return (
+            <button
+              key={t}
+              type="button"
+              className={cx(
+                'rounded-full border px-2 py-0.5 text-[11px] transition-colors',
+                on
+                  ? 'border-rmit-navy bg-rmit-navy text-white dark:border-white/60 dark:bg-white/15'
+                  : 'border-line text-muted hover:border-ink/40',
+              )}
+              onClick={() => onToggle(t)}
+              aria-pressed={on}
+            >
+              {t}
+            </button>
+          )
+        })}
+        {all.length === 0 && <span className="text-[11px] text-faint">Nothing in this list yet.</span>}
+      </div>
+    </div>
   )
 }
 
@@ -854,6 +1220,8 @@ function ListEditor({
   dotColor = 'bg-rmit-red',
   mondayIds,
   onMondayId,
+  className,
+  bare,
 }: {
   title: string
   description: string
@@ -872,6 +1240,10 @@ function ListEditor({
   /** When set, each row gets a small monday.com user-id input (People panel only). */
   mondayIds?: Record<string, string>
   onMondayId?: (item: string, id: string) => void
+  /** Extra classes on the card wrapper — e.g. a grid col-span for the wider People panel. */
+  className?: string
+  /** Render without the Card wrapper (a compact heading instead) — for combined cards. */
+  bare?: boolean
 }) {
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
@@ -921,9 +1293,17 @@ function ListEditor({
     cancelEdit()
   }
 
+  const Wrapper = bare ? 'div' : Card
   return (
-    <Card className="bg-subtle">
-      <CardHeader title={title} subtitle={description} />
+    <Wrapper className={cx(!bare && 'bg-subtle', className)}>
+      {bare ? (
+        <div className="mb-2">
+          <h4 className="text-sm font-semibold text-ink">{title}</h4>
+          <p className="text-xs text-muted">{description}</p>
+        </div>
+      ) : (
+        <CardHeader title={title} subtitle={description} />
+      )}
       <div className="mb-3 flex gap-2">
         <input
           className="input"
@@ -936,6 +1316,16 @@ function ListEditor({
           <Plus className="h-4 w-4" />
         </button>
       </div>
+      {onMondayId && sortedItems.length > 0 && (
+        <div className="mb-1 flex items-center gap-2 px-3 text-[10px] font-semibold uppercase tracking-wide text-faint">
+          <span className="flex-1">Name</span>
+          <span className="w-32 shrink-0">monday ID</span>
+          <span className="flex shrink-0 items-center gap-1">
+            <span className="w-14 text-right">Tasks</span>
+            <span className="w-12" />
+          </span>
+        </div>
+      )}
       <ul className="space-y-1.5">
         {sortedItems.map((item) => {
           const count = usage(item)
@@ -1010,13 +1400,21 @@ function ListEditor({
                     <span className="truncate text-ink">{item}</span>
                   </button>
                   {onMondayId && (
-                    <MondayIdInput value={mondayIds?.[item] ?? ''} onCommit={(v) => onMondayId(item, v)} />
+                    <div className="w-32 shrink-0">
+                      <MondayIdInput value={mondayIds?.[item] ?? ''} onCommit={(v) => onMondayId(item, v)} />
+                    </div>
                   )}
                   <span className="flex shrink-0 items-center gap-1">
-                    {count > 0 && (
-                      <span className="text-[11px] text-muted">
-                        {count} task{count === 1 ? '' : 's'}
+                    {onMondayId ? (
+                      <span className="w-14 text-right text-[11px] text-muted">
+                        {count > 0 ? `${count} task${count === 1 ? '' : 's'}` : ''}
                       </span>
+                    ) : (
+                      count > 0 && (
+                        <span className="text-[11px] text-muted">
+                          {count} task{count === 1 ? '' : 's'}
+                        </span>
+                      )
                     )}
                     <button
                       className="rounded-md p-1 text-faint hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white"
@@ -1119,6 +1517,6 @@ function ListEditor({
           </div>
         )}
       </Modal>
-    </Card>
+    </Wrapper>
   )
 }

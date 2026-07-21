@@ -27,7 +27,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const meta = TITLES[pathname] ?? { title: 'Workload Report', subtitle: '' }
   const { theme, toggle } = useTheme()
   const { user } = useAuth()
-  const currentYear = new Date().getFullYear()
 
   const [loginOpen, setLoginOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -81,13 +80,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <h1 className="truncate text-base font-bold text-ink sm:text-lg">{meta.title}</h1>
                 {meta.subtitle && <p className="hidden truncate text-xs text-muted sm:block">{meta.subtitle}</p>}
               </div>
-              <span
-                className="hidden items-center rounded-xl border border-line px-4 text-2xl font-bold leading-none text-ink sm:flex"
-                title="Current year"
-              >
-                {currentYear}
-              </span>
-              {/* Live/Offline badge — hidden on mobile to keep the top row compact */}
+              {/* Page-injected left slot (e.g. the dashboard's function filter) —
+                  hidden on mobile to keep the top row compact */}
               {slots.left && <div className="hidden items-center sm:flex">{slots.left}</div>}
             </div>
 

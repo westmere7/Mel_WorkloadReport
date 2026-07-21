@@ -63,10 +63,12 @@ export interface Repository {
   /**
    * Rename a value across all tasks (used when a campaign/type/person is
    * renamed in Settings) so tasks stay linked. `field` is the task field:
-   * 'campaign' (scalar) or 'types' / 'people' (arrays).
+   * 'campaign' (scalar), 'types' / 'people' (arrays), 'assetBreakdown' /
+   * 'functionData' (JSON maps — the KEY is renamed; also inside functionData's
+   * nested types/assetBreakdown when renaming a work/asset type).
    */
   renameValue(
-    field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown',
+    field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown' | 'functionData',
     oldValue: string,
     newValue: string,
   ): Promise<void>

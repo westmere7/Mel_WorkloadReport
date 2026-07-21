@@ -15,6 +15,31 @@ export type Size = 'XS' | 'S' | 'M' | 'L' | 'XL'
 /** Breakdown of the total asset count, keyed by asset-type name (editable in Settings). */
 export type AssetBreakdown = Record<string, number>
 
+/**
+ * One GCMC function's slice of a task (Vietnam Design / Melbourne Design /
+ * Production / Contents…). Work types, asset counts and an optional timeline are
+ * captured per function; the task's top-level fields stay the COMBINED view so
+ * every existing chart/export keeps working unchanged.
+ */
+export interface FunctionEntry {
+  /** Work types this function performed on the task. */
+  types: string[]
+  /** This function's asset counts by asset-type name. */
+  assetBreakdown: AssetBreakdown
+  /** Sum of this function's breakdown (denormalized for convenience). */
+  assetTotal: number
+  /** Function-specific timeline — only meaningful when `timelineOn`. */
+  timelineOn: boolean
+  startDate: string | null
+  endDate: string | null
+}
+
+/**
+ * Per-function slices keyed by function NAME (matches `AppSettings.functions`;
+ * renames rewrite these keys, like other name-keyed maps in the app).
+ */
+export type FunctionData = Record<string, FunctionEntry>
+
 /** An image attached to a task (stored in Supabase Storage; `id` is the object name). */
 export interface TaskImage {
   id: string
@@ -53,6 +78,14 @@ export interface Task {
   images: TaskImage[]
   /** Freeform note — shown on hover in the task list. Optional. */
   note?: string
+  /**
+   * Per-function workload slices. `null`/absent = legacy task recorded before
+   * functions existed — treated as belonging entirely to the legacy function
+   * (Vietnam Design) and upgraded lazily the next time it's edited & saved.
+   * The top-level types/assetBreakdown/assetTotal/startDate/endDate are always
+   * the combined roll-up across functions.
+   */
+  functionData?: FunctionData | null
   createdAt: string
   updatedAt: string
   /** Username that created the task; null for tasks created before this was tracked. */
@@ -62,6 +95,24 @@ export interface Task {
 /** Fields supplied when creating/editing a task (no system fields). */
 export type TaskInput = Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>
 
+/**
+ * A GCMC function (team) that records workload — e.g. Vietnam Design. Configured
+ * in Settings; each task-form tab shows only the work/asset types checked here.
+ */
+export interface FunctionConfig {
+  name: string
+  /** Preset color key (see FUNCTION_COLORS in constants) — drives the tab tint. */
+  color: string
+  /**
+   * Work types HIDDEN from this function's tab. Exclusion list, so an empty
+   * array = offer everything and newly added master types appear on every tab
+   * automatically (no per-function re-seeding when the master lists change).
+   */
+  hiddenWorkTypes: string[]
+  /** Asset types hidden from this function's tab (same exclusion semantics). */
+  hiddenAssetTypes: string[]
+}
+
 /** User-editable lists + app preferences. */
 export interface AppSettings {
   squads: string[]
@@ -69,6 +120,8 @@ export interface AppSettings {
   types: string[]
   people: string[]
   assetTypes: string[]
+  /** GCMC functions that record workload (task-form tabs). Order = tab order. */
+  functions: FunctionConfig[]
   /** Days each task size adds to the start date when auto-filling the end date. */
   sizeDurations: Record<Size, number>
   /** When false, a group item (squad/campaign/type/asset-type/person) used by ≥1 task can't be removed. */

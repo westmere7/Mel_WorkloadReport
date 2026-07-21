@@ -1,16 +1,31 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, CalendarClock, ChevronDown, ChevronUp, ImagePlus, Loader2, Sparkles, Trash2, X } from 'lucide-react'
-import type { AssetBreakdown, Half, Size, Squad, Task, TaskImage, TaskInput } from '../types'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CalendarClock,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  ImagePlus,
+  Loader2,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react'
+import type { AssetBreakdown, FunctionConfig, FunctionData, Half, Size, Squad, Task, TaskImage, TaskInput } from '../types'
 import {
   SQUAD_DESCRIPTIONS,
   SIZES,
   SIZE_DESCRIPTIONS,
   SIZE_COLORS,
   formatDurationDays,
+  functionColor,
+  legacyOwnerName,
   withFallback,
 } from '../constants'
 import { useStore } from '../data/store'
 import { MultiSelect } from './ui/MultiSelect'
+import { Modal } from './ui/Modal'
 import { ImageLightbox } from './ui/ImageLightbox'
 import { addDaysISO, cx, toMessage } from '../lib/format'
 import { compressToWebP, ACCEPTED_IMAGE_TYPES } from '../lib/image'
@@ -25,10 +40,98 @@ interface TaskFormProps {
   onSubmit: (input: TaskInput) => Promise<void> | void
   onCancel?: () => void
   onDelete?: () => void
+  /** New-task flow: jump to the task that already uses the entered code. */
+  onOpenExisting?: (task: Task) => void
 }
 
 function sumBreakdown(b: AssetBreakdown): number {
   return Object.values(b).reduce((acc, v) => acc + (Number(v) || 0), 0)
+}
+
+/**
+ * One function's in-form draft. All configured functions get a draft; only
+ * `enabled` ones are shown as active tabs and persisted on save. Data on a
+ * disabled draft is kept in state (re-enabling restores it) but stripped at
+ * submit.
+ */
+interface FnDraft {
+  enabled: boolean
+  types: string[]
+  /** Sparse — only touched asset types appear; zero/absent are equivalent. */
+  breakdown: AssetBreakdown
+  timelineOn: boolean
+  startDate: string
+  endDate: string
+}
+
+const emptyDraft = (): FnDraft => ({
+  enabled: false,
+  types: [],
+  breakdown: {},
+  timelineOn: false,
+  startDate: '',
+  endDate: '',
+})
+
+/** True when disabling this tab would discard something the user entered. */
+function draftHasData(d: FnDraft): boolean {
+  return d.types.length > 0 || sumBreakdown(d.breakdown) > 0 || (d.timelineOn && (!!d.startDate || !!d.endDate))
+}
+
+/**
+ * Normalised per-function slices for signatures/submit: enabled drafts only,
+ * zero counts dropped, timeline nulled while its toggle is off.
+ */
+function draftsToFunctionData(drafts: Record<string, FnDraft>): FunctionData {
+  const out: FunctionData = {}
+  for (const [fnName, d] of Object.entries(drafts)) {
+    if (!d.enabled) continue
+    const breakdown = Object.fromEntries(Object.entries(d.breakdown).filter(([, v]) => Number(v) > 0))
+    out[fnName] = {
+      types: d.types,
+      assetBreakdown: breakdown,
+      assetTotal: sumBreakdown(breakdown),
+      timelineOn: d.timelineOn,
+      startDate: d.timelineOn ? d.startDate || null : null,
+      endDate: d.timelineOn ? d.endDate || null : null,
+    }
+  }
+  return out
+}
+
+/** Order-independent signature of per-function slices (for the dirty check). */
+function functionDataSignature(fd: FunctionData): unknown {
+  return Object.entries(fd)
+    .map(([fnName, e]) => ({
+      fn: fnName,
+      types: [...e.types].sort(),
+      breakdown: Object.entries(e.assetBreakdown)
+        .filter(([, v]) => Number(v) > 0)
+        .map(([k, v]) => `${k}=${Number(v)}`)
+        .sort(),
+      timelineOn: e.timelineOn,
+      startDate: e.timelineOn ? e.startDate || null : null,
+      endDate: e.timelineOn ? e.endDate || null : null,
+    }))
+    .sort((a, b) => a.fn.localeCompare(b.fn))
+}
+
+/**
+ * A legacy task (no functionData) belongs entirely to the legacy owner function
+ * — its top-level fields ARE that function's slice. Used to seed the form and
+ * to build the pre-edit signature so opening a legacy task isn't "dirty".
+ */
+function legacyFunctionData(task: Task, functions: FunctionConfig[]): FunctionData {
+  return {
+    [legacyOwnerName(functions)]: {
+      types: task.types,
+      assetBreakdown: task.assetBreakdown,
+      assetTotal: sumBreakdown(task.assetBreakdown),
+      timelineOn: false,
+      startDate: null,
+      endDate: null,
+    },
+  }
 }
 
 /**
@@ -51,6 +154,7 @@ function taskSignature(f: {
   size: Size
   note: string
   images: string[]
+  functionData: FunctionData
 }): string {
   return JSON.stringify({
     squad: f.squad,
@@ -69,6 +173,7 @@ function taskSignature(f: {
     size: f.size,
     note: f.note.trim(),
     images: [...f.images].sort(),
+    functions: functionDataSignature(f.functionData),
   })
 }
 
@@ -558,25 +663,133 @@ function Section({
   )
 }
 
-export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }: TaskFormProps) {
+export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, onOpenExisting }: TaskFormProps) {
   const { settings, tasks, supportsImages, uploadImage, deleteImage } = useStore()
 
   // Editable lists always include the reserved "Others" fallback as an option.
+  // (Work/asset type options are per-function — computed on each tab below.)
   const squadOptions = withFallback(settings.squads)
   const campaignOptions = withFallback(settings.campaigns)
-  const typeOptions = withFallback(settings.types)
   const peopleOptions = withFallback(settings.people)
-  const assetTypeOptions = withFallback(settings.assetTypes)
 
   const [squad, setSquad] = useState<Squad>(initial?.squad ?? settings.squads[0] ?? 'Others')
   const [campaign, setCampaign] = useState<string>(initial?.campaign ?? settings.campaigns[0] ?? '')
   const [code, setCode] = useState(initial?.code ?? '')
   const [name, setName] = useState(initial?.name ?? '')
-  const [types, setTypes] = useState<string[]>(initial?.types ?? [])
   const [people, setPeople] = useState<string[]>(initial?.people ?? [])
-  const [breakdown, setBreakdown] = useState<AssetBreakdown>(() =>
-    Object.fromEntries(assetTypeOptions.map((n) => [n, initial?.assetBreakdown?.[n] ?? 0])),
-  )
+
+  // ── GCMC function tabs ─────────────────────────────────────────
+  // Configured functions + any orphan keys still on the task, so a slice whose
+  // function config disappeared is never silently hidden or dropped.
+  const functionConfigs = useMemo<FunctionConfig[]>(() => {
+    const known = new Set(settings.functions.map((f) => f.name))
+    const orphans = Object.keys(initial?.functionData ?? {}).filter((n) => !known.has(n))
+    return [
+      ...settings.functions,
+      ...orphans.map((n) => ({ name: n, color: 'plum', hiddenWorkTypes: [], hiddenAssetTypes: [] })),
+    ]
+  }, [settings.functions, initial])
+
+  // Per-function drafts. Editing seeds from the task's slices; a LEGACY task
+  // (no functionData) opens with only the legacy owner tab enabled, seeded from
+  // its top-level fields — it upgrades to per-function form when saved.
+  const [fnDrafts, setFnDrafts] = useState<Record<string, FnDraft>>(() => {
+    const seed = initial ? (initial.functionData ?? legacyFunctionData(initial, settings.functions)) : null
+    const drafts: Record<string, FnDraft> = {}
+    for (const n of new Set([...settings.functions.map((f) => f.name), ...Object.keys(seed ?? {})])) {
+      const e = seed?.[n]
+      drafts[n] = e
+        ? {
+            enabled: true,
+            types: [...e.types],
+            breakdown: { ...e.assetBreakdown },
+            timelineOn: e.timelineOn,
+            startDate: e.startDate ?? '',
+            endDate: e.endDate ?? '',
+          }
+        : emptyDraft()
+    }
+    return drafts
+  })
+  // The selected tab. Only ever an ENABLED function (or '' when none are on) —
+  // disabled tabs can't be selected, and the body only renders for this one.
+  const [activeFn, setActiveFn] = useState<string>(() => {
+    const seed = initial ? (initial.functionData ?? legacyFunctionData(initial, settings.functions)) : null
+    if (!seed) return '' // new task: nothing enabled yet
+    return settings.functions.find((f) => seed[f.name])?.name ?? Object.keys(seed)[0] ?? ''
+  })
+  // Tab whose disable needs confirming because the save would drop its values.
+  const [pendingDisable, setPendingDisable] = useState<string | null>(null)
+
+  // Chrome-tab join: the active tab only "opens into" the panel when it sits on
+  // the strip's BOTTOM row. When many functions wrap to a 2nd line and the
+  // active tab lands on an upper row, it falls back to a closed pill (same
+  // colour) so its open bottom never cuts into the row of tabs below it.
+  const tabStripRef = useRef<HTMLDivElement>(null)
+  const activeTabRef = useRef<HTMLDivElement>(null)
+  const [tabJoinsPanel, setTabJoinsPanel] = useState(true)
+  useEffect(() => {
+    const measure = () => {
+      const strip = tabStripRef.current
+      const tab = activeTabRef.current
+      if (!strip || !tab) return
+      const s = strip.getBoundingClientRect()
+      const t = tab.getBoundingClientRect()
+      setTabJoinsPanel(t.bottom >= s.bottom - 6)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    if (tabStripRef.current) ro.observe(tabStripRef.current)
+    // Also watch the viewport itself (the strip may reflow without its own box
+    // resizing first, and some embedded browsers skip the window resize event).
+    ro.observe(document.documentElement)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [activeFn, functionConfigs, fnDrafts])
+
+  const patchDraft = (fnName: string, p: Partial<FnDraft>) =>
+    setFnDrafts((prev) => ({ ...prev, [fnName]: { ...(prev[fnName] ?? emptyDraft()), ...p } }))
+
+  // Turn a function off and, if it was the selected tab, move the selection to
+  // another enabled function (or clear it → the body disappears, tabs remain).
+  const disableFn = (fnName: string) => {
+    patchDraft(fnName, { enabled: false })
+    setActiveFn((cur) =>
+      cur === fnName ? (functionConfigs.find((f) => f.name !== fnName && fnDrafts[f.name]?.enabled)?.name ?? '') : cur,
+    )
+  }
+
+  const requestToggleFn = (fnName: string) => {
+    const d = fnDrafts[fnName] ?? emptyDraft()
+    if (!d.enabled) {
+      patchDraft(fnName, { enabled: true })
+      setActiveFn(fnName) // enabling selects it so its body shows
+    } else if (draftHasData(d)) {
+      setPendingDisable(fnName) // has values — confirm before hiding them
+    } else {
+      disableFn(fnName)
+    }
+  }
+
+  // Combined roll-up across enabled tabs — this is what the dashboard reads, so
+  // it's also what the top-level task fields store (charts stay unchanged).
+  const combined = useMemo(() => {
+    const types: string[] = []
+    const breakdown: AssetBreakdown = {}
+    for (const d of Object.values(fnDrafts)) {
+      if (!d.enabled) continue
+      for (const t of d.types) if (!types.includes(t)) types.push(t)
+      for (const [k, v] of Object.entries(d.breakdown)) {
+        const num = Number(v) || 0
+        if (num > 0) breakdown[k] = (breakdown[k] ?? 0) + num
+      }
+    }
+    return { types, breakdown }
+  }, [fnDrafts])
+  const enabledCount = useMemo(() => Object.values(fnDrafts).filter((d) => d.enabled).length, [fnDrafts])
   const [startDate, setStartDate] = useState<string>(initial?.startDate ?? '')
   const [startDateTouched, setStartDateTouched] = useState(Boolean(initial?.startDate))
   const [endDate, setEndDate] = useState<string>(initial?.endDate ?? '')
@@ -670,7 +883,34 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   }, [])
 
   const parsed = useMemo(() => parseTaskCode(code), [code])
-  const breakdownSum = useMemo(() => sumBreakdown(breakdown), [breakdown])
+  const breakdownSum = useMemo(() => sumBreakdown(combined.breakdown), [combined])
+
+  // ── Master-timeline envelope ────────────────────────────────────
+  // Function timelines may reach past the master dates; the master auto-extends
+  // (highlighted below) so it always covers them — the ENVELOPE is what's saved,
+  // keeping the top-level dates the combined truth for every chart.
+  const fnRange = useMemo(() => {
+    let min: string | null = null
+    let max: string | null = null
+    let minFn = ''
+    let maxFn = ''
+    for (const [fnName, d] of Object.entries(fnDrafts)) {
+      if (!d.enabled || !d.timelineOn) continue
+      if (d.startDate && (!min || d.startDate < min)) {
+        min = d.startDate
+        minFn = fnName
+      }
+      if (d.endDate && (!max || d.endDate > max)) {
+        max = d.endDate
+        maxFn = fnName
+      }
+    }
+    return { min, max, minFn, maxFn }
+  }, [fnDrafts])
+  const effectiveStart = fnRange.min && (!startDate || fnRange.min < startDate) ? fnRange.min : startDate
+  const effectiveEnd = fnRange.max && (!endDate || fnRange.max > endDate) ? fnRange.max : endDate
+  const startExtended = effectiveStart !== startDate
+  const endExtended = effectiveEnd !== endDate
 
   // "Created" metadata shown beside the delete button when editing an existing task.
   const createdMeta = useMemo(() => {
@@ -694,20 +934,36 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   }, [suggestedEnd, endDateTouched])
   const endIsAuto = Boolean(suggestedEnd) && !endDateTouched && endDate === suggestedEnd
 
+  // The task (if any) already using the entered code — registering a duplicate
+  // is hard-blocked (codes key the CSV merge-import), with a jump-to-it button.
+  const dupTask = useMemo(() => {
+    const c = code.trim().toUpperCase()
+    if (!c) return null
+    return tasks.find((t) => t.id !== initial?.id && t.code.trim().toUpperCase() === c) ?? null
+  }, [code, tasks, initial])
+
   // Live notice for the task code: wrong format or already used by another task.
   const codeError = useMemo(() => {
     const c = code.trim()
     if (!c) return null
     if (!parsed.valid) return 'Code must look like 26.0608.A (YY.MMDD.seq).'
-    const dup = tasks.some(
-      (t) => t.id !== initial?.id && t.code.trim().toUpperCase() === c.toUpperCase(),
-    )
-    if (dup) return 'This code is already used by another task.'
+    if (dupTask) return 'This code is already used by another task.'
     return null
-  }, [code, parsed, tasks, initial])
+  }, [code, parsed, dupTask])
 
-  const setBreakdownField = (key: string, value: number) => {
-    setBreakdown((prev) => ({ ...prev, [key]: Math.max(0, value || 0) }))
+  const setDraftBreakdown = (fnName: string, key: string, value: number) => {
+    setFnDrafts((prev) => {
+      const d = prev[fnName] ?? emptyDraft()
+      return { ...prev, [fnName]: { ...d, breakdown: { ...d.breakdown, [key]: Math.max(0, value || 0) } } }
+    })
+  }
+
+  const toggleDraftType = (fnName: string, t: string) => {
+    setFnDrafts((prev) => {
+      const d = prev[fnName] ?? emptyDraft()
+      const types = d.types.includes(t) ? d.types.filter((x) => x !== t) : [...d.types, t]
+      return { ...prev, [fnName]: { ...d, types } }
+    })
   }
 
   // Auto-fill the start date from a valid code — unless the user has set it themselves.
@@ -761,8 +1017,9 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     }
   }
 
-  // Prefill from a monday.com board item (name, code, timeline → dates, size).
-  // On-demand only; every field stays editable afterwards.
+  // Prefill from a monday.com board item — only task-level fields (name, code,
+  // timeline → dates, size, people); it never touches the per-function tabs, so
+  // it's safe alongside the function-tab rework.
   const mondayEnabled = useMemo(isMondayLookupEnabled, [])
   const applyMondayHit = (hit: MondayHit) => {
     setName(hit.name)
@@ -796,19 +1053,33 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
   }
 
   // The code is optional; if given, it must still be valid & unique. Everything
-  // else — including start and end dates — is required, and total assets must be positive.
+  // else — including start and end dates — is required, and total assets must be
+  // positive. Per-tab: every ENABLED function needs a work type, and a switched-on
+  // function timeline needs both dates in order.
   const validate = (): string[] => {
     const errs: string[] = []
     if (codeError) errs.push(codeError)
     if (!name.trim()) errs.push('Task name is required.')
     if (!squad) errs.push('Squad is required.')
     if (!campaign) errs.push('Campaign is required.')
-    if (types.length === 0) errs.push('Select at least one work type.')
+    if (enabledCount === 0) errs.push('Enable at least one function tab.')
+    for (const f of functionConfigs) {
+      const d = fnDrafts[f.name]
+      if (!d?.enabled) continue
+      if (d.types.length === 0) errs.push(`${f.name} Team: select at least one work type.`)
+      if (d.timelineOn) {
+        if (!d.startDate || !d.endDate)
+          errs.push(`${f.name} Team: set both timeline dates (or switch its timeline off).`)
+        else if (d.endDate < d.startDate)
+          errs.push(`${f.name} Team: timeline end must be on or after its start.`)
+      }
+    }
     if (breakdownSum <= 0) errs.push('Total assets must be greater than 0.')
     if (people.length === 0) errs.push('Assign at least one person in charge.')
-    if (!startDate) errs.push('Start date is required.')
-    if (!endDate) errs.push('End date is required.')
-    else if (startDate && endDate < startDate) errs.push('End date must be on or after the start date.')
+    if (!effectiveStart) errs.push('Start date is required.')
+    if (!effectiveEnd) errs.push('End date is required.')
+    else if (effectiveStart && effectiveEnd < effectiveStart)
+      errs.push('End date must be on or after the start date.')
     return errs
   }
 
@@ -834,9 +1105,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
             size: initial.size,
             note: initial.note ?? '',
             images: (initial.images ?? []).map((i) => i.id),
+            // A legacy task's slice-equivalent matches the seeded form state, so
+            // simply opening it is never "dirty".
+            functionData: initial.functionData ?? legacyFunctionData(initial, settings.functions),
           })
         : null,
-    [initial],
+    [initial, settings.functions],
   )
   const dirty =
     !initial ||
@@ -845,15 +1119,16 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       campaign,
       code,
       name,
-      types,
+      types: combined.types,
       people,
-      assetBreakdown: breakdown,
-      startDate: startDate || null,
-      endDate: endDate || null,
+      assetBreakdown: combined.breakdown,
+      startDate: effectiveStart || null,
+      endDate: effectiveEnd || null,
       half,
       size,
       note,
       images: images.map((i) => i.id),
+      functionData: draftsToFunctionData(fnDrafts),
     }) !== initialSig
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -867,21 +1142,24 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
     // again only if the save fails (so a later cancel can still clean up).
     finalized.current = true
     try {
+      // Top-level fields carry the COMBINED roll-up (what all charts read);
+      // the per-function slices ride alongside in functionData.
       await onSubmit({
         squad,
         campaign: campaign.trim(),
         code: code.trim(),
         name: name.trim(),
-        types,
+        types: combined.types,
         assetTotal: breakdownSum,
-        assetBreakdown: breakdown,
+        assetBreakdown: combined.breakdown,
         people,
-        startDate: startDate || null,
-        endDate: endDate || null,
+        startDate: effectiveStart || null,
+        endDate: effectiveEnd || null,
         half,
         size,
         note: note.trim(),
         images,
+        functionData: draftsToFunctionData(fnDrafts),
       })
       reconcileSaved(new Set(images.map((i) => i.id)))
     } catch (err) {
@@ -1011,6 +1289,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         mondayEnabled={mondayEnabled}
         onPick={applyMondayHit}
       />
+      {/* Duplicate code → jump straight to the task that owns it. */}
+      {dupTask && onOpenExisting && (
+        <button
+          type="button"
+          onClick={() => onOpenExisting(dupTask)}
+          className="-mt-2 inline-flex items-center gap-1.5 rounded-lg border border-line bg-subtle px-2.5 py-1.5 text-xs font-semibold text-ink transition hover:border-rmit-red hover:text-rmit-red"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Edit the existing task instead — “{dupTask.name || dupTask.code}”
+        </button>
+      )}
 
       {/* Squad, Campaign & Task size on one line */}
       <div className="grid gap-4 sm:grid-cols-[1fr_1fr_1.4fr]">
@@ -1073,72 +1362,252 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
         </div>
       </div>
 
-      {/* Work type — full width, badge multi-select (like task size) */}
-      <div>
-        <label className="label">Work type(s)</label>
-        <div className="flex flex-wrap gap-2">
-          {typeOptions.map((t) => {
-            const active = types.includes(t)
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTypes(active ? types.filter((x) => x !== t) : [...types, t])}
-                aria-pressed={active}
-                className={cx(
-                  'rounded-xl px-3 py-2 text-xs font-medium leading-5 transition',
-                  active
-                    ? 'bg-navy-100/60 text-navy-700 dark:border dark:border-navy-300 dark:bg-navy-300 dark:text-white'
-                    : 'bg-subtle text-muted hover:text-ink dark:border dark:border-line dark:bg-card dark:hover:border-navy-300',
-                )}
-              >
-                {t}
-              </button>
-            )
-          })}
-        </div>
-      </div>
       </Section>
 
+      {/* ── Function-specific workload: one tab per GCMC function ────────── */}
       <Section
-        title="Assets"
+        title="Workload by function"
         action={
-          <div className="flex items-center gap-2">
-            <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
-              {breakdownSum} total
-            </span>
-            <button
-              type="button"
-              onClick={() => setImagesOpen(true)}
-              title="Attach demo images to this task"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 hover:text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300 dark:hover:bg-amber-500/25"
-            >
-              <ImagePlus className="h-3.5 w-3.5" />
-              Demo Images
-              {images.length > 0 && (
-                <span className="rounded-full bg-amber-600 px-1.5 text-[10px] font-bold leading-4 text-white">
-                  {images.length}
-                </span>
-              )}
-            </button>
-          </div>
+          <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
+            {breakdownSum} total
+          </span>
         }
       >
-        <div className="flex flex-wrap gap-2">
-          {assetTypeOptions.map((name) => (
-            <AssetInput
-              key={name}
-              label={name}
-              value={breakdown[name] || 0}
-              onChange={(v) => setBreakdownField(name, v)}
-            />
-          ))}
-          {settings.assetTypes.length === 0 && (
-            <p className="w-full text-xs text-muted">
-              Add asset types in Settings to break down deliverables.
-            </p>
-          )}
-        </div>
+        {/* Chrome-style tabs: the ACTIVE tab merges into the settings panel below
+            (same bg, open bottom, shared coloured outline) while the others sit as
+            separate pills "outside", above the panel. Disabled tabs can't be
+            selected — only their switch works — and when nothing is enabled the
+            panel is hidden entirely, leaving just the bare tab pills. Tabs wrap to
+            a 2nd row when narrow; the row touching the panel is the one that joins. */}
+        {(() => {
+          const activeCfg = functionConfigs.find((x) => x.name === activeFn)
+          const activeDraft = activeCfg ? (fnDrafts[activeCfg.name] ?? emptyDraft()) : null
+          const showBody = !!(activeCfg && activeDraft?.enabled)
+          const col = functionColor(activeCfg?.color)
+
+          const tabs = functionConfigs.map((f) => {
+            const d = fnDrafts[f.name] ?? emptyDraft()
+            const fcol = functionColor(f.color)
+            const isActive = d.enabled && activeFn === f.name
+            const tabTotal = sumBreakdown(d.breakdown)
+            return (
+              <div
+                key={f.name}
+                ref={isActive ? activeTabRef : undefined}
+                className={cx(
+                  'flex items-center gap-1.5 py-1 pl-2 pr-1.5 text-xs font-semibold',
+                  isActive
+                    ? // merges into the panel: open bottom, panel bg, shared coloured
+                      // outline — unless it wrapped to an upper row (closed pill then)
+                      cx(
+                        'relative z-10 border-2 bg-card',
+                        fcol.outline,
+                        tabJoinsPanel ? '-mb-0.5 rounded-t-lg border-b-0' : 'rounded-lg',
+                      )
+                    : // a separate pill sitting "outside", above the panel
+                      'rounded-lg border-2 border-line bg-subtle',
+                  !d.enabled && 'opacity-60',
+                )}
+              >
+                {/* Fillet corners: concave quarter-arcs where the tab meets the
+                    panel, so the outline turns smoothly instead of a sharp T.
+                    Each span paints (from its arc centre at the top corner):
+                    transparent outside → a 2px stroke arc that merges with the
+                    tab/panel borders → card fill that erases the border stubs
+                    inside the curve. */}
+                {isActive && tabJoinsPanel && (
+                  <>
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute bottom-0 h-2.5 w-2.5"
+                      style={{
+                        left: '-10px',
+                        background: `radial-gradient(circle at 0 0, transparent 7.5px, ${fcol.hex} 8px 10px, var(--card) 10.5px)`,
+                      }}
+                    />
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute bottom-0 h-2.5 w-2.5"
+                      style={{
+                        right: '-10px',
+                        background: `radial-gradient(circle at 100% 0, transparent 7.5px, ${fcol.hex} 8px 10px, var(--card) 10.5px)`,
+                      }}
+                    />
+                  </>
+                )}
+                <button
+                  type="button"
+                  disabled={!d.enabled}
+                  onClick={() => d.enabled && setActiveFn(f.name)}
+                  className={cx(
+                    'flex items-center gap-1.5 py-1',
+                    d.enabled ? 'cursor-pointer text-ink' : 'cursor-default text-muted',
+                  )}
+                  title={
+                    d.enabled
+                      ? `Edit ${f.name} Team’s workload`
+                      : `${f.name} Team is off — use the switch to include it`
+                  }
+                >
+                  {f.name}
+                  {d.enabled && tabTotal > 0 && (
+                    <span className="rounded-full bg-card px-1.5 text-[10px] font-bold leading-4 text-ink ring-1 ring-line">
+                      {tabTotal}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={d.enabled}
+                  onClick={() => requestToggleFn(f.name)}
+                  title={d.enabled ? `Exclude ${f.name} Team from this task` : `Include ${f.name} Team on this task`}
+                  className={cx(
+                    'relative h-4 w-7 shrink-0 rounded-full transition-colors',
+                    // the switch carries the function's own colour when on
+                    d.enabled ? fcol.dot : 'bg-line',
+                  )}
+                >
+                  <span
+                    className={cx(
+                      'absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all',
+                      d.enabled ? 'left-3.5' : 'left-0.5',
+                    )}
+                  />
+                </button>
+              </div>
+            )
+          })
+
+          // The strip sits directly on top of the panel; `items-end` keeps every
+          // tab's bottom on the panel's top edge, and `px-6` insets them clear of
+          // the panel's rounded corners (12px radius) so the active tab AND its
+          // 10px fillet arcs always join on the flat part of the panel border.
+          const tabStrip = (
+            <div ref={tabStripRef} className="flex flex-wrap items-end gap-3 px-6">
+              {tabs}
+            </div>
+          )
+
+          // Nothing recording yet → show only the tabs (no panel).
+          if (!showBody) return tabStrip
+
+          const f = activeCfg as FunctionConfig
+          const d = activeDraft as FnDraft
+          // Tab options = master lists minus this function's exclusions, plus
+          // anything the task already has (config changes never hide entered values).
+          const tabTypes = withFallback(
+            Array.from(new Set([...settings.types.filter((t) => !f.hiddenWorkTypes.includes(t)), ...d.types])),
+          )
+          const tabAssets = withFallback(
+            Array.from(
+              new Set([
+                ...settings.assetTypes.filter((t) => !f.hiddenAssetTypes.includes(t)),
+                ...Object.keys(d.breakdown).filter((k) => (d.breakdown[k] ?? 0) > 0),
+              ]),
+            ),
+          )
+          const tabTotal = sumBreakdown(d.breakdown)
+          return (
+            <div>
+              {tabStrip}
+              <div className={cx('space-y-4 rounded-xl border-2 bg-card p-4', col.outline)}>
+                <div>
+                  <label className="label">Work type(s) — {f.name}</label>
+                  <div className="flex flex-wrap gap-2">
+                    {tabTypes.map((t) => {
+                      const active = d.types.includes(t)
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => toggleDraftType(f.name, t)}
+                          aria-pressed={active}
+                          className={cx(
+                            'rounded-xl px-3 py-2 text-xs font-medium leading-5 transition',
+                            active
+                              ? 'bg-navy-100/60 text-navy-700 dark:border dark:border-navy-300 dark:bg-navy-300 dark:text-white'
+                              : 'bg-subtle text-muted hover:text-ink dark:border dark:border-line dark:bg-card dark:hover:border-navy-300',
+                          )}
+                        >
+                          {t}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <label className="label !mb-0">Assets — {f.name}</label>
+                    <span className="rounded-full border border-line bg-card px-2.5 py-0.5 text-xs font-semibold text-ink">
+                      {tabTotal} total
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {tabAssets.map((assetName) => (
+                      <AssetInput
+                        key={assetName}
+                        label={assetName}
+                        value={d.breakdown[assetName] || 0}
+                        onChange={(v) => setDraftBreakdown(f.name, assetName, v)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={d.timelineOn}
+                      onClick={() => patchDraft(f.name, { timelineOn: !d.timelineOn })}
+                      className={cx(
+                        'relative h-4 w-7 shrink-0 rounded-full transition-colors',
+                        d.timelineOn ? 'bg-accent-green' : 'bg-line',
+                      )}
+                    >
+                      <span
+                        className={cx(
+                          'absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all',
+                          d.timelineOn ? 'left-3.5' : 'left-0.5',
+                        )}
+                      />
+                    </button>
+                    <span className="text-xs font-semibold text-ink">Function-specific timeline</span>
+                    {!d.timelineOn && (
+                      <span className="text-[11px] text-faint">— follows the master timeline below</span>
+                    )}
+                  </div>
+                  {d.timelineOn && (
+                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="label">Start date — {f.name}</label>
+                        <input
+                          type="date"
+                          className="input h-11"
+                          value={d.startDate}
+                          onChange={(e) => patchDraft(f.name, { startDate: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">End date — {f.name}</label>
+                        <input
+                          type="date"
+                          className="input h-11"
+                          value={d.endDate}
+                          min={d.startDate || undefined}
+                          onChange={(e) => patchDraft(f.name, { endDate: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </Section>
 
       <Section title="Assignment">
@@ -1171,17 +1640,27 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       </Section>
 
       <Section title="Timeline">
-      {/* Start / End / Half */}
+      {/* Start / End / Half. The inputs show the ENVELOPE: when an enabled
+          function timeline reaches outside the entered master dates, the master
+          extends to cover it — highlighted amber so the extension is obvious. */}
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <label className={cx('label', filled.has('startDate') && 'is-filled')}>Start date</label>
           <input
             type="date"
-            className="input h-11"
-            value={startDate}
+            className={cx(
+              'input h-11',
+              startExtended && 'border-amber-400 ring-2 ring-amber-400/40 dark:border-amber-500/60',
+            )}
+            value={effectiveStart}
             onChange={(e) => onStartDateChange(e.target.value)}
           />
-          {parsed.valid && parsed.iso && parsed.iso !== startDate && (
+          {startExtended && (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <CalendarClock className="h-3.5 w-3.5" /> Extended to cover {fnRange.minFn} Team’s timeline
+            </p>
+          )}
+          {!startExtended && parsed.valid && parsed.iso && parsed.iso !== startDate && (
             <button
               type="button"
               onClick={applyDateFromCode}
@@ -1190,7 +1669,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
               <CalendarClock className="h-3.5 w-3.5" /> Use date from code ({parsed.iso})
             </button>
           )}
-          {!startDateTouched && parsed.valid && parsed.iso && parsed.iso === startDate && (
+          {!startExtended && !startDateTouched && parsed.valid && parsed.iso && parsed.iso === startDate && (
             <p className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent-green">
               <Sparkles className="h-3.5 w-3.5" /> Auto-set from code
             </p>
@@ -1200,17 +1679,25 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
           <label className={cx('label', filled.has('endDate') && 'is-filled')}>End date</label>
           <input
             type="date"
-            className="input h-11"
-            value={endDate}
-            min={startDate || undefined}
+            className={cx(
+              'input h-11',
+              endExtended && 'border-amber-400 ring-2 ring-amber-400/40 dark:border-amber-500/60',
+            )}
+            value={effectiveEnd}
+            min={effectiveStart || undefined}
             onChange={(e) => onEndDateChange(e.target.value)}
           />
-          {endIsAuto && (
+          {endExtended && (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <CalendarClock className="h-3.5 w-3.5" /> Extended to cover {fnRange.maxFn} Team’s timeline
+            </p>
+          )}
+          {!endExtended && endIsAuto && (
             <p className="mt-1.5 text-xs text-accent-green">
               Auto-set from {size} size ({durationLabel})
             </p>
           )}
-          {suggestedEnd && endDate !== suggestedEnd && (
+          {!endExtended && suggestedEnd && endDate !== suggestedEnd && (
             <button
               type="button"
               onClick={applyEstimatedEnd}
@@ -1248,6 +1735,21 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
 
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 pt-2">
         <div className="flex items-center gap-3">
+          {/* Demo images are task-level (not per-function) — they live down here. */}
+          <button
+            type="button"
+            onClick={() => setImagesOpen(true)}
+            title="Attach demo images to this task"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 hover:text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300 dark:hover:bg-amber-500/25"
+          >
+            <ImagePlus className="h-3.5 w-3.5" />
+            Demo Images
+            {images.length > 0 && (
+              <span className="rounded-full bg-amber-600 px-1.5 text-[10px] font-bold leading-4 text-white">
+                {images.length}
+              </span>
+            )}
+          </button>
           {onDelete && (
             <button
               type="button"
@@ -1283,6 +1785,41 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete }:
       </>
       )}
       {lightbox && <ImageLightbox src={lightbox} onClose={() => setLightbox(null)} />}
+
+      {/* Confirm before switching off a function tab that already has values. */}
+      <Modal
+        open={pendingDisable !== null}
+        onClose={() => setPendingDisable(null)}
+        title="Turn off this function?"
+        footer={
+          <>
+            <button className="btn-outline" type="button" onClick={() => setPendingDisable(null)}>
+              Keep it on
+            </button>
+            <button
+              className="btn-primary"
+              type="button"
+              onClick={() => {
+                if (pendingDisable) disableFn(pendingDisable)
+                setPendingDisable(null)
+              }}
+            >
+              Turn off
+            </button>
+          </>
+        }
+      >
+        {pendingDisable && (
+          <div className="flex gap-3 rounded-xl bg-brand-50 p-3 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <p>
+              <strong>{pendingDisable} Team</strong> already has work types, assets or a timeline filled in.
+              Turning it off keeps the values in this form (switch it back on to restore them), but they
+              will be <strong>dropped when the task is saved</strong>.
+            </p>
+          </div>
+        )}
+      </Modal>
     </form>
   )
 }

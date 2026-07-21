@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftRight } from 'lucide-react'
+import { ArrowLeftRight, Check, ChevronDown } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { TaskDetails } from '../components/TaskDetails'
@@ -24,13 +24,14 @@ import {
   STAKEHOLDER_GROUPS,
   summarize,
 } from '../lib/analytics'
-import { withFallback } from '../constants'
+import { functionColor, withFallback } from '../constants'
 import { cx, todayISO, formatDate, formatDayMonth } from '../lib/format'
+import { sliceTasksByFunctions } from '../lib/functionData'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
 import { useAuth } from '../lib/auth'
-import type { Half, Squad, Task, TaskInput } from '../types'
+import type { FunctionConfig, Half, Squad, Task, TaskInput } from '../types'
 import { TaskForm } from '../components/TaskForm'
 
 /**
@@ -52,13 +53,17 @@ function useToday(): string {
 }
 
 export function Dashboard() {
-  const { tasks, live, settings, updateTask, deleteTask } = useStore()
+  const { tasks, settings, updateTask, deleteTask } = useStore()
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
   const squadColor = useSquadColor()
   const [span, setSpan] = useState<SpanMode>('year')
   const [year, setYear] = useState<number | null>(null)
   const [half, setHalf] = useState<Half>('H1')
+  // GCMC function filter — [] = "All GCMC" (the combined default on landing).
+  // Every chart below reads the SLICED task set, so a specific selection shows
+  // only those functions' recorded workload (shared tasks count their slice only).
+  const [fnFilter, setFnFilter] = useState<string[]>([])
   // Comparison mode: measure the target year against a source (baseline) year.
   const [compare, setCompare] = useState(false)
   const [sourceYear, setSourceYear] = useState<number | null>(null)
@@ -74,6 +79,14 @@ export function Dashboard() {
   const { demandDim, hideCommonCampaigns, showTasksByPerson } = useDashboardPrefs()
   const navigate = useNavigate()
 
+  // Tasks projected to the selected functions' slices (pass-through for All GCMC).
+  const fnTasks = useMemo(
+    () => sliceTasksByFunctions(tasks, fnFilter, settings.functions),
+    [tasks, fnFilter, settings.functions],
+  )
+
+  // Year options stay based on ALL tasks so the selector doesn't jump around
+  // when a function with a shorter history is isolated.
   const years = useMemo(() => taskYears(tasks), [tasks])
 
   // Default to the current calendar year when it has data, else the most recent.
@@ -96,21 +109,21 @@ export function Dashboard() {
 
   // In comparison mode the span filter is replaced by whole-year target vs source.
   const filtered = useMemo(() => {
-    const base = filterBySpan(tasks, compare ? 'year' : span, activeYear, half)
+    const base = filterBySpan(fnTasks, compare ? 'year' : span, activeYear, half)
     if (compare && ytd) {
       return base.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
     }
     return base
-  }, [tasks, span, activeYear, half, compare, ytd, todayMD])
+  }, [fnTasks, span, activeYear, half, compare, ytd, todayMD])
 
   const sourceTasks = useMemo(() => {
     if (!compare) return []
-    const base = filterBySpan(tasks, 'year', srcYear, half)
+    const base = filterBySpan(fnTasks, 'year', srcYear, half)
     if (ytd) {
       return base.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
     }
     return base
-  }, [tasks, compare, srcYear, half, ytd, todayMD])
+  }, [fnTasks, compare, srcYear, half, ytd, todayMD])
 
   const summary = useMemo(() => summarize(filtered), [filtered])
   const bySquad = useMemo(() => assetsBySquad(filtered), [filtered])
@@ -135,21 +148,21 @@ export function Dashboard() {
   // "Across the year" ignores the half sub-filter — it always shows the full 12
   // months of the active year (the latest year by default, or the selected one).
   const byMonth = useMemo(() => {
-    let list = tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === chartYear)
+    let list = fnTasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === chartYear)
     if (compare && ytd) {
       list = list.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
     }
     return assetsByMonth(list)
-  }, [tasks, chartYear, compare, ytd, todayMD])
+  }, [fnTasks, chartYear, compare, ytd, todayMD])
   // The same set of tasks the workload chart aggregates — scattered under the
   // line as individual clickable columns.
   const chartYearTasks = useMemo(() => {
-    let list = tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === chartYear)
+    let list = fnTasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === chartYear)
     if (compare && ytd) {
       list = list.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
     }
     return list
-  }, [tasks, chartYear, compare, ytd, todayMD])
+  }, [fnTasks, chartYear, compare, ytd, todayMD])
   // The task currently under the pointer on the workload chart — shown live in
   // the card's top-right corner in place of the year.
   const [hoverTask, setHoverTask] = useState<Task | null>(null)
@@ -198,12 +211,12 @@ export function Dashboard() {
   )
   const srcWorkTypeMix = useMemo(() => countByMulti(sourceTasks, 'types'), [sourceTasks])
   const srcByMonth = useMemo(() => {
-    let list = tasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === srcYear)
+    let list = fnTasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === srcYear)
     if (ytd) {
       list = list.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
     }
     return assetsByMonth(list)
-  }, [tasks, srcYear, ytd, todayMD])
+  }, [fnTasks, srcYear, ytd, todayMD])
 
   // ── Deep-link to the Task List, filtered to a single selection ──────────
   // Each click passes exactly the chosen filter(s) via the URL query; the Task
@@ -240,24 +253,11 @@ export function Dashboard() {
     [srcWorkTypeMix],
   )
 
-  // Render the Live badge (left) and span selector (right) into the top header bar.
+  // Render the function filter (left) and span selector (right) into the top header bar.
   const setHeaderSlots = useHeaderSlots()
   useEffect(() => {
     setHeaderSlots({
-      left: (
-        <span
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted"
-          title={live ? 'Dashboard updates automatically when tasks change' : 'Live updates unavailable'}
-        >
-          <span className={cx('relative flex h-2 w-2', !live && 'opacity-40')}>
-            {live && (
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent-green opacity-75" />
-            )}
-            <span className={cx('relative inline-flex h-2 w-2 rounded-full', live ? 'bg-accent-green' : 'bg-faint')} />
-          </span>
-          {live ? 'Live' : 'Offline'}
-        </span>
-      ),
+      left: <FunctionFilter functions={settings.functions} selected={fnFilter} onChange={setFnFilter} />,
       right: (
         <div className="flex flex-wrap items-center gap-3">
           {compare ? (
@@ -350,7 +350,8 @@ export function Dashboard() {
     return () => setHeaderSlots({})
   }, [
     setHeaderSlots,
-    live,
+    fnFilter,
+    settings.functions,
     span,
     activeYear,
     half,
@@ -390,6 +391,11 @@ export function Dashboard() {
   const squadCompareSuffix = compare ? ` — ${activeYear} over ${srcYear} (bar)${ytdLabel}` : ''
   // Human-readable description of the current (non-compare) span, for stat hints.
   const spanDesc = span === 'total' ? 'all time' : span === 'half' ? `${activeYear} ${half}` : `${activeYear}`
+  // When isolating functions, empty charts say WHY (that function simply has no
+  // recorded workload here yet) instead of the generic "add tasks" nudges.
+  const fnLabel =
+    fnFilter.length === 1 ? `${fnFilter[0]} Team` : fnFilter.length > 1 ? 'the selected functions' : null
+  const fnEmpty = fnLabel ? `No workload recorded for ${fnLabel} in this view yet.` : undefined
 
   return (
     <div className="flex min-h-full flex-col gap-4">
@@ -446,7 +452,7 @@ export function Dashboard() {
           <CardHeader title="Tasks by squad" subtitle={`Requests by stakeholder team${squadCompareSuffix}`} />
           <RankedBars
             data={bySquadTasks}
-            emptyMessage="Add tasks for at least 2 squads."
+            emptyMessage={fnEmpty ?? 'Add tasks for at least 2 squads.'}
             onSelect={(name) => goTasks([['squad', name]])}
             compare={compare ? srcBySquadTasks : undefined}
             sourceLabel={String(srcYear)}
@@ -457,7 +463,7 @@ export function Dashboard() {
           <CardHeader title="Assets by squad" subtitle={`Deliverables by stakeholder team${squadCompareSuffix}`} />
           <RankedBars
             data={bySquad}
-            emptyMessage="Add tasks for at least 2 squads."
+            emptyMessage={fnEmpty ?? 'Add tasks for at least 2 squads.'}
             onSelect={(name) => goTasks([['squad', name]])}
             compare={compare ? srcBySquad : undefined}
             sourceLabel={String(srcYear)}
@@ -515,6 +521,7 @@ export function Dashboard() {
                 <AreaTrendChart
                   data={byMonth}
                   height="100%"
+                  emptyMessage={fnEmpty}
                   nowMonth={nowMonth}
                   // Zoom to Jan→now whenever the year is still in progress: always
                   // in single-year mode, and in compare mode only when matching ranges.
@@ -542,9 +549,10 @@ export function Dashboard() {
                   data={assetCampaignShown}
                   height="100%"
                   emptyMessage={
-                    compare
+                    fnEmpty ??
+                    (compare
                       ? `No campaigns with assets in both ${srcYear} and ${activeYear}.`
-                      : 'Add tasks with asset counts across at least 2 campaigns.'
+                      : 'Add tasks with asset counts across at least 2 campaigns.')
                   }
                   compare={
                     compare
@@ -569,7 +577,7 @@ export function Dashboard() {
               <DonutChart
                 data={assetMix}
                 height={200}
-                emptyMessage="Add tasks with asset counts to see the mix."
+                emptyMessage={fnEmpty ?? 'Add tasks with asset counts to see the mix.'}
                 compare={compare ? srcAssetMix : undefined}
                 onSelect={(name) => goTasks([['asset', name]])}
                 taskCounts={assetMixCounts}
@@ -585,7 +593,7 @@ export function Dashboard() {
               <DonutChart
                 data={workTypeMix}
                 height={200}
-                emptyMessage="Tag tasks with work types to see the mix."
+                emptyMessage={fnEmpty ?? 'Tag tasks with work types to see the mix.'}
                 compare={compare ? srcWorkTypeMix : undefined}
                 onSelect={(name) => goTasks([['type', name]])}
                 taskCounts={workTypeCounts}
@@ -598,7 +606,11 @@ export function Dashboard() {
                 <CardHeader title="Tasks by person" subtitle="Tasks assigned per team member" />
                 <div className="relative min-h-[180px] flex-1">
                   <div className="absolute inset-0">
-                    <HBarChart data={byPerson} height="100%" emptyMessage="Assign people to at least 2 tasks." />
+                    <HBarChart
+                      data={byPerson}
+                      height="100%"
+                      emptyMessage={fnEmpty ?? 'Assign people to at least 2 tasks.'}
+                    />
                   </div>
                 </div>
               </Card>
@@ -619,9 +631,10 @@ export function Dashboard() {
                   height="100%"
                   hideLegend
                   emptyMessage={
-                    compare
+                    fnEmpty ??
+                    (compare
                       ? `No ${demandDim === 'asset' ? 'asset types' : 'work types'} with demand in both ${srcYear} and ${activeYear}.`
-                      : 'Add tasks with asset counts to see demand.'
+                      : 'Add tasks with asset counts to see demand.')
                   }
                   compare={
                     compare
@@ -694,6 +707,118 @@ export function Dashboard() {
           {deleteConfirm?.code ? ` (${deleteConfirm.code})` : ''}? This cannot be undone.
         </p>
       </Modal>
+    </div>
+  )
+}
+
+/**
+ * Header dropdown filtering the whole dashboard by GCMC function. Toggleable
+ * items; "All GCMC" on top = the combined view (default on landing) and greys
+ * the individual functions out. Selecting every function (or none) snaps back
+ * to All GCMC.
+ */
+function FunctionFilter({
+  functions,
+  selected,
+  onChange,
+}: {
+  functions: FunctionConfig[]
+  selected: string[]
+  onChange: (next: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  // Close on outside click / Escape.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey, true)
+    }
+  }, [open])
+
+  const isAll = selected.length === 0
+  const label = isAll ? 'All GCMC' : selected.length === 1 ? selected[0] : `${selected.length} functions`
+
+  const toggleFn = (name: string) => {
+    if (isAll) {
+      onChange([name])
+      return
+    }
+    const next = selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name]
+    // Nothing left, or everything picked → that's just "All GCMC" again.
+    onChange(next.length === 0 || next.length >= functions.length ? [] : next)
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title="Filter the dashboard by GCMC function"
+        aria-expanded={open}
+        className="flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-1.5 text-sm font-semibold text-ink shadow-soft transition hover:border-faint"
+      >
+        {!isAll && (
+          <span className="flex items-center -space-x-1">
+            {functions
+              .filter((f) => selected.includes(f.name))
+              .map((f) => (
+                <span
+                  key={f.name}
+                  className={cx('h-2.5 w-2.5 rounded-full ring-2 ring-card', functionColor(f.color).dot)}
+                />
+              ))}
+          </span>
+        )}
+        {label}
+        <ChevronDown className={cx('h-3.5 w-3.5 text-muted transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-40 min-w-[230px] rounded-xl border border-line bg-card p-1.5 shadow-lg">
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-semibold text-ink transition hover:bg-subtle"
+          >
+            <span className="flex-1">All GCMC</span>
+            {isAll && <Check className="h-4 w-4 shrink-0 text-accent-green" />}
+          </button>
+          <div className="my-1 border-t border-line" />
+          {functions.map((f) => {
+            const on = selected.includes(f.name)
+            return (
+              <button
+                key={f.name}
+                type="button"
+                onClick={() => toggleFn(f.name)}
+                aria-pressed={on}
+                className={cx(
+                  'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-subtle',
+                  isAll ? 'opacity-50' : on ? 'text-ink' : 'text-muted',
+                )}
+              >
+                <span className={cx('h-2 w-2 shrink-0 rounded-full', functionColor(f.color).dot)} />
+                <span className="flex-1">{f.name}</span>
+                {on && <Check className="h-4 w-4 shrink-0 text-accent-green" />}
+              </button>
+            )
+          })}
+          <p className="mt-1 border-t border-line px-2 pt-1.5 text-[10px] leading-snug text-faint">
+            Shared tasks count only the selected functions&rsquo; share of assets.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

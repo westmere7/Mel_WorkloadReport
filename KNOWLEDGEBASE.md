@@ -67,13 +67,17 @@ happens** (see §6).
 `src/types.ts`:
 
 - **`Task`** — `id, squad, campaign, code, name, types[], assetTotal, assetBreakdown,
-  people[], startDate|null, endDate|null, half, size, images[], note?, createdAt, updatedAt`.
+  people[], startDate|null, endDate|null, half, size, images[], note?, functionData?,
+  createdAt, updatedAt`. ⚠️ Since v0.3.0 the top-level types/assets/dates are the
+  COMBINED roll-up across GCMC functions; the per-function slices live in
+  `functionData` (null = legacy task, owned by Vietnam Design). See §19.
 - **`TaskImage`** — `{ id, url, w, h }`. Up to 10 per task; the `id` is the Storage
   object name (`<id>.webp`), `url` is its public URL. See §15.
 - **`TaskInput`** = `Task` without system fields (used for create/update).
-- **`AppSettings`** — `{ squads[], campaigns[], types[], people[], assetTypes[] }`. The
-  five user-editable reference lists. `Squad` is now just `string` (was a fixed union) —
-  squads are editable like the others.
+- **`AppSettings`** — `{ squads[], campaigns[], types[], people[], assetTypes[],
+  functions[], … }`. The user-editable reference lists. `Squad` is now just `string`
+  (was a fixed union) — squads are editable like the others. `functions` is the
+  GCMC-function config (see §19).
 - **`AssetBreakdown`** = `Record<string, number>` — **keyed by asset-type NAME**
   (e.g. `{ "Image": 3, "Video": 1 }`), not fixed keys. See §6.
 
@@ -650,6 +654,10 @@ link `/showcase/<id>` playing a deterministic, pure-CSS animated presentation.
 
 ## 18. monday.com task lookup (on-demand prefill, NOT sync)
 
+Note: the auto-fill only prefills TASK-level fields (name, code, timeline → master dates,
+size, people) — it never touches the per-function tabs (§19), so it's safe alongside the
+function rework. `mondayEnabled = isMondayLookupEnabled()` in `TaskForm.tsx`.
+
 An **"auto-fill" button** (monday.com logo, `public/monday.svg`) sits **inline on the right of the
 combined code+name field** (`CodeNameField` in `TaskForm.tsx`). Clicking it searches the configured
 board for **whatever's in the field (code + name)** and drops the matches **right under the box** —
@@ -683,8 +691,10 @@ derives half). Manual, per-task — **no background sync**; every field stays ed
 - **"Persons in charge" auto-fill (person mapping).** The board's Project-team people column
   (`people7__1`, secret `MONDAY_COL_PEOPLE`) returns monday **user ids**; the function parses the
   column `value` (`personsAndTeams`, kind `person`) → `mondayPeopleIds`. Each app person is mapped
-  to their monday user id in **Settings → Groups → People** (a monday-ID input per person; local
-  state, saves on blur), stored in `settings.peopleMondayIds` (name→id, new column `people_monday`
+  to their monday user id in **Settings → Groups → People** (`MondayIdInput` per person: local edit
+  with explicit Save ✓/Enter, Discard ↩/Esc, Clear ×, and a monday.com logo linking to
+  `https://rmit.monday.com/users/<id>` for preview), stored in `settings.peopleMondayIds` (name→id,
+  new column `people_monday`
   jsonb, guarded write; the store keeps it aligned on rename/remove). `applyMondayHit` reverse-maps
   ids→names via `resolvePeopleFromMonday` (only names still in `settings.people`) and fills the
   People field + green dot. ⚠️ Needs BOTH: re-run `schema.sql` (adds `people_monday`) AND redeploy
@@ -701,3 +711,151 @@ derives half). Manual, per-task — **no background sync**; every field stays ed
 - The function pages the board (up to ~500 items), filters by name/code substring, returns ≤15 hits;
   Timeline `value` JSON gives `from`/`to`. ⚠️ **Column ids are board-specific** — they must be set as
   secrets; the board id + ids are still TBD from the team (the button is dark until then).
+
+---
+
+## 19. GCMC functions (per-function workload slices) ⚠️ v0.3.0
+
+The big task-input revision: each GCMC function — **Vietnam Design, Melbourne Design,
+Production, Contents** — records its OWN work types, asset counts and (optional)
+timeline on a task, via colour-coded tabs in the task form.
+
+### The load-bearing design decision
+
+Per-function data rides **alongside** the existing top-level fields, not instead of
+them. On save, the form recomputes the top-level `types` (union), `assetBreakdown` /
+`assetTotal` (merged sums) and `startDate`/`endDate` (envelope) from the enabled tabs.
+Every chart / CSV / showcase / snapshot consumer keeps reading the top-level fields —
+**the dashboard shows everything combined and needed ZERO changes.** Per-function
+dashboard views (incl. the "VN+Mel = one Design team, with isolate" rule) are a
+LATER phase; the data is already captured for it.
+
+### Data model
+
+- `Task.functionData?: FunctionData | null` — `Record<functionName, FunctionEntry>`;
+  `FunctionEntry = { types[], assetBreakdown, assetTotal, timelineOn, startDate, endDate }`
+  (`src/types.ts`). **`null`/absent = LEGACY task** recorded before functions existed —
+  treated as belonging entirely to the legacy owner (see below) and **upgraded lazily**:
+  it only gains `functionData` when someone edits AND saves it. No backfill ever runs.
+- `AppSettings.functions: FunctionConfig[]` — `{ name, color, hiddenWorkTypes[],
+  hiddenAssetTypes[] }`. ⚠️ The type lists are **EXCLUSIONS** ("hidden on this tab"),
+  so empty = offer every master type and newly added master types appear on all tabs
+  automatically (an include-list would drift from the live master lists — that bug was
+  hit and fixed during the build).
+- `LEGACY_FUNCTION = 'Vietnam Design'` + `legacyOwnerName(functions)` (constants):
+  legacy tasks belong to the function named Vietnam Design, falling back to the first
+  configured function if it was renamed. `functionColor()` / `FUNCTION_COLORS` map the
+  stored color key (red/teal/gold/green/plum) to dot/tab/ring Tailwind classes.
+- Normalizers: `normalizeFunctions` (settings), `normalizeFunctionData` (task column) —
+  both junk-tolerant, applied at every read.
+
+### Persistence
+
+- `tasks.function_data jsonb` (null = legacy) + `settings.functions jsonb` — both
+  idempotent alters in `schema.sql` (§10 pattern) with guarded-write strip-and-retry
+  (`isMissingFunctionDataColumn` / `isMissingFunctionsColumn`) in create / createMany /
+  update / restoreTasks / saveSettings, so the app works before the migration runs.
+- Renames stay linked EVERYWHERE: `repo.renameValue` gained `'functionData'` (function
+  rename → rewrites the map key on every task, merging entries on collision), and the
+  existing `'types'` / `'assetBreakdown'` renames ALSO rewrite the nested per-function
+  entries (`src/lib/functionData.ts` holds the pure transforms, shared by both repos).
+- Store: `renameFunction` / `removeFunction` / `functionUsage(name)` (legacy tasks count
+  toward the legacy owner). **Removal is ALWAYS blocked while a function has task data**
+  (no fallback exists for per-function data) — independent of the Groups toggle.
+- CSV merge-import: rows carry no slices, so a matched task KEEPS its `functionData` when
+  the import didn't change its combined types/assets; otherwise the slices are dropped
+  (task reverts to legacy). Replace-mode imports are all legacy.
+
+### Task form (`TaskForm.tsx`)
+
+- Fixed sections: identity + squad/campaign/size (size stays whole-task), Assignment,
+  master Timeline. **Demo Images moved to the footer, left of "Remove task"** (task-level,
+  not per-function).
+- "Workload by function" section: **Chrome-style tabs** — the ACTIVE tab visually merges
+  into the settings panel below it (shared `border-2` outline in the function's colour via
+  `functionColor().outline`, same `bg-card`, open bottom: `border-b-0` + `-mb-0.5` 2px overlap
+  + `z-10`) while inactive tabs sit as separate neutral pills (`border-line bg-subtle`)
+  "outside", above the panel. No dots; the per-function on/off **switch carries the function's
+  colour** when on (`functionColor().dot` as its track bg). **Disabled tabs can't be selected**
+  — the name button is `disabled`, only the switch works — and there is NO disabled/dashed
+  "not recording" panel. **When no function is enabled the panel is hidden — only the bare tab
+  pills show.** `activeFn` invariant: only ever an ENABLED function or `''`; `disableFn()`
+  reassigns it when the active one is switched off; enabling a function selects it.
+  **2-row wrap handling:** a measurement effect (`tabStripRef`/`activeTabRef` + ResizeObserver
+  on the strip AND `document.documentElement`, plus window resize) sets `tabJoinsPanel` = active
+  tab sits on the strip's BOTTOM row; when tabs wrap and the active tab lands on an upper row it
+  falls back to a CLOSED pill (same colour) so its open bottom never cuts into the row below.
+  **Fillet corners:** when joined, two 10×10 `span[aria-hidden]` children at the active tab's
+  bottom-left/-right draw concave quarter-arcs via inline `radial-gradient` (circle at the top
+  corner: transparent → 2px stroke in `functionColor().hex` → `var(--card)` fill) so the outline
+  TURNS smoothly into the panel instead of a sharp T — the card fill also erases the straight
+  border stubs inside the curve. Offsets: `left/right: -10px`, `bottom-0` (the stroke band lands
+  exactly on the tab's 2px border and the panel's 2px top border; verified pixel-aligned). The
+  strip uses `px-6` (fillets clear the panel's 12px corner radius) and `gap-3` (fillets extend
+  10px past the tab, so pills need ≥10px separation). `FUNCTION_COLORS` gained `hex` for this.
+  ⚠️ The `border-accent-*` outline utilities are new; a running dev server must be RESTARTED for
+  Tailwind's JIT to emit them (`border-rmit-red` worked pre-existing, the accent borders didn't
+  until restart).
+  Per-tab state lives in `fnDrafts: Record<string, FnDraft>`; disabled drafts KEEP their
+  values in form state (re-enable restores) but are stripped at submit. **Toggling OFF a
+  tab with values opens a confirm modal.** Per tab: work-type badges + asset counters
+  (master lists minus that function's exclusions, plus any values the task already has),
+  a per-tab total chip, and a timeline switch (off = follows the master timeline).
+- **Master-timeline envelope**: the Start/End inputs display
+  `effectiveStart/effectiveEnd` = the entered dates extended by any enabled function
+  timeline that reaches outside them; extended inputs get an amber ring + "Extended to
+  cover X's timeline" note. The ENVELOPE is what's saved. Validation and the dirty
+  signature both use the effective dates; `taskSignature` gained a `functions` field
+  (via `functionDataSignature`), and a legacy task's initial signature uses
+  `legacyFunctionData()` so opening one is NOT dirty.
+- Validation additions: ≥1 enabled tab; each enabled tab needs ≥1 work type; a
+  switched-on function timeline needs both dates in order.
+- **Duplicate code**: was already blocked; now `dupTask` also renders an "Edit the
+  existing task instead — …" button (prop `onOpenExisting`). `NewTaskProvider`
+  (`NewTaskModal.tsx`) implements the handoff with its own edit modal.
+- **monday auto-fill is enabled** and only fills task-level fields (§18) — it never
+  touches the function tabs, so it composes with the rework.
+- Function-name display: prose/status **messages, tooltips and validation** append
+  " Team" to the function name (e.g. "Production Team isn't recording…", "Enable VN
+  Design Team", "Extended to cover … Team's timeline"); the compact tab chips and
+  "— {function}" field labels stay the short raw name.
+
+### Dashboard function filter (added later the same day)
+
+- The top-bar's static year badge (Layout) and the "Live" badge (Dashboard's left header
+  slot) were REMOVED; the left slot now holds **`FunctionFilter`** (bottom of
+  `Dashboard.tsx`) — a dropdown of toggleable function items with **"All GCMC"** on top.
+  All GCMC = empty selection = the landing default; while active the function items render
+  greyed (`opacity-50`, still clickable → switches to that one function). Toggling
+  functions multi-selects; deselecting the last one or selecting ALL of them snaps back to
+  All GCMC. Button shows selected functions' colour dots + label.
+- Filtering is done by **`sliceTasksByFunctions(tasks, selected, functions)`**
+  (`src/lib/functionData.ts`): empty selection returns tasks untouched (combined view);
+  otherwise each task is projected to the SUM of only the selected functions' slices
+  (types union, breakdown/total summed) — so shared tasks count a function's real
+  contribution, not the whole task. Legacy tasks follow the legacy owner. A slice's own
+  timeline (when on) drives the projected dates. Applied ONCE as `fnTasks` at the top of
+  the Dashboard pipeline — `filtered`, `sourceTasks`, `byMonth`, `chartYearTasks`,
+  `srcByMonth` all read it, so span/compare/match-range compose with it untouched. `years`
+  stays on ALL tasks (stable year selector).
+- Empty-data messaging: when a selection is active, every chart's `emptyMessage` becomes
+  "No workload recorded for {fn} Team in this view yet." (`fnEmpty` overrides the generic
+  "add tasks" nudges) — functions without data yet show that instead of blank charts.
+
+### Settings (`Settings.tsx`)
+
+- **Functions card**: add (picks the first unused colour) / rename (via
+  `store.renameFunction`) / remove (blocked-with-modal while in use); expanding a row
+  reveals the colour picker + `TypePicker` chip grids (checked = NOT hidden). Legacy
+  count shows on Vietnam Design (e.g. "185 tasks" = the whole pre-function history).
+- Work types + Asset types merged into ONE "Types" card (two `ListEditor bare` sections
+  — `bare` renders without the Card wrapper).
+
+### Testing gotchas (browser evals)
+
+- The tab-strip switches and the in-tab timeline switch are both `role="switch"` —
+  exclude the tab body via `closest('div.rounded-xl.border.p-4')` to hit the strip.
+- `aria-checked` reads STALE in the same eval tick as the click (React re-render) —
+  read it in a separate eval.
+- The Browser-pane console buffer persists across reloads AND dev-server restarts —
+  old HMR errors linger; verify with a live `window.__errCount` probe instead.

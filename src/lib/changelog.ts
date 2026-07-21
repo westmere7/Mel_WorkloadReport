@@ -30,6 +30,33 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.3.0',
+    date: '2026-07-21',
+    title: 'Workload by function',
+    notes: [
+      {
+        kind: 'new',
+        text: 'GCMC functions — Vietnam Design, Melbourne Design, Production and Contents each record their own work types, asset counts and optional timeline on a task, via colour-coded tabs in the task form. All tasks recorded before this release belong to Vietnam Design.',
+      },
+      {
+        kind: 'new',
+        text: 'Settings → Functions: add, rename, colour and remove functions, and choose which work / asset types each function’s tab offers. Work types and asset types now share one “Types” card.',
+      },
+      {
+        kind: 'new',
+        text: 'The master timeline auto-extends (highlighted) when a function’s timeline reaches outside it, and registering a task code that already exists is blocked with a jump to the existing task.',
+      },
+      {
+        kind: 'new',
+        text: 'Dashboard function filter — an "All GCMC" dropdown in the top bar isolates one or more functions (shared tasks count only their slice of the assets); the static year and Live badges made way for it.',
+      },
+      {
+        kind: 'improved',
+        text: 'Demo images moved next to the form’s footer actions. monday.com auto-fill still prefills the task-level name, code, timeline, size and people.',
+      },
+    ],
+  },
+  {
     version: '0.2.0',
     date: '2026-07-20',
     title: 'Showreel & monday.com',

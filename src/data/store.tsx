@@ -13,7 +13,7 @@ import type { Repository } from './repository'
 import { LocalRepository } from './localRepository'
 import { SupabaseRepository } from './supabaseRepository'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
-import { DEFAULT_SETTINGS, FALLBACK_ITEM } from '../constants'
+import { DEFAULT_SETTINGS, FALLBACK_ITEM, legacyOwnerName } from '../constants'
 import { generateSampleTasks } from '../lib/sampleData'
 import { toMessage } from '../lib/format'
 import { useAuth } from '../lib/auth'
@@ -59,6 +59,12 @@ interface StoreValue {
     key: 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes',
     value: string,
   ) => Promise<void>
+  /** Rename a GCMC function: rewrites tasks' per-function keys + the Settings config. */
+  renameFunction: (oldName: string, newName: string) => Promise<void>
+  /** Remove a function config. Blocked (throws) while any task still has data under it. */
+  removeFunction: (name: string) => Promise<void>
+  /** How many tasks carry data under this function (legacy tasks count toward their owner). */
+  functionUsage: (name: string) => number
   /** Whether task image uploads are available (Supabase Storage only). */
   supportsImages: boolean
   /** Compress-then-upload happens in the caller; this stores the blob and returns its descriptor. */
@@ -206,12 +212,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const byCode = new Map(existing.filter((t) => t.code.trim()).map((t) => [t.code.trim(), t]))
       const toCreate: TaskInput[] = []
       let updated = 0
+      // CSV rows don't carry per-function slices. Keep a matched task's existing
+      // functionData when the import didn't change its combined types/assets —
+      // otherwise the slices no longer add up, so drop them (the task reverts to
+      // legacy = wholly owned by the legacy function).
+      const aggSig = (types: string[], breakdown: Record<string, number>) =>
+        JSON.stringify([
+          [...types].sort(),
+          Object.entries(breakdown)
+            .filter(([, v]) => Number(v) > 0)
+            .map(([k, v]) => `${k}=${Number(v)}`)
+            .sort(),
+        ])
       for (const input of inputs) {
         const key = input.code.trim()
         const match = key ? byCode.get(key) : undefined
         if (match) {
           // CSV doesn't carry images (they live in Storage) — keep the existing ones.
-          await repo.updateTask(match.id, { ...input, images: match.images })
+          const keepSlices =
+            input.functionData === undefined &&
+            aggSig(match.types, match.assetBreakdown) === aggSig(input.types, input.assetBreakdown)
+          await repo.updateTask(match.id, {
+            ...input,
+            images: match.images,
+            functionData: input.functionData ?? (keepSlices ? match.functionData : null),
+          })
           updated++
         } else {
           toCreate.push(input)
@@ -406,6 +431,72 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [repo],
   )
 
+  // ── GCMC functions (Settings panel) ─────────────────────────────
+  const functionUsage = useCallback(
+    (name: string) => {
+      const legacy = legacyOwnerName(settings.functions)
+      return tasks.filter((t) =>
+        t.functionData ? t.functionData[name] !== undefined : name === legacy,
+      ).length
+    },
+    [tasks, settings.functions],
+  )
+
+  const renameFunction = useCallback(
+    async (oldName: string, newName: string) => {
+      const trimmed = newName.trim()
+      if (!trimmed || trimmed === oldName) return
+
+      // 1. Rewrite the per-function key on every task that has one.
+      await repo.renameValue('functionData', oldName, trimmed)
+
+      // 2. Update the Settings config (merge configs if the new name already exists).
+      setSettings((prev) => {
+        const dupe = prev.functions.find(
+          (f) => f.name !== oldName && f.name.toLowerCase() === trimmed.toLowerCase(),
+        )
+        const old = prev.functions.find((f) => f.name === oldName)
+        const nextFunctions = dupe
+          ? prev.functions
+              .filter((f) => f.name !== oldName)
+              .map((f) =>
+                f.name === dupe.name && old
+                  ? {
+                      // Union of what both tabs OFFERED = intersection of exclusions.
+                      ...f,
+                      hiddenWorkTypes: f.hiddenWorkTypes.filter((t) => old.hiddenWorkTypes.includes(t)),
+                      hiddenAssetTypes: f.hiddenAssetTypes.filter((t) => old.hiddenAssetTypes.includes(t)),
+                    }
+                  : f,
+              )
+          : prev.functions.map((f) => (f.name === oldName ? { ...f, name: trimmed } : f))
+        const nextSettings = { ...prev, functions: nextFunctions }
+        void repo.saveSettings(nextSettings)
+        return nextSettings
+      })
+
+      // 3. Refresh tasks so usage counts reflect the rewrite.
+      setTasks(await repo.listTasks())
+    },
+    [repo],
+  )
+
+  const removeFunction = useCallback(
+    async (name: string) => {
+      // Removing a function whose tasks still carry data would delete recorded
+      // workload — always blocked (there's no "Others" fallback for functions).
+      if (functionUsage(name) > 0) {
+        throw new Error(`"${name}" still has tasks with recorded workload — reassign them first.`)
+      }
+      setSettings((prev) => {
+        const nextSettings = { ...prev, functions: prev.functions.filter((f) => f.name !== name) }
+        void repo.saveSettings(nextSettings)
+        return nextSettings
+      })
+    },
+    [repo, functionUsage],
+  )
+
   const value = useMemo<StoreValue>(
     () => ({
       backend: repo.backend,
@@ -423,6 +514,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveSettings,
       renameListItem,
       removeListItem,
+      renameFunction,
+      removeFunction,
+      functionUsage,
       supportsImages: repo.supportsImages,
       uploadImage,
       deleteImage,
@@ -457,6 +551,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       saveSettings,
       renameListItem,
       removeListItem,
+      renameFunction,
+      removeFunction,
+      functionUsage,
       uploadImage,
       deleteImage,
       createSnapshot,

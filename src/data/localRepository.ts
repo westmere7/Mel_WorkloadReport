@@ -2,7 +2,19 @@ import type { AppSettings, Task, TaskInput } from '../types'
 import type { Repository } from './repository'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
 import type { ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
-import { DEFAULT_SETTINGS, canonicalAssetName, normalizeBreakdown, normalizeSizeDurations } from '../constants'
+import {
+  DEFAULT_SETTINGS,
+  canonicalAssetName,
+  normalizeBreakdown,
+  normalizeFunctionData,
+  normalizeFunctions,
+  normalizeSizeDurations,
+} from '../constants'
+import {
+  renameAssetTypeInFunctionData,
+  renameFunctionKey,
+  renameWorkTypeInFunctionData,
+} from '../lib/functionData'
 import { SEED_TASKS } from './seed'
 
 const TASKS_KEY = 'mwr.tasks.v1'
@@ -66,6 +78,7 @@ export class LocalRepository implements Repository {
       createdBy: t.createdBy ?? null,
       images: t.images ?? [],
       assetBreakdown: normalizeBreakdown(t.assetBreakdown),
+      functionData: normalizeFunctionData(t.functionData),
     }))
   }
 
@@ -141,7 +154,7 @@ export class LocalRepository implements Repository {
   }
 
   async renameValue(
-    field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown',
+    field: 'squad' | 'campaign' | 'types' | 'people' | 'assetBreakdown' | 'functionData',
     oldValue: string,
     newValue: string,
   ): Promise<void> {
@@ -153,21 +166,37 @@ export class LocalRepository implements Repository {
       if (field === 'campaign') {
         return t.campaign === oldValue ? { ...t, campaign: newValue } : t
       }
+      if (field === 'functionData') {
+        // Rename a FUNCTION: rewrite the per-function map key.
+        const fd = t.functionData ? renameFunctionKey(t.functionData, oldValue, newValue) : null
+        return fd ? { ...t, functionData: fd } : t
+      }
       if (field === 'assetBreakdown') {
         const keys = Object.keys(t.assetBreakdown).filter(
           (k) => canonicalAssetName(k) === oldValue && k !== newValue,
         )
-        if (keys.length === 0) return t
+        // Nested per-function breakdowns must follow the rename too.
+        const fd = t.functionData ? renameAssetTypeInFunctionData(t.functionData, oldValue, newValue) : null
+        if (keys.length === 0 && !fd) return t
         const b = { ...t.assetBreakdown }
         for (const k of keys) {
           b[newValue] = (b[newValue] ?? 0) + (b[k] ?? 0)
           delete b[k]
         }
-        return { ...t, assetBreakdown: b }
+        return { ...t, assetBreakdown: b, functionData: fd ?? t.functionData }
       }
       const arr = t[field]
-      if (!arr.includes(oldValue)) return t
-      return { ...t, [field]: Array.from(new Set(arr.map((v) => (v === oldValue ? newValue : v)))) }
+      // Work types also live inside per-function entries.
+      const fd =
+        field === 'types' && t.functionData
+          ? renameWorkTypeInFunctionData(t.functionData, oldValue, newValue)
+          : null
+      if (!arr.includes(oldValue) && !fd) return t
+      return {
+        ...t,
+        [field]: Array.from(new Set(arr.map((v) => (v === oldValue ? newValue : v)))),
+        functionData: fd ?? t.functionData,
+      }
     })
     write(TASKS_KEY, next)
   }
@@ -175,7 +204,12 @@ export class LocalRepository implements Repository {
   async getSettings(): Promise<AppSettings> {
     // Merge over defaults so older stored settings (missing newer keys like `squads`) don't break.
     const stored = read<Partial<AppSettings>>(SETTINGS_KEY, {})
-    return { ...DEFAULT_SETTINGS, ...stored, sizeDurations: normalizeSizeDurations(stored.sizeDurations) }
+    return {
+      ...DEFAULT_SETTINGS,
+      ...stored,
+      sizeDurations: normalizeSizeDurations(stored.sizeDurations),
+      functions: normalizeFunctions(stored.functions),
+    }
   }
 
   async saveSettings(settings: AppSettings): Promise<AppSettings> {
