@@ -134,7 +134,14 @@
      (invisible). The `calc(7rem - 100%)` shift = slot width − text width, so it
      only scrolls when the text actually overflows (min with 0). */
   .tab-marquee {
-    @apply block min-w-0 overflow-hidden whitespace-nowrap;
+    /* text-left: the parent <button> defaults to text-align:center (UA style),
+       which would centre short names; keep them left like the rest. */
+    @apply block min-w-0 overflow-hidden whitespace-nowrap text-left;
+  }
+  /* The right-fade + scroll only apply when the name is actually clipped (JS adds
+     `is-clipped` when the text overflows its slot) — so names that fit show in
+     full with no fade eating their last characters. */
+  .tab-marquee.is-clipped {
     -webkit-mask-image: linear-gradient(to right, #000 84%, transparent);
     mask-image: linear-gradient(to right, #000 84%, transparent);
   }

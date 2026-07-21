@@ -744,6 +744,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
         // the ~76% of the cycle that actually moves), floored so short names still
         // read calmly. Full back-and-forth is 2× this (CSS `alternate`).
         el.style.setProperty('--marquee-dur', `${Math.max(2.5, Math.abs(shift) / 26)}s`)
+        // Only fade + scroll a name that genuinely overflows its (content-sized) slot.
+        el.classList.toggle('is-clipped', inner.scrollWidth > el.clientWidth + 1)
       })
     }
     measure()
@@ -1404,9 +1406,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                 style={isActive ? { backgroundColor: fcol.hex, borderColor: fcol.hex, color: onFill! } : undefined}
                 className={cx(
                   // fn-tab drives the name marquee (hover); fn-tab-active keeps it
-                  // scrolling while selected. flex-1 + min-w-0 makes tabs share the
-                  // row evenly and shrink to fit (never overflow/wrap).
-                  'fn-tab relative flex min-w-0 flex-1 items-center gap-1.5 border-2 py-1 pl-2 pr-1.5 text-xs font-semibold',
+                  // scrolling while selected. Tabs are their natural (fixed-slot)
+                  // width and left-packed; min-w-0 lets them SHRINK to fit only
+                  // when there are enough to overflow the row (no grow → they don't
+                  // stretch to fill the panel when there's room).
+                  'fn-tab relative flex min-w-0 items-center gap-1.5 border-2 py-1 pl-2 pr-1.5 text-xs font-semibold',
                   isActive
                     ? 'fn-tab-active z-10 -mb-0.5 rounded-t-lg' // solid colour fill (inline) rides the panel edge
                     : 'rounded-lg border-line bg-subtle', // separate pill above the panel
@@ -1418,7 +1422,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   disabled={!d.enabled}
                   onClick={() => d.enabled && setActiveFn(f.name)}
                   className={cx(
-                    'flex min-w-0 flex-1 items-center gap-1.5 py-1',
+                    'flex min-w-0 items-center gap-1.5 py-1',
                     d.enabled ? 'cursor-pointer' : 'cursor-default',
                     isActive ? '' : d.enabled ? 'text-ink' : 'text-muted',
                   )}
@@ -1429,7 +1433,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                       : `${f.name} Team is off — use the switch to include it`
                   }
                 >
-                  <span className="tab-marquee flex-1">
+                  <span className="tab-marquee max-w-36">
                     <span>{f.name}</span>
                   </span>
                   {d.enabled && tabTotal > 0 && (
