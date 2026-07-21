@@ -793,14 +793,16 @@ LATER phase; the data is already captured for it.
   Assignment and Timeline so there's no separator after Workload-by-function or before Timeline.
   **When no function is enabled the panel is hidden — only the bare tab pills show.** `activeFn`
   invariant: only ever an ENABLED function or `''`; `disableFn()` reassigns it when the active
-  one is switched off; enabling a function selects it. **2-row wrap:** with the filled-chip
-  approach no join geometry is needed — the strip is `flex flex-wrap items-end px-3`; on one row
-  the active chip rides the panel edge, and when tabs wrap the chip is still colour-matched to
-  the panel (no fillets, no measurement effect, no glitch). `FUNCTION_COLORS` gained `hex` (raw
-  colour for inline fills).
-  ⚠️ The `border-accent-*` outline utilities are new; a running dev server must be RESTARTED for
-  Tailwind's JIT to emit them (`border-rmit-red` worked pre-existing, the accent borders didn't
-  until restart).
+  one is switched off; enabling a function selects it. **Single row, no wrap/scroll:** the strip
+  is `flex items-end px-3` and every tab is `flex-1 min-w-0`, so tabs share the row evenly and
+  shrink to fit — they never overflow the modal or wrap to a 2nd line (earlier tries at wrapping
+  + moving the active chip to the bottom row, and at horizontal scrolling, were both scrapped for
+  this). Each tab's name sits in a `.tab-marquee` slot (`index.css`): clipped with a soft right
+  fade and **auto-scrolls on hover** to reveal the tail — a per-tab `--marquee-shift` CSS var
+  (= `min(0, slotWidth − textWidth)`, set by a ResizeObserver effect on the strip via
+  `tabStripRef`) drives the scroll distance, so it adapts to the dynamic slot width and only
+  scrolls when actually clipped. The on/off switch is a `shrink-0` sibling — always visible.
+  `FUNCTION_COLORS` is `hex`-only (raw colour for inline fills).
   Per-tab state lives in `fnDrafts: Record<string, FnDraft>`; disabled drafts KEEP their
   values in form state (re-enable restores) but are stripped at submit. **Toggling OFF a
   tab with values opens a confirm modal.** Per tab: work-type badges + asset counters

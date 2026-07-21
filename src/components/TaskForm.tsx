@@ -727,6 +727,32 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   // Tab whose disable needs confirming because the save would drop its values.
   const [pendingDisable, setPendingDisable] = useState<string | null>(null)
 
+  // Tabs share the row (flex), so each name slot's width is dynamic. Measure how
+  // far a clipped name must scroll to reveal its tail and stash it as a CSS var
+  // the hover rule uses (`--marquee-shift`). Re-measured on any layout change.
+  const tabStripRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const strip = tabStripRef.current
+    if (!strip) return
+    const measure = () => {
+      strip.querySelectorAll<HTMLElement>('.tab-marquee').forEach((el) => {
+        const inner = el.firstElementChild as HTMLElement | null
+        if (!inner) return
+        const shift = Math.min(0, el.clientWidth - inner.scrollWidth)
+        el.style.setProperty('--marquee-shift', `${shift}px`)
+        // Duration scales with the scroll distance → constant speed (~34px/s over
+        // the ~76% of the cycle that actually moves), floored so short names still
+        // read calmly. Full back-and-forth is 2× this (CSS `alternate`).
+        el.style.setProperty('--marquee-dur', `${Math.max(2.5, Math.abs(shift) / 26)}s`)
+      })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(strip)
+    ro.observe(document.documentElement)
+    return () => ro.disconnect()
+  }, [activeFn, functionConfigs, fnDrafts])
+
   const patchDraft = (fnName: string, p: Partial<FnDraft>) =>
     setFnDrafts((prev) => ({ ...prev, [fnName]: { ...(prev[fnName] ?? emptyDraft()), ...p } }))
 
@@ -1377,9 +1403,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                 key={f.name}
                 style={isActive ? { backgroundColor: fcol.hex, borderColor: fcol.hex, color: onFill! } : undefined}
                 className={cx(
-                  'relative flex items-center gap-1.5 border-2 py-1 pl-2 pr-1.5 text-xs font-semibold',
+                  // fn-tab drives the name marquee (hover); fn-tab-active keeps it
+                  // scrolling while selected. flex-1 + min-w-0 makes tabs share the
+                  // row evenly and shrink to fit (never overflow/wrap).
+                  'fn-tab relative flex min-w-0 flex-1 items-center gap-1.5 border-2 py-1 pl-2 pr-1.5 text-xs font-semibold',
                   isActive
-                    ? 'z-10 -mb-0.5 rounded-t-lg' // solid colour fill (inline) rides the panel edge
+                    ? 'fn-tab-active z-10 -mb-0.5 rounded-t-lg' // solid colour fill (inline) rides the panel edge
                     : 'rounded-lg border-line bg-subtle', // separate pill above the panel
                   !d.enabled && 'opacity-60',
                 )}
@@ -1389,7 +1418,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   disabled={!d.enabled}
                   onClick={() => d.enabled && setActiveFn(f.name)}
                   className={cx(
-                    'flex items-center gap-1.5 py-1',
+                    'flex min-w-0 flex-1 items-center gap-1.5 py-1',
                     d.enabled ? 'cursor-pointer' : 'cursor-default',
                     isActive ? '' : d.enabled ? 'text-ink' : 'text-muted',
                   )}
@@ -1400,11 +1429,13 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                       : `${f.name} Team is off — use the switch to include it`
                   }
                 >
-                  {f.name}
+                  <span className="tab-marquee flex-1">
+                    <span>{f.name}</span>
+                  </span>
                   {d.enabled && tabTotal > 0 && (
                     <span
                       className={cx(
-                        'rounded-full px-1.5 text-[10px] font-bold leading-4',
+                        'shrink-0 rounded-full px-1.5 text-[10px] font-bold leading-4',
                         isActive ? 'bg-white/25' : 'bg-card text-ink ring-1 ring-line',
                       )}
                     >
@@ -1444,10 +1475,14 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             )
           })
 
-          // Strip sits directly above the panel; `items-end` keeps the active
-          // chip's bottom on the panel's top edge, `px-3` insets it clear of the
-          // panel's rounded corners so the chip rides the flat part of the edge.
-          const tabStrip = <div className="flex flex-wrap items-end gap-1.5 px-3">{tabs}</div>
+          // ONE row, no wrap: tabs flex to share the row and shrink to fit, so they
+          // never overflow or wrap and the active chip always rides the panel's top
+          // edge. `items-end` keeps every chip's bottom on that edge.
+          const tabStrip = (
+            <div ref={tabStripRef} className="flex items-end gap-1.5 px-3">
+              {tabs}
+            </div>
+          )
 
           // Nothing recording yet → show only the tabs (no panel).
           if (!showBody) return tabStrip

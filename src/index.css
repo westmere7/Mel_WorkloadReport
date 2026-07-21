@@ -127,6 +127,40 @@
     @apply bg-accent-green;
   }
 
+  /* Function tab name — a fixed narrow slot so every tab stays compact and the
+     row never wraps. Long names are clipped with a soft right fade (hinting
+     more text) and gently auto-scroll to reveal the tail while the tab is
+     hovered; short names sit left-aligned with the fade over empty space
+     (invisible). The `calc(7rem - 100%)` shift = slot width − text width, so it
+     only scrolls when the text actually overflows (min with 0). */
+  .tab-marquee {
+    @apply block min-w-0 overflow-hidden whitespace-nowrap;
+    -webkit-mask-image: linear-gradient(to right, #000 84%, transparent);
+    mask-image: linear-gradient(to right, #000 84%, transparent);
+  }
+  .tab-marquee > span {
+    @apply inline-block whitespace-nowrap;
+    transition: transform 0.3s ease-out; /* graceful settle when hover ends */
+  }
+  /* Ping-pong scroll: ease to the clipped tail and back, forever. `--marquee-shift`
+     (px, set per-tab in JS) = min(0, slotWidth − textWidth) — 0 when the name
+     fits, so the animation is a no-op there. `--marquee-dur` scales with the
+     distance for a constant scroll speed. The 12%/88% dwell pauses at each end. */
+  @keyframes tab-marquee-scroll {
+    0%,
+    12% {
+      transform: translateX(0);
+    }
+    88%,
+    100% {
+      transform: translateX(var(--marquee-shift, 0px));
+    }
+  }
+  .fn-tab:hover .tab-marquee > span,
+  .fn-tab-active .tab-marquee > span {
+    animation: tab-marquee-scroll var(--marquee-dur, 4s) ease-in-out infinite alternate;
+  }
+
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm
            font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-1
