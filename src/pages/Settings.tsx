@@ -100,43 +100,30 @@ export function SettingsPage() {
             onRename={(o, n) => renameListItem('campaigns', o, n)}
             usage={(v) => usageCount('campaigns', v)}
           />
-          {/* Work + asset types share one card — the Functions panel draws from both. */}
-          <Card className="bg-subtle">
-            <CardHeader
-              title="Types"
-              subtitle="Work types and asset (deliverable) types. Each function picks which of these its task-form tab offers."
-            />
-            <div className="space-y-5">
-              <ListEditor
-                bare
-                title="Work types"
-                dotColor="bg-accent-gold"
-                description="Categories of design work."
-                items={settings.types}
-                fallback={FALLBACK_ITEM}
-                allowRemoveUsed={settings.allowRemoveUsed}
-                onAdd={(v) => mutate('types', [...settings.types, v])}
-                onRemove={(v) => removeListItem('types', v)}
-                onRename={(o, n) => renameListItem('types', o, n)}
-                usage={(v) => usageCount('types', v)}
-              />
-              <div className="border-t border-line pt-4">
-                <ListEditor
-                  bare
-                  title="Asset types"
-                  dotColor="bg-accent-green"
-                  description="Deliverable types counted in the asset breakdown."
-                  items={settings.assetTypes}
-                  fallback={FALLBACK_ITEM}
-                  allowRemoveUsed={settings.allowRemoveUsed}
-                  onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
-                  onRemove={(v) => removeListItem('assetTypes', v)}
-                  onRename={(o, n) => renameListItem('assetTypes', o, n)}
-                  usage={(v) => usageCount('assetTypes', v)}
-                />
-              </div>
-            </div>
-          </Card>
+          <ListEditor
+            title="Work types"
+            dotColor="bg-accent-gold"
+            description="Categories of design work. Each function picks which to show on its task-form tab."
+            items={settings.types}
+            fallback={FALLBACK_ITEM}
+            allowRemoveUsed={settings.allowRemoveUsed}
+            onAdd={(v) => mutate('types', [...settings.types, v])}
+            onRemove={(v) => removeListItem('types', v)}
+            onRename={(o, n) => renameListItem('types', o, n)}
+            usage={(v) => usageCount('types', v)}
+          />
+          <ListEditor
+            title="Asset types"
+            dotColor="bg-accent-green"
+            description="Deliverable types counted in the asset breakdown. Each function picks which to show."
+            items={settings.assetTypes}
+            fallback={FALLBACK_ITEM}
+            allowRemoveUsed={settings.allowRemoveUsed}
+            onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
+            onRemove={(v) => removeListItem('assetTypes', v)}
+            onRename={(o, n) => renameListItem('assetTypes', o, n)}
+            usage={(v) => usageCount('assetTypes', v)}
+          />
           {/* GCMC functions — per-function task-form tabs (work/asset types + colour) */}
           <FunctionsCard />
           <ListEditor
