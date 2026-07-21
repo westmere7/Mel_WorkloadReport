@@ -564,7 +564,10 @@ function CodeNameField({
         </div>
 
         {open && (
-          <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-30 rounded-xl border border-line bg-card p-1.5 shadow-lg">
+          // Elevated onto `bg-subtle` (lighter than the modal's `bg-card`) with a
+          // strong shadow + ring so the results clearly float above the panel
+          // instead of blending into it.
+          <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-xl border border-line bg-subtle p-1.5 shadow-2xl ring-1 ring-black/10 dark:ring-white/10">
             {loading ? (
               <p className="flex items-center gap-2 px-2 py-3 text-xs text-muted">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Searching monday…
@@ -583,7 +586,7 @@ function CodeNameField({
                         onPick(h)
                         setOpen(false)
                       }}
-                      className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-subtle"
+                      className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-card"
                     >
                       <span className="line-clamp-1 text-sm font-semibold text-ink">{h.name || 'Untitled item'}</span>
                       <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
@@ -593,7 +596,7 @@ function CodeNameField({
                           <span className="text-faint">no code</span>
                         )}
                         <span>· {fmtMondayRange(h.startDate, h.endDate)}</span>
-                        {h.size && <span className="rounded bg-subtle px-1.5 py-px font-semibold text-ink">{h.size}</span>}
+                        {h.size && <span className="rounded bg-card px-1.5 py-px font-semibold text-ink ring-1 ring-line">{h.size}</span>}
                       </span>
                     </button>
                   </li>
@@ -1470,7 +1473,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               {tabStrip}
               <div className="space-y-4 rounded-xl border-2 bg-card p-4" style={{ borderColor: col.hex }}>
                 <div>
-                  <label className="label">Work type(s) — {f.name}</label>
+                  <label className="label">Work type(s)</label>
                   <div className="flex flex-wrap gap-2">
                     {tabTypes.map((t) => {
                       const active = d.types.includes(t)
@@ -1496,7 +1499,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
 
                 <div>
                   <div className="mb-2 flex items-center gap-2">
-                    <label className="label !mb-0">Assets — {f.name}</label>
+                    <label className="label !mb-0">Assets</label>
                     <span className="rounded-full border border-line bg-card px-2.5 py-0.5 text-xs font-semibold text-ink">
                       {tabTotal} total
                     </span>
@@ -1533,14 +1536,16 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                       />
                     </button>
                     <span className="text-xs font-semibold text-ink">Function-specific timeline</span>
-                    {!d.timelineOn && (
-                      <span className="text-[11px] text-faint">— follows the master timeline below</span>
-                    )}
+                    <span className="text-[11px] text-faint">
+                      {d.timelineOn
+                        ? '— on: this function has its own dates'
+                        : '— off: this function follows the master timeline below'}
+                    </span>
                   </div>
                   {d.timelineOn && (
                     <div className="mt-3 grid gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="label">Start date — {f.name}</label>
+                        <label className="label">Start date</label>
                         <input
                           type="date"
                           className="input h-11"
@@ -1549,7 +1554,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                         />
                       </div>
                       <div>
-                        <label className="label">End date — {f.name}</label>
+                        <label className="label">End date</label>
                         <input
                           type="date"
                           className="input h-11"

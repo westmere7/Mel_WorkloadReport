@@ -853,8 +853,9 @@ LATER phase; the data is already captured for it.
   `store.renameFunction`) / remove (blocked-with-modal while in use); expanding a row
   reveals the colour picker + `TypePicker` chip grids (checked = NOT hidden). Legacy
   count shows on Vietnam Design (e.g. "185 tasks" = the whole pre-function history).
-- Work types + Asset types merged into ONE "Types" card (two `ListEditor bare` sections
-  — `bare` renders without the Card wrapper).
+- Work types and Asset types are their own separate `ListEditor` cards (like squads/campaigns).
+  (They were briefly merged into one "Types" card; now split again. `ListEditor` still has a
+  dormant `bare` prop — renders without the Card wrapper — left in for reuse.)
 
 ### Testing gotchas (browser evals)
 
