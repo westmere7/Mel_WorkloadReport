@@ -94,6 +94,8 @@ export interface Task {
   draft?: boolean
   /** User-flagged "starred" task — a personal marker for quick filtering. */
   starred?: boolean
+  /** Linked monday.com item URL (e.g. https://rmit.monday.com/pulses/12345). */
+  mondayUrl?: string
   createdAt: string
   updatedAt: string
   /** Username that created the task; null for tasks created before this was tracked. */

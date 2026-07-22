@@ -385,6 +385,18 @@ export function TaskList() {
                           <StickyNote className="h-3.5 w-3.5" />
                         </span>
                       ) : null}
+                      {t.mondayUrl ? (
+                        <a
+                          href={t.mondayUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title={`Open on monday.com (${t.mondayUrl})`}
+                          className="shrink-0 rounded p-0.5 transition hover:scale-110"
+                        >
+                          <img src="/monday.svg" alt="Monday.com" className="h-3.5 w-3.5" />
+                        </a>
+                      ) : null}
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3">

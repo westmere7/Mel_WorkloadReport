@@ -16,6 +16,7 @@ import type { Size } from '../types'
 export interface MondayHit {
   /** monday item id (stable) — used as the React key; not stored on the task. */
   id: string
+  boardId?: string | null
   name: string
   /** Booking code if the board has one for this item; else '' (many won't). */
   code: string
@@ -27,18 +28,22 @@ export interface MondayHit {
   size: Size | null
   /** monday user-ids assigned on the Project-team column (mapped to people via settings). */
   mondayPeopleIds: string[]
+  /** Direct URL to the item on monday.com */
+  url?: string
 }
 
 interface SearchResponse {
   configured?: boolean
   items?: Array<{
     id: string
+    boardId?: string | null
     name: string
     code?: string | null
     startDate?: string | null
     endDate?: string | null
     size?: string | null
     mondayPeopleIds?: string[] | null
+    url?: string | null
   }>
   error?: string
 }
@@ -111,16 +116,23 @@ export async function searchMonday(query: string, boardIds?: string[]): Promise<
   if (!data || data.configured === false) throw new MondayNotConfiguredError()
   if (data.error) throw new Error(data.error)
 
+  const activeBoardIds = boardIds?.filter(Boolean) ?? []
+
   return (data.items ?? []).map((it) => {
     const { code, name } = splitCodeFromName(it.name ?? '', it.code)
+    const idStr = String(it.id)
+    const bid = it.boardId || (activeBoardIds.length > 0 ? activeBoardIds[0] : null)
+    const url = it.url || (bid ? `https://rmit.monday.com/boards/${bid}/pulses/${idStr}` : `https://rmit.monday.com/pulses/${idStr}`)
     return {
-      id: String(it.id),
+      id: idStr,
+      boardId: bid,
       name,
       code,
       startDate: it.startDate || null,
       endDate: it.endDate || null,
       size: normalizeSize(it.size),
       mondayPeopleIds: (it.mondayPeopleIds ?? []).map(String),
+      url,
     }
   })
 }

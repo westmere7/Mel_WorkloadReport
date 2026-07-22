@@ -163,6 +163,7 @@ function taskSignature(f: {
   note: string
   images: string[]
   functionData: FunctionData
+  mondayUrl?: string
 }): string {
   return JSON.stringify({
     squad: f.squad,
@@ -182,6 +183,7 @@ function taskSignature(f: {
     note: f.note.trim(),
     images: [...f.images].sort(),
     functions: functionDataSignature(f.functionData),
+    mondayUrl: (f.mondayUrl ?? '').trim(),
   })
 }
 
@@ -875,6 +877,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const [code, setCode] = useState(initial?.code ?? '')
   const [name, setName] = useState(initial?.name ?? '')
   const [people, setPeople] = useState<string[]>(initial?.people ?? [])
+  const [mondayUrl, setMondayUrl] = useState<string>(initial?.mondayUrl ?? '')
   // Starred value written on save. New tasks: the controlled `starredProp` from
   // the modal header. Editing: the LIVE store value (the header star persists on
   // click, so this just prevents Save from clobbering it).
@@ -1226,8 +1229,14 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
     // Map monday assignees → app people via the Settings monday-id map.
     const resolvedPeople = resolvePeopleFromMonday(hit.mondayPeopleIds, settings.peopleMondayIds, settings.people)
     if (resolvedPeople.length) setPeople(resolvedPeople)
-    // The green dots follow live field values, so no extra bookkeeping is needed —
-    // the fields this fill populated now have values and go green on their own.
+    if (hit.url) {
+      setMondayUrl(hit.url)
+    } else if (hit.boardId && hit.id) {
+      setMondayUrl(`https://rmit.monday.com/boards/${hit.boardId}/pulses/${hit.id}`)
+    } else if (hit.id) {
+      const fallbackBid = settings.mondayBoardIds[0]
+      setMondayUrl(fallbackBid ? `https://rmit.monday.com/boards/${fallbackBid}/pulses/${hit.id}` : `https://rmit.monday.com/pulses/${hit.id}`)
+    }
   }
 
   // The code is optional; if given, it must still be valid & unique. Everything
@@ -1297,6 +1306,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             // A legacy task's slice-equivalent matches the seeded form state, so
             // simply opening it is never "dirty".
             functionData: initial.functionData ?? legacyFunctionData(initial, settings.functions),
+            mondayUrl: initial.mondayUrl,
           })
         : null,
     [initial, settings.functions],
@@ -1318,6 +1328,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       note,
       images: images.map((i) => i.id),
       functionData: draftsToFunctionData(fnDrafts),
+      mondayUrl,
     }) !== initialSig
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1362,6 +1373,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
         draft: asDraft,
         // Preserve the live starred value (toggled from the header, not this form).
         starred: liveStarred,
+        mondayUrl: mondayUrl.trim() || undefined,
       })
       reconcileSaved(new Set(images.map((i) => i.id)))
     } catch (err) {
@@ -1982,7 +1994,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       </Section>
 
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 pt-2">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {/* Demo images are task-level (not per-function) — they live down here. */}
           <button
             type="button"
@@ -1998,13 +2010,33 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               </span>
             )}
           </button>
+          {mondayUrl ? (
+            <a
+              href={mondayUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Open on monday.com (${mondayUrl})`}
+              className="inline-flex items-center justify-center rounded-lg border border-line bg-subtle p-1.5 transition hover:bg-card hover:border-brand-300"
+            >
+              <img src="/monday.svg" alt="Monday.com" className="h-4 w-4" />
+            </a>
+          ) : (
+            <span
+              title="No monday.com link attached (auto-fills when selecting a monday result)"
+              className="inline-flex items-center justify-center rounded-lg border border-line bg-subtle p-1.5 opacity-40 cursor-not-allowed"
+            >
+              <img src="/monday.svg" alt="Monday.com" className="h-4 w-4 grayscale" />
+            </span>
+          )}
           {onDelete && (
             <button
               type="button"
               onClick={onDelete}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted transition hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
+              title="Remove task"
+              aria-label="Remove task"
+              className="inline-flex items-center justify-center rounded-lg p-1.5 text-muted transition hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
             >
-              <Trash2 className="h-4 w-4" /> Remove task
+              <Trash2 className="h-4 w-4" />
             </button>
           )}
         </div>

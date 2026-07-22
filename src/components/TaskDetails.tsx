@@ -113,6 +113,18 @@ export function TaskDetails({
           >
             {task.half}
           </span>
+          {task.mondayUrl && (
+            <a
+              href={task.mondayUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Open on monday.com (${task.mondayUrl})`}
+              className="inline-flex items-center gap-1 rounded border border-line bg-subtle px-2 py-0.5 text-xs font-semibold text-ink transition hover:bg-card hover:border-brand-300"
+            >
+              <img src="/monday.svg" alt="Monday.com" className="h-3.5 w-3.5" />
+              <span>monday.com</span>
+            </a>
+          )}
           <span className="text-xs text-muted">{SIZE_DESCRIPTIONS[task.size]}</span>
         </div>
       </div>

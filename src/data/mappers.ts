@@ -24,6 +24,8 @@ export interface TaskRow {
   draft: boolean | null
   /** User "starred" flag — a personal marker for quick filtering. */
   starred: boolean | null
+  /** Linked monday.com item URL. */
+  monday_url?: string | null
   created_at: string
   updated_at: string
   created_by: string | null
@@ -50,6 +52,7 @@ export function rowToTask(row: TaskRow): Task {
     functionData: normalizeFunctionData(row.function_data),
     draft: row.draft === true,
     starred: row.starred === true,
+    mondayUrl: row.monday_url ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by ?? null,
@@ -88,5 +91,6 @@ export function taskInputToRow(input: TaskInput): Omit<TaskRow, 'id' | 'created_
     function_data: input.functionData ?? null,
     draft: input.draft === true,
     starred: input.starred === true,
+    monday_url: input.mondayUrl ?? null,
   }
 }

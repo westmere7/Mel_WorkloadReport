@@ -153,7 +153,7 @@ Deno.serve(async (req: Request) => {
       const payload = await res.json()
       if (payload.errors?.length) throw new Error(payload.errors[0]?.message ?? 'monday API error.')
       const page = payload?.data?.boards?.[0]?.items_page
-      const pageItems: any[] = page?.items ?? []
+      const pageItems: any[] = (page?.items ?? []).map((item: any) => ({ ...item, boardId: bid }))
       items.push(...pageItems)
       cursor = pageItems.length ? (page?.cursor ?? null) : null
     } while (cursor && items.length < MAX_ITEMS_PER_BOARD)
@@ -199,12 +199,14 @@ Deno.serve(async (req: Request) => {
       nameLen: name.length,
       item: {
         id: (it as any).id,
+        boardId: (it as any).boardId ?? null,
         name,
         code,
         startDate,
         endDate,
         size: (cvById.get(colSize ?? '')?.text ?? '').trim() || null,
         mondayPeopleIds,
+        url: (it as any).boardId ? `https://rmit.monday.com/boards/${(it as any).boardId}/pulses/${(it as any).id}` : null,
       },
     })
   }
