@@ -47,6 +47,14 @@ export const CHANGELOG: Release[] = [
         text: 'Removing anything from a Settings list now always asks first — even items no task uses.',
       },
       {
+        kind: 'improved',
+        text: 'monday.com auto-fill is much faster — each board is fetched in a single request, all boards in parallel, with a short cache so repeat searches are near-instant.',
+      },
+      {
+        kind: 'improved',
+        text: 'Long Settings lists fade at the bottom edge while there’s more to scroll, so it’s clear the list continues.',
+      },
+      {
         kind: 'new',
         text: 'The master timeline auto-extends (highlighted) when a function’s timeline reaches outside it, and registering a task code that already exists is blocked with a jump to the existing task.',
       },

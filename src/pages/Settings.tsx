@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Archive, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, Archive, Check, ChevronDown, Download, Eraser, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -29,6 +29,37 @@ import {
 import type { AppSettings, FunctionConfig, Size } from '../types'
 
 type ListKey = keyof Pick<AppSettings, 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes'>
+
+/**
+ * Fade the bottom edge of a scrollable list to hint "there's more below". Returns
+ * a ref for the scroll container; the `is-scroll-faded` mask (index.css) is toggled
+ * on only while more content sits below the fold, so it disappears at the bottom and
+ * when the list isn't scrollable. Re-checks on scroll, viewport resize and content
+ * changes (items added/removed).
+ */
+function useScrollFade<T extends HTMLElement>() {
+  const ref = useRef<T>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const update = () => {
+      const moreBelow = el.scrollHeight - el.scrollTop - el.clientHeight > 1
+      el.classList.toggle('is-scroll-faded', moreBelow)
+    }
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    const mo = new MutationObserver(update)
+    mo.observe(el, { childList: true, subtree: true })
+    return () => {
+      el.removeEventListener('scroll', update)
+      ro.disconnect()
+      mo.disconnect()
+    }
+  }, [])
+  return ref
+}
 
 export function SettingsPage() {
   const { settings, saveSettings, tasks, renameListItem, removeListItem } = useStore()
@@ -146,6 +177,7 @@ function MondayBoardsCard() {
   const { settings, saveSettings } = useStore()
   const [draft, setDraft] = useState('')
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
+  const listRef = useScrollFade<HTMLUListElement>()
   if (!isMondayLookupEnabled()) return null
 
   const boards = settings.mondayBoardIds
@@ -181,7 +213,7 @@ function MondayBoardsCard() {
           <Plus className="h-4 w-4" />
         </button>
       </div>
-      <ul className="max-h-[21rem] space-y-1.5 overflow-y-auto">
+      <ul ref={listRef} className="max-h-[21rem] space-y-1.5 overflow-y-auto">
         {boards.map((id) => (
           <li
             key={id}
@@ -1083,6 +1115,7 @@ function FunctionsCard() {
   const [editValue, setEditValue] = useState('')
   const [blockedRemove, setBlockedRemove] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
+  const listRef = useScrollFade<HTMLUListElement>()
 
   const add = () => {
     const v = draft.trim()
@@ -1147,7 +1180,7 @@ function FunctionsCard() {
           <Plus className="h-4 w-4" />
         </button>
       </div>
-      <ul className="max-h-[26rem] space-y-1.5 overflow-y-auto">
+      <ul ref={listRef} className="max-h-[26rem] space-y-1.5 overflow-y-auto">
         {functions.map((f) => {
           const count = functionUsage(f.name)
           const isOpen = expanded === f.name
@@ -1248,12 +1281,14 @@ function FunctionsCard() {
                     all={sortAlpha(settings.types)}
                     included={f.workTypes}
                     onToggle={(t) => toggleType(f, 'workTypes', t)}
+                    onClear={() => patch(f.name, { workTypes: [] })}
                   />
                   <TypePicker
                     label="Asset types on this tab"
                     all={sortAlpha(settings.assetTypes)}
                     included={f.assetTypes}
                     onToggle={(t) => toggleType(f, 'assetTypes', t)}
+                    onClear={() => patch(f.name, { assetTypes: [] })}
                   />
                   <p className="text-[11px] text-faint">
                     Only checked types appear on this tab. Newly added types aren’t offered until you check them
@@ -1331,15 +1366,31 @@ function TypePicker({
   all,
   included,
   onToggle,
+  onClear,
 }: {
   label: string
   all: string[]
   included: string[]
   onToggle: (t: string) => void
+  /** Untick every type at once (inclusion list → []). Doesn't touch existing tasks. */
+  onClear: () => void
 }) {
   return (
     <div>
-      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-faint">{label}</div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-faint">{label}</span>
+        {included.length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-faint transition-colors hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
+            title="Untick every type on this tab. Tasks that already recorded these keep them."
+          >
+            <Eraser className="h-3 w-3" />
+            Clear
+          </button>
+        )}
+      </div>
       <div className="flex flex-wrap gap-1">
         {all.map((t) => {
           const on = included.includes(t)
@@ -1415,6 +1466,7 @@ function ListEditor({
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
   // Item whose removal is blocked because it's in use and the setting is off.
   const [blockedRemove, setBlockedRemove] = useState<string | null>(null)
+  const listRef = useScrollFade<HTMLUListElement>()
 
   // Shown alphabetically (matches the task-form order via withFallback).
   const sortedItems = sortAlpha(items)
@@ -1490,7 +1542,7 @@ function ListEditor({
           </span>
         </div>
       )}
-      <ul className="max-h-[21rem] space-y-1.5 overflow-y-auto">
+      <ul ref={listRef} className="max-h-[21rem] space-y-1.5 overflow-y-auto">
         {sortedItems.map((item) => {
           const count = usage(item)
           const isLocked = !!locked?.includes(item)

@@ -221,7 +221,11 @@ happens** (see §6).
   confirm modal's copy + button switch to a simple "no tasks use it" variant); nothing in the
   Settings lists is deleted without a warning. `MondayBoardsCard` removal likewise confirms. Items shown
   **alphabetically** (`sortAlpha`); `withFallback()` sorts (Others last) so the task form/charts
-  list A→Z too. The whole page requires sign-in. NOTE: the old **Data backend** card and
+  list A→Z too. Every capped, scrollable list (`ListEditor`, `FunctionsCard`, `MondayBoardsCard`)
+  gets a **bottom scroll-fade hint** via `useScrollFade` (a ref hook, top of Settings.tsx): it
+  toggles the `.is-scroll-faded` mask (index.css) on the `<ul>` **only while more content sits below
+  the fold** (recomputed on scroll + ResizeObserver + MutationObserver), so the last row is crisp at
+  the bottom and unscrollable lists get no fade. The whole page requires sign-in. NOTE: the old **Data backend** card and
   **Developer/danger zone** were removed from the UI (`store.populateSampleData`/`deleteAllTasks`
   still exist, unsurfaced).
 - **Charts** (`src/components/charts.tsx`): `AreaTrendChart, DonutChart, VBarChart,
@@ -718,16 +722,23 @@ derives half). Manual, per-task — **no background sync**; every field stays ed
   2. `supabase functions deploy monday-search` (default JWT verify is fine — `functions.invoke` sends
      the anon key, a valid JWT).
   3. Set `VITE_MONDAY_LOOKUP=1` in the app build and restart.
-- The function pages EACH board (up to ~500 items total across boards), filters by name/code
-  substring, returns ≤15 hits ranked across all boards; Timeline `value` JSON gives `from`/`to`.
+- The function fetches EACH board, filters by name/code substring, returns ≤15 hits ranked across
+  all boards; Timeline `value` JSON gives `from`/`to`.
   ⚠️ The query uses `boards(ids: …, state: all)` so **archived (read-only) boards are included** —
   `boards()` defaults to `state: active` and silently drops an archived board + all its items (this
   bit the 2025 archived board: results showed but its tasks were missing). Requires a redeploy.
+- **Speed (make it snappy):** three levers, all in `fetchBoardItems`. (1) `PAGE_LIMIT = 500` —
+  monday's `items_page` max, so a board is normally ONE request, not five 100-item pages (was the
+  main latency). (2) boards fetched **CONCURRENTLY** via `Promise.allSettled` (was a sequential
+  `for` loop); a single board's failure no longer sinks the search — it only errors if EVERY board
+  fails. (3) a module-level warm-instance **cache** (`boardCache`, TTL `MONDAY_CACHE_TTL` ms, default
+  60000, 0 = off) so repeat lookups skip monday entirely while the Edge instance stays warm. Scoring
+  is unchanged (tiered code-hit / all-tokens / partial). ⚠️ **Needs a redeploy** to take effect.
 - **Multiple boards (added later):** the boards to search are configured in the app —
   `AppSettings.mondayBoardIds` (`monday_boards` jsonb column; seeded `['1967557512','5026397227']`;
   `normalizeMondayBoards` + guarded write; edited in Settings → **monday.com boards** card, shown
   only when `isMondayLookupEnabled()`). `searchMonday(query, boardIds)` sends them in the request
-  body; the Edge Function loops each board (own cursor) and merges results. `MONDAY_BOARD_ID` is now
+  body; the Edge Function fetches each board (own cursor, in parallel) and merges results. `MONDAY_BOARD_ID` is now
   just a comma-separated FALLBACK when the request omits `boardIds`. ⚠️ **Column ids must be the SAME
   across the searched boards** (they're one shared secret set). Two operator actions to enable
   2-board search: (1) redeploy `monday-search` (else it ignores `boardIds` and uses the secret's

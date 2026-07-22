@@ -16,7 +16,13 @@
 //   MONDAY_COL_CODE      column id of the booking-code text column (optional)
 //   MONDAY_COL_PEOPLE    column id of the Project-team people column (optional)
 //   MONDAY_ALLOW_ORIGIN  CORS allow-origin (optional; default '*')
+//   MONDAY_CACHE_TTL     ms to keep each board's items warm in memory between
+//                        searches (optional; default 60000, 0 disables).
 //   NOTE: the mapped column ids are shared across the searched boards.
+//
+// Speed: each board is fetched in ONE 500-item page (monday's max) and all boards
+// run CONCURRENTLY, with a short warm-instance cache — so repeat searches are near
+// instant and the first is a single parallel round-trip per board.
 //
 // Request  (POST JSON):  { "query": "open day", "boardIds": ["1967557512","5026397227"] }
 //   `boardIds` are the boards to search at once (from the app's Settings); if
@@ -29,7 +35,14 @@
 
 const MONDAY_API = 'https://api.monday.com/v2'
 const MAX_HITS = 15
-const MAX_SCAN = 500 // items fetched from the board before filtering (paged)
+// monday's items_page caps `limit` at 500 — fetch a full page at once so each
+// board is normally ONE request instead of five 100-item pages.
+const PAGE_LIMIT = 500
+const MAX_ITEMS_PER_BOARD = 1000 // safety cap per board (≤2 pages); avoids deep paging
+// Warm-instance cache: a board's item list is reused across searches for a short
+// TTL so repeat lookups skip monday entirely. Persists only while the Edge
+// instance stays warm; tune/disable with MONDAY_CACHE_TTL (ms, 0 = off).
+const boardCache = new Map<string, { at: number; items: Array<Record<string, unknown>> }>()
 
 function cors(): Record<string, string> {
   return {
@@ -120,6 +133,45 @@ Deno.serve(async (req: Request) => {
       }
     }`
 
+  // How long a board's fetched items stay warm in memory (ms). Repeat searches
+  // within the window skip monday entirely. Operator-tunable; 0 disables.
+  const cacheTtl = Math.max(0, Number(Deno.env.get('MONDAY_CACHE_TTL') ?? '60000') || 0)
+
+  /** Fetch (and cache) all items for one board — one 500-item page in the common case. */
+  async function fetchBoardItems(bid: string): Promise<Array<Record<string, unknown>>> {
+    const now = Date.now()
+    const cached = boardCache.get(bid)
+    if (cacheTtl > 0 && cached && now - cached.at < cacheTtl) return cached.items
+    const items: Array<Record<string, unknown>> = []
+    let cursor: string | null = null
+    do {
+      const res = await fetch(MONDAY_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: token, 'API-Version': '2024-01' },
+        body: JSON.stringify({ query: gql, variables: { board: [bid], cols: colIds, limit: PAGE_LIMIT, cursor } }),
+      })
+      const payload = await res.json()
+      if (payload.errors?.length) throw new Error(payload.errors[0]?.message ?? 'monday API error.')
+      const page = payload?.data?.boards?.[0]?.items_page
+      const pageItems: any[] = page?.items ?? []
+      items.push(...pageItems)
+      cursor = pageItems.length ? (page?.cursor ?? null) : null
+    } while (cursor && items.length < MAX_ITEMS_PER_BOARD)
+    if (cacheTtl > 0) boardCache.set(bid, { at: now, items })
+    return items
+  }
+
+  // Fetch every board CONCURRENTLY (was sequential) — one slow board no longer
+  // blocks the others, and a single board's failure doesn't sink the search.
+  const settled = await Promise.allSettled(boards.map((bid) => fetchBoardItems(bid)))
+  const allItems = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+  const failures = settled.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+  // Only surface an error if EVERY board failed (partial results still help).
+  if (allItems.length === 0 && failures.length > 0) {
+    const reason = failures[0].reason
+    return json({ error: reason instanceof Error ? reason.message : 'Lookup failed.' }, 502)
+  }
+
   // Tokenize the query. Matching is tiered so a precise query (full name + code)
   // returns the ONE item, while a rough query still surfaces candidates:
   //   1. code match  — if the query has a task code and an item's name/code
@@ -129,66 +181,32 @@ Deno.serve(async (req: Request) => {
   const tokens = query.toLowerCase().split(/\s+/).filter(Boolean)
   const codeTokens = tokens.filter((t) => /^\d{2}\.\d{2}\d{2}\.[a-z]+$/.test(t) || /^vn\d{2}-\d{4}-[a-z]+$/.test(t))
   const scored: Array<{ matched: number; all: boolean; codeHit: boolean; nameLen: number; item: Record<string, unknown> }> = []
-  let scanned = 0
 
-  try {
-    // Each board is paged independently (its items_page has its own cursor); we
-    // score across ALL boards into one pool, capped globally by MAX_SCAN.
-    for (const bid of boards) {
-      let cursor: string | null = null
-      while (scanned < MAX_SCAN) {
-        const res = await fetch(MONDAY_API, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: token,
-            'API-Version': '2024-01',
-          },
-          body: JSON.stringify({
-            query: gql,
-            variables: { board: [bid], cols: colIds, limit: 100, cursor },
-          }),
-        })
-        const payload = await res.json()
-        if (payload.errors?.length) {
-          return json({ error: payload.errors[0]?.message ?? 'monday API error.' }, 502)
-        }
-        const page = payload?.data?.boards?.[0]?.items_page
-        const items: any[] = page?.items ?? []
-        for (const it of items) {
-          scanned++
-          const cvById = new Map<string, any>((it.column_values ?? []).map((c: any) => [c.id, c]))
-          const code = colCode ? (cvById.get(colCode)?.text ?? '').trim() : ''
-          const name = String(it.name ?? '')
-          const haystack = `${name} ${code}`.toLowerCase()
-          const matched = tokens.reduce((n, t) => n + (haystack.includes(t) ? 1 : 0), 0)
-          if (matched === 0) continue
-          const codeHit = codeTokens.length > 0 && codeTokens.some((t) => haystack.includes(t))
-          const { startDate, endDate } = parseTimeline(cvById.get(colTimeline ?? '')?.value ?? null)
-          const mondayPeopleIds = parsePeople(cvById.get(colPeople ?? '')?.value ?? null)
-          scored.push({
-            matched,
-            all: matched === tokens.length,
-            codeHit,
-            nameLen: name.length,
-            item: {
-              id: it.id,
-              name,
-              code,
-              startDate,
-              endDate,
-              size: (cvById.get(colSize ?? '')?.text ?? '').trim() || null,
-              mondayPeopleIds,
-            },
-          })
-        }
-        cursor = page?.cursor ?? null
-        if (!cursor || items.length === 0) break
-      }
-      if (scanned >= MAX_SCAN) break
-    }
-  } catch (e) {
-    return json({ error: e instanceof Error ? e.message : 'Lookup failed.' }, 502)
+  for (const it of allItems) {
+    const cvById = new Map<string, any>(((it as any).column_values ?? []).map((c: any) => [c.id, c]))
+    const code = colCode ? (cvById.get(colCode)?.text ?? '').trim() : ''
+    const name = String((it as any).name ?? '')
+    const haystack = `${name} ${code}`.toLowerCase()
+    const matched = tokens.reduce((n, t) => n + (haystack.includes(t) ? 1 : 0), 0)
+    if (matched === 0) continue
+    const codeHit = codeTokens.length > 0 && codeTokens.some((t) => haystack.includes(t))
+    const { startDate, endDate } = parseTimeline(cvById.get(colTimeline ?? '')?.value ?? null)
+    const mondayPeopleIds = parsePeople(cvById.get(colPeople ?? '')?.value ?? null)
+    scored.push({
+      matched,
+      all: matched === tokens.length,
+      codeHit,
+      nameLen: name.length,
+      item: {
+        id: (it as any).id,
+        name,
+        code,
+        startDate,
+        endDate,
+        size: (cvById.get(colSize ?? '')?.text ?? '').trim() || null,
+        mondayPeopleIds,
+      },
+    })
   }
 
   // Tier 1: a unique code match; Tier 2: items with every word; Tier 3: best partials.
@@ -202,8 +220,9 @@ Deno.serve(async (req: Request) => {
 
 // ── Setup / deploy ───────────────────────────────────────────────────────────
 // 1) supabase secrets set MONDAY_TOKEN=... MONDAY_BOARD_ID=... \
-//      MONDAY_COL_TIMELINE=... MONDAY_COL_SIZE=... MONDAY_COL_CODE=...
-// 2) supabase functions deploy monday-search
+//      MONDAY_COL_TIMELINE=... MONDAY_COL_SIZE=... MONDAY_COL_CODE=... \
+//      [MONDAY_CACHE_TTL=60000]
+// 2) supabase functions deploy monday-search   ← REDEPLOY after this speed change
 //    (Default JWT verification is fine — supabase-js `functions.invoke` sends the
 //     anon key, which is a valid JWT, so no --no-verify-jwt needed.)
 // 3) In the app build, set VITE_MONDAY_LOOKUP=1 so the button appears.

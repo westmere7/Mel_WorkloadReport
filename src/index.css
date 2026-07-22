@@ -196,6 +196,16 @@
   .chip {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
   }
+
+  /* Bottom scroll-fade hint for capped, scrollable lists (Settings). The mask is
+     applied only while more content sits below the fold (JS toggles the class via
+     useScrollFade), so the last row shows crisply once you reach the bottom. The
+     band is ~a full row tall and starts fading earlier (85%) so the last visible
+     row clearly dissolves — an obvious "there's more below" cue. */
+  .is-scroll-faded {
+    -webkit-mask-image: linear-gradient(to bottom, #000 85%, rgba(0, 0, 0, 0.15) 96%, transparent);
+    mask-image: linear-gradient(to bottom, #000 85%, rgba(0, 0, 0, 0.15) 96%, transparent);
+  }
 }
 
 /* Comparison "trending" indicator — an infinite escalator of chevrons that fade in
