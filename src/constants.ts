@@ -83,27 +83,28 @@ export const DEFAULT_ASSET_TYPES: string[] = ['Image', 'Video', 'Publication', '
 export const LEGACY_FUNCTION = 'Vietnam Design'
 
 /**
- * Preset function colours — one deliberately DARKENED/subdued hex per key so a
- * solid fill always reads with white text (see `readableOn` — every hex here has
- * luminance < 0.6). Rendered via inline styles (dots, the panel outline, the
- * filled active tab, the on-switch track), so functions stay a distinct family
- * from the brighter chart accents in tailwind.config.js.
+ * Preset function colours — vibrant, saturated hues (roughly the Tailwind-600
+ * family). Text placed on a solid fill uses `readableOn`, which picks white or
+ * dark per colour, so every fill stays perfectly legible in both themes (all are
+ * white-text except the bright `gold`, which takes dark text). Rendered via
+ * inline styles (dots, the panel outline, the filled active tab, the on-switch
+ * track), a distinct family from the chart accents in tailwind.config.js.
  */
 export interface FunctionColorSet {
   hex: string
 }
 
 export const FUNCTION_COLORS: Record<string, FunctionColorSet> = {
-  red: { hex: '#C41E2A' },
-  orange: { hex: '#C2410C' },
-  gold: { hex: '#B7791F' },
-  green: { hex: '#3F8E3A' },
-  teal: { hex: '#0E7C99' },
-  blue: { hex: '#1E5FB4' },
-  indigo: { hex: '#4B3F9E' },
-  plum: { hex: '#7A4E91' },
-  pink: { hex: '#BE185D' },
-  slate: { hex: '#566072' },
+  red: { hex: '#DC2626' },
+  orange: { hex: '#EA580C' },
+  gold: { hex: '#EAB308' },
+  green: { hex: '#16A34A' },
+  teal: { hex: '#0D9488' },
+  blue: { hex: '#2563EB' },
+  indigo: { hex: '#4F46E5' },
+  plum: { hex: '#9333EA' },
+  pink: { hex: '#DB2777' },
+  slate: { hex: '#64748B' },
 }
 
 export const FUNCTION_COLOR_KEYS = Object.keys(FUNCTION_COLORS)

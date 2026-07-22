@@ -385,7 +385,18 @@ function AddTypeInline({
  * and responds to the mouse wheel on hover (no focus needed) to bump the value
  * up/down. The wheel listener is non-passive so the page doesn't scroll.
  */
-function AssetInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function AssetInput({
+  label,
+  value,
+  onChange,
+  accent,
+}: {
+  label: string
+  value: number
+  onChange: (v: number) => void
+  /** Active (count > 0) outline colour — the function's colour. */
+  accent?: string
+}) {
   const boxRef = useRef<HTMLLabelElement>(null)
   const [draft, setDraft] = useState<string | null>(null) // null → show the committed value
   const stateRef = useRef({ value, onChange })
@@ -427,11 +438,15 @@ function AssetInput({ label, value, onChange }: { label: string; value: number; 
       ref={boxRef}
       title={label}
       className={cx(
-        'flex cursor-text items-center gap-2 rounded-xl px-3 py-2 transition focus-within:ring-2 focus-within:ring-brand-100 dark:focus-within:ring-brand-500/25',
+        'flex cursor-text items-center gap-2 rounded-xl border px-3 py-2 transition focus-within:ring-2 focus-within:ring-brand-100 dark:focus-within:ring-brand-500/25',
+        // Selected = thick function-colour outline + faint tint; inactive = thin line border.
         active
-          ? 'bg-navy-100/60 text-navy-700 dark:border dark:border-navy-300 dark:bg-navy-300 dark:text-white'
-          : 'bg-subtle text-muted hover:text-ink dark:border dark:border-line dark:bg-card dark:hover:border-navy-300',
+          ? accent
+            ? 'border-2 text-ink'
+            : 'border-navy-300 bg-navy-100/60 text-navy-700 dark:bg-navy-300 dark:text-white'
+          : 'border-line bg-subtle text-muted hover:text-ink dark:bg-card dark:hover:border-navy-300',
       )}
+      style={active && accent ? { borderColor: accent, backgroundColor: `${accent}1a` } : undefined}
     >
       {!editingMath && <span className="min-w-0 flex-1 truncate text-xs font-medium">{label}</span>}
       <input
@@ -1758,11 +1773,14 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                           onClick={() => toggleDraftType(f.name, t)}
                           aria-pressed={active}
                           className={cx(
-                            'rounded-xl px-3 py-2 text-xs font-medium leading-5 transition',
+                            'rounded-xl border px-3 py-2 text-xs leading-5 transition',
+                            // Selected = thick function-colour outline + faint tint;
+                            // inactive = thin line border.
                             active
-                              ? 'bg-navy-100/60 text-navy-700 dark:border dark:border-navy-300 dark:bg-navy-300 dark:text-white'
-                              : 'bg-subtle text-muted hover:text-ink dark:border dark:border-line dark:bg-card dark:hover:border-navy-300',
+                              ? 'border-2 font-semibold text-ink'
+                              : 'border-line bg-subtle font-medium text-muted hover:text-ink dark:bg-card dark:hover:border-navy-300',
                           )}
+                          style={active ? { borderColor: col.hex, backgroundColor: `${col.hex}1a` } : undefined}
                         >
                           {t}
                         </button>
@@ -1791,6 +1809,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                         label={assetName}
                         value={d.breakdown[assetName] || 0}
                         onChange={(v) => setDraftBreakdown(f.name, assetName, v)}
+                        accent={col.hex}
                       />
                     ))}
                     <AddTypeInline
