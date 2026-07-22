@@ -3,12 +3,14 @@ import {
   AlertTriangle,
   ArrowLeft,
   CalendarClock,
+  Check,
   ChevronDown,
   ChevronUp,
   ExternalLink,
   ImagePlus,
   Loader2,
   Plus,
+  RotateCcw,
   Sparkles,
   Trash2,
   X,
@@ -581,9 +583,40 @@ function CodeNameField({
   // monday auto-fill dropdown state.
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [bgSearching, setBgSearching] = useState(false)
+  const [perfectMatchHit, setPerfectMatchHit] = useState<MondayHit | null>(null)
   const [hits, setHits] = useState<MondayHit[] | null>(null)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [autoFillEnabled, setAutoFillEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('gcmc_monday_autofill_toggle') !== 'false'
+    } catch {
+      return true
+    }
+  })
+
+  const toggleAutoFill = () => {
+    setAutoFillEnabled((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('gcmc_monday_autofill_toggle', String(next))
+      } catch {
+        // ignore
+      }
+      return next
+    })
+  }
+
+  const autoFilledQueryRef = useRef<string | null>(null)
   const query = [name.trim(), code.trim()].filter(Boolean).join(' ')
+
+  const doAutoFill = (hit: MondayHit) => {
+    autoFilledQueryRef.current = query.toLowerCase().trim()
+    onPick(hit)
+    setPerfectMatchHit(null)
+    setBgSearching(false)
+    setOpen(false)
+  }
 
   const runSearch = async () => {
     setOpen(true)
@@ -596,6 +629,80 @@ function CodeNameField({
       setSearchError(toMessage(e))
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 500ms debounced background search whenever query input changes
+  useEffect(() => {
+    const cleanQuery = query.toLowerCase().trim()
+
+    // Reset auto-filled ref if input is emptied (e.g. via Reset button or clearing input)
+    if (!cleanQuery) {
+      autoFilledQueryRef.current = null
+      setPerfectMatchHit(null)
+      setBgSearching(false)
+      return
+    }
+
+    // Reset auto-filled ref if text changes to a different query
+    if (autoFilledQueryRef.current && autoFilledQueryRef.current !== cleanQuery) {
+      autoFilledQueryRef.current = null
+    }
+
+    // Stop searching if disabled, query is too short, or auto-fill was ALREADY performed for this exact text
+    if (!mondayEnabled || cleanQuery.length < 3 || autoFilledQueryRef.current === cleanQuery) {
+      setPerfectMatchHit(null)
+      setBgSearching(false)
+      return
+    }
+
+    setBgSearching(true)
+    setPerfectMatchHit(null)
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchMonday(query, mondayBoardIds)
+        setHits(results)
+
+        // Only show "Found" when ONLY ONE result is returned AND it's a perfect match
+        if (results.length === 1) {
+          const singleHit = results[0]
+          const hCode = (singleHit.code || '').toLowerCase().trim()
+          const hName = (singleHit.name || '').toLowerCase().trim()
+          const qCode = (code || '').toLowerCase().trim()
+          const qName = (name || '').toLowerCase().trim()
+
+          const isCodeMatch = Boolean(qCode && (hCode === qCode || hName.includes(qCode)))
+          const isNameMatch = Boolean(qName && (hName === qName || cleanQuery === hName))
+          const isFullMatch = cleanQuery === `${hCode} ${hName}`.trim() || cleanQuery === hName
+
+          if (isCodeMatch || isNameMatch || isFullMatch) {
+            if (autoFillEnabled) {
+              autoFilledQueryRef.current = cleanQuery
+              onPick(singleHit)
+              setPerfectMatchHit(null)
+            } else {
+              setPerfectMatchHit(singleHit)
+            }
+          }
+        }
+      } catch {
+        // Silently ignore background search errors
+      } finally {
+        setBgSearching(false)
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [query, mondayEnabled, mondayBoardIds, code, name, autoFillEnabled, onPick])
+
+  const handleButtonClick = () => {
+    if (!query) {
+      toggleAutoFill()
+    } else if (perfectMatchHit) {
+      doAutoFill(perfectMatchHit)
+    } else {
+      runSearch()
     }
   }
 
@@ -709,6 +816,7 @@ function CodeNameField({
                 setName('')
                 setCode('')
                 setEditing(false)
+                setPerfectMatchHit(null)
                 inputRef.current?.focus()
               }}
               title="Clear name and code"
@@ -721,17 +829,58 @@ function CodeNameField({
           {mondayEnabled && (
             <button
               type="button"
-              onClick={runSearch}
-              disabled={loading || !query}
-              title="Search monday.com for this task and auto-fill"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-xs font-semibold text-ink transition hover:bg-subtle disabled:opacity-40"
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <img src="/monday.svg" alt="" className="h-4 w-4" />
+              onClick={handleButtonClick}
+              disabled={loading}
+              title={
+                !query
+                  ? `Auto-fill is ${autoFillEnabled ? 'ON' : 'OFF'} — click to toggle`
+                  : perfectMatchHit
+                    ? '1 perfect match found! Click to auto-fill'
+                    : bgSearching
+                      ? 'Searching monday.com in background…'
+                      : 'Search monday.com for this task'
+              }
+              className={cx(
+                'relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all',
+                !query
+                  ? 'border border-line bg-card text-ink hover:bg-subtle'
+                  : perfectMatchHit
+                    ? 'border-2 border-accent-green bg-accent-green/10 text-accent-green dark:bg-accent-green/20 shadow-sm'
+                    : bgSearching
+                      ? 'border border-line bg-subtle text-ink'
+                      : 'border border-line bg-card text-ink hover:bg-subtle',
               )}
-              auto-fill
+            >
+
+              {loading ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+              ) : (
+                <img src="/monday.svg" alt="" className="h-4 w-4 shrink-0" />
+              )}
+
+              {!query ? (
+                <span className="flex items-center gap-1.5">
+                  <span>auto-fill</span>
+                  <span
+                    className={cx(
+                      'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+                      autoFillEnabled
+                        ? 'border-accent-green bg-accent-green text-white'
+                        : 'border-line bg-card text-transparent',
+                    )}
+                  >
+                    <Check className={cx('h-3 w-3 stroke-[3]', autoFillEnabled ? 'opacity-100' : 'opacity-0')} />
+                  </span>
+                </span>
+              ) : bgSearching ? (
+                <span>
+                  Searching<span className="inline-flex"><span className="dot-1">.</span><span className="dot-2">.</span><span className="dot-3">.</span></span>
+                </span>
+              ) : perfectMatchHit ? (
+                <span>Auto-fill</span>
+              ) : (
+                <span>auto-fill</span>
+              )}
             </button>
           )}
         </div>
@@ -758,8 +907,7 @@ function CodeNameField({
                       <button
                         type="button"
                         onClick={() => {
-                          onPick(h)
-                          setOpen(false)
+                          doAutoFill(h)
                         }}
                         className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-card"
                       >
@@ -1085,6 +1233,37 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const finalized = useRef(false) // true once save/cancel has reconciled deletions
 
   const canAddImages = images.length + uploading < MAX_IMAGES
+
+  const handleResetForm = () => {
+    setCode('')
+    setName('')
+    setSquad('' as Squad)
+    setSquadTouched(false)
+    setCampaign('')
+    setCampaignTouched(false)
+    setSize('M')
+    setPeople([])
+    setNote('')
+    setStartDate('')
+    setStartDateTouched(false)
+    setEndDate('')
+    setEndDateTouched(false)
+    setHalf('H1')
+    setHalfTouched(false)
+    setMondayUrl('')
+    setImages([])
+    setFnDrafts(() => {
+      const drafts: Record<string, FnDraft> = {}
+      for (const f of functionConfigs) {
+        drafts[f.name] = emptyDraft()
+      }
+      return drafts
+    })
+    setActiveFn('')
+    setPendingDisable(null)
+    setErrors([])
+    setAttempted(false)
+  }
 
   const addFiles = async (files: FileList) => {
     setImgError(null)
@@ -2087,6 +2266,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           )}
         </div>
         <div className="flex gap-2">
+          {!initial && (
+            <button
+              type="button"
+              className="btn-outline inline-flex items-center gap-1.5"
+              onClick={handleResetForm}
+              title="Reset all fields in this task creation panel"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset
+            </button>
+          )}
           {onCancel && (
             <button type="button" className="btn-outline" onClick={handleCancel}>
               Cancel
