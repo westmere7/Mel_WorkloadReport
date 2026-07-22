@@ -668,7 +668,15 @@ derives half). Manual, per-task — **no background sync**; every field stays ed
 - **Green field dots:** the fields a pick populated get a **green** dot on their label
   (`.task-form .label.is-filled::before`) instead of the default **RMIT-red** dot; editing a field
   reverts its dot to red. Tracked by a `filled: Set<string>` in `TaskForm` (`identity`/`startDate`/
-  `endDate`/`size`), set in `applyMondayHit` and cleared in each field's change handler.
+  `endDate`/`size`/`people`), set in `applyMondayHit` and cleared in each field's change handler.
+  Optional fields carry a **grey** dot via `.label.is-optional` (Note uses it — it's not required).
+- **Result rows** show name · code (only if the item HAS one — no "no code" placeholder) · timeline
+  range · resolved people-in-charge (`resolvePeople` prop → `resolvePeopleFromMonday`) · size pill.
+- **Submit surfaces missing input:** the Register/Save button is NOT disabled on invalid (only on
+  `submitting`/`!dirty`); clicking runs `validate()` and shows the error summary at the top of the
+  form ("Please fix the following before saving:"), scrolled into view via `errorsRef`. The old red
+  "Use date from code" / "Auto-set from size" apply-buttons under the date inputs were removed (dates
+  still auto-fill; the amber "extended" + green "auto-set" notes remain).
 - **Never calls monday from the browser** (token exposure + monday blocks browser CORS). The client
   (`src/lib/monday.ts` `searchMonday`) calls a **Supabase Edge Function** `monday-search`
   (`supabase/functions/monday-search/index.ts`, Deno, entry file **`index.ts`**) via

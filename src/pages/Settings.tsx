@@ -101,30 +101,8 @@ export function SettingsPage() {
             onRename={(o, n) => renameListItem('campaigns', o, n)}
             usage={(v) => usageCount('campaigns', v)}
           />
-          <ListEditor
-            title="Work types"
-            dotColor="bg-accent-gold"
-            description="Categories of design work. Each function picks which to show on its task-form tab."
-            items={settings.types}
-            fallback={FALLBACK_ITEM}
-            allowRemoveUsed={settings.allowRemoveUsed}
-            onAdd={(v) => mutate('types', [...settings.types, v])}
-            onRemove={(v) => removeListItem('types', v)}
-            onRename={(o, n) => renameListItem('types', o, n)}
-            usage={(v) => usageCount('types', v)}
-          />
-          <ListEditor
-            title="Asset types"
-            dotColor="bg-accent-green"
-            description="Deliverable types counted in the asset breakdown. Each function picks which to show."
-            items={settings.assetTypes}
-            fallback={FALLBACK_ITEM}
-            allowRemoveUsed={settings.allowRemoveUsed}
-            onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
-            onRemove={(v) => removeListItem('assetTypes', v)}
-            onRename={(o, n) => renameListItem('assetTypes', o, n)}
-            usage={(v) => usageCount('assetTypes', v)}
-          />
+          {/* Work + asset types share one 2-tabbed card */}
+          <TypesCard />
           {/* GCMC functions — per-function task-form tabs (work/asset types + colour) */}
           <FunctionsCard />
           <ListEditor
@@ -202,7 +180,7 @@ function MondayBoardsCard() {
           <Plus className="h-4 w-4" />
         </button>
       </div>
-      <ul className="space-y-1.5">
+      <ul className="max-h-[21rem] space-y-1.5 overflow-y-auto">
         {boards.map((id) => (
           <li
             key={id}
@@ -989,6 +967,75 @@ function MondayIdInput({ value, onCommit }: { value: string; onCommit: (v: strin
 }
 
 /**
+ * Work types + Asset types in one card, switched by a 2-tab strip — they share
+ * the same editor UI and are both drawn on by the Functions panel, so they live
+ * together while their data stays two separate settings lists.
+ */
+function TypesCard() {
+  const { settings, saveSettings, tasks, renameListItem, removeListItem } = useStore()
+  const [tab, setTab] = useState<'types' | 'assetTypes'>('types')
+  const isTypes = tab === 'types'
+  const mutate = (key: 'types' | 'assetTypes', next: string[]) => void saveSettings({ ...settings, [key]: next })
+  const usage = (key: 'types' | 'assetTypes', v: string) =>
+    key === 'types'
+      ? tasks.filter((t) => t.types.includes(v)).length
+      : tasks.filter((t) => (t.assetBreakdown[v] ?? 0) > 0).length
+
+  const TabBtn = ({ value, label }: { value: 'types' | 'assetTypes'; label: string }) => (
+    <button
+      type="button"
+      onClick={() => setTab(value)}
+      className={cx(
+        'rounded-md px-3 py-1 text-sm font-semibold transition',
+        tab === value ? 'bg-rmit-navy text-white dark:bg-navy-300' : 'text-muted hover:text-ink',
+      )}
+    >
+      {label}
+    </button>
+  )
+
+  return (
+    <Card className="bg-subtle">
+      <div className="mb-3 inline-flex items-center gap-0.5 rounded-lg bg-card p-1 shadow-soft">
+        <TabBtn value="types" label="Work types" />
+        <TabBtn value="assetTypes" label="Asset types" />
+      </div>
+      {isTypes ? (
+        <ListEditor
+          bare
+          hideHeading
+          title="Work types"
+          dotColor="bg-accent-gold"
+          description="Categories of design work. Each function picks which to show on its task-form tab."
+          items={settings.types}
+          fallback={FALLBACK_ITEM}
+          allowRemoveUsed={settings.allowRemoveUsed}
+          onAdd={(v) => mutate('types', [...settings.types, v])}
+          onRemove={(v) => removeListItem('types', v)}
+          onRename={(o, n) => renameListItem('types', o, n)}
+          usage={(v) => usage('types', v)}
+        />
+      ) : (
+        <ListEditor
+          bare
+          hideHeading
+          title="Asset types"
+          dotColor="bg-accent-green"
+          description="Deliverable types counted in the asset breakdown. Each function picks which to show."
+          items={settings.assetTypes}
+          fallback={FALLBACK_ITEM}
+          allowRemoveUsed={settings.allowRemoveUsed}
+          onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
+          onRemove={(v) => removeListItem('assetTypes', v)}
+          onRename={(o, n) => renameListItem('assetTypes', o, n)}
+          usage={(v) => usage('assetTypes', v)}
+        />
+      )}
+    </Card>
+  )
+}
+
+/**
  * GCMC functions panel — each function is a tab in the task form, with its own
  * colour and its own pick of work/asset types. Removal is always blocked while
  * a function still has tasks with recorded workload (there's no fallback that
@@ -1063,7 +1110,7 @@ function FunctionsCard() {
           <Plus className="h-4 w-4" />
         </button>
       </div>
-      <ul className="space-y-1.5">
+      <ul className="max-h-[26rem] space-y-1.5 overflow-y-auto">
         {functions.map((f) => {
           const count = functionUsage(f.name)
           const isOpen = expanded === f.name
@@ -1297,6 +1344,7 @@ function ListEditor({
   onMondayId,
   className,
   bare,
+  hideHeading,
 }: {
   title: string
   description: string
@@ -1319,6 +1367,8 @@ function ListEditor({
   className?: string
   /** Render without the Card wrapper (a compact heading instead) — for combined cards. */
   bare?: boolean
+  /** In bare mode, drop the title line (the tab already labels it) — description only. */
+  hideHeading?: boolean
 }) {
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
@@ -1373,7 +1423,7 @@ function ListEditor({
     <Wrapper className={cx(!bare && 'bg-subtle', className)}>
       {bare ? (
         <div className="mb-2">
-          <h4 className="text-sm font-semibold text-ink">{title}</h4>
+          {!hideHeading && <h4 className="text-sm font-semibold text-ink">{title}</h4>}
           <p className="text-xs text-muted">{description}</p>
         </div>
       ) : (
@@ -1401,7 +1451,7 @@ function ListEditor({
           </span>
         </div>
       )}
-      <ul className="space-y-1.5">
+      <ul className="max-h-[21rem] space-y-1.5 overflow-y-auto">
         {sortedItems.map((item) => {
           const count = usage(item)
           const isLocked = !!locked?.includes(item)

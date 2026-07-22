@@ -126,6 +126,10 @@
   .task-form .label.is-filled::before {
     @apply bg-accent-green;
   }
+  /* Optional fields (e.g. Note) get a neutral grey dot, not the required-red one. */
+  .task-form .label.is-optional::before {
+    @apply bg-faint;
+  }
 
   /* Function tab name — a fixed narrow slot so every tab stays compact and the
      row never wraps. Long names are clipped with a soft right fade (hinting

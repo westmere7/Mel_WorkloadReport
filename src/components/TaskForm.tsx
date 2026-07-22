@@ -403,13 +403,14 @@ function CodeNameField({
   setName,
   mondayEnabled,
   mondayBoardIds,
+  resolvePeople,
   onPick,
 }: {
   code: string
   name: string
   parsed: ParsedCode
   codeError: string | null
-  /** True when name/code were just auto-filled from monday (green dot). */
+  /** Live status: true when the task has a name → green label dot (else red). */
   filledIdentity: boolean
   /** Lift a raw "[code] name" string into code + name (the form's onNameChange). */
   applyIdentity: (raw: string) => void
@@ -418,6 +419,8 @@ function CodeNameField({
   mondayEnabled: boolean
   /** monday board ids to search (from Settings). */
   mondayBoardIds: string[]
+  /** Resolve a hit's monday assignees → app people names (for the result row). */
+  resolvePeople: (hit: MondayHit) => string[]
   onPick: (hit: MondayHit) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -581,29 +584,32 @@ function CodeNameField({
               <p className="px-2 py-3 text-xs text-muted">No matches on the board for “{query}”.</p>
             ) : hits ? (
               <ul className="flex max-h-[300px] flex-col gap-0.5 overflow-y-auto">
-                {hits.map((h) => (
-                  <li key={h.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onPick(h)
-                        setOpen(false)
-                      }}
-                      className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-card"
-                    >
-                      <span className="line-clamp-1 text-sm font-semibold text-ink">{h.name || 'Untitled item'}</span>
-                      <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
-                        {h.code ? (
-                          <span className="font-mono text-ink">{h.code}</span>
-                        ) : (
-                          <span className="text-faint">no code</span>
-                        )}
-                        <span>· {fmtMondayRange(h.startDate, h.endDate)}</span>
-                        {h.size && <span className="rounded bg-card px-1.5 py-px font-semibold text-ink ring-1 ring-line">{h.size}</span>}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                {hits.map((h) => {
+                  const ppl = resolvePeople(h)
+                  return (
+                    <li key={h.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onPick(h)
+                          setOpen(false)
+                        }}
+                        className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left transition hover:bg-card"
+                      >
+                        <span className="line-clamp-1 text-sm font-semibold text-ink">{h.name || 'Untitled item'}</span>
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
+                          {/* code only when present (no "no code" placeholder) */}
+                          {h.code && <span className="font-mono text-ink">{h.code}</span>}
+                          <span>{fmtMondayRange(h.startDate, h.endDate)}</span>
+                          {ppl.length > 0 && <span className="text-ink">{ppl.join(', ')}</span>}
+                          {h.size && (
+                            <span className="rounded bg-card px-1.5 py-px font-semibold text-ink ring-1 ring-line">{h.size}</span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
               </ul>
             ) : null}
           </div>
@@ -681,8 +687,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const campaignOptions = withFallback(settings.campaigns)
   const peopleOptions = withFallback(settings.people)
 
-  const [squad, setSquad] = useState<Squad>(initial?.squad ?? settings.squads[0] ?? 'Others')
-  const [campaign, setCampaign] = useState<string>(initial?.campaign ?? settings.campaigns[0] ?? '')
+  // New tasks start UNSELECTED (empty) so the placeholder shows and the red dot is
+  // meaningful — the dot turns green once a value is chosen (live status).
+  const [squad, setSquad] = useState<Squad>(initial?.squad ?? '')
+  const [campaign, setCampaign] = useState<string>(initial?.campaign ?? '')
   const [code, setCode] = useState(initial?.code ?? '')
   const [name, setName] = useState(initial?.name ?? '')
   const [people, setPeople] = useState<string[]>(initial?.people ?? [])
@@ -805,17 +813,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const [half, setHalf] = useState<Half>(initial?.half ?? 'H1')
   const [halfTouched, setHalfTouched] = useState(Boolean(initial))
   const [size, setSize] = useState<Size>(initial?.size ?? 'M')
-  // Which fields were just auto-filled from monday.com (drives the green field dots).
-  // Keys: 'identity' (code+name), 'startDate', 'endDate', 'size'. Cleared when the
-  // user edits that field, so a green dot only means "as auto-filled, untouched".
-  const [filled, setFilled] = useState<Set<string>>(() => new Set())
-  const clearFilled = (key: string) =>
-    setFilled((prev) => {
-      if (!prev.has(key)) return prev
-      const next = new Set(prev)
-      next.delete(key)
-      return next
-    })
   const [note, setNote] = useState(initial?.note ?? '')
   const [images, setImages] = useState<TaskImage[]>(initial?.images ?? [])
   const [uploading, setUploading] = useState(0)
@@ -986,7 +983,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   // Pasting "[26.0608.A] ISC Roadshow 2026…" pulls the code out and fills it + the date.
   // Also the single-field parser: a leading "[code]" lifts into the code, the rest is the name.
   const onNameChange = (value: string) => {
-    clearFilled('identity')
     const parts = splitPastedName(value)
     if (parts.code !== undefined) {
       setCode(parts.code)
@@ -998,32 +994,16 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   }
 
   const onStartDateChange = (value: string) => {
-    clearFilled('startDate')
     setStartDate(value)
     setStartDateTouched(true)
     if (!halfTouched) setHalf(deriveHalf(value || null))
   }
 
   const onEndDateChange = (value: string) => {
-    clearFilled('endDate')
     setEndDate(value)
     setEndDateTouched(true)
   }
 
-  // Snap the end date back to the size-based estimate and re-enable auto-fill.
-  const applyEstimatedEnd = () => {
-    if (!suggestedEnd) return
-    setEndDate(suggestedEnd)
-    setEndDateTouched(false)
-  }
-
-  const applyDateFromCode = () => {
-    if (parsed.valid && parsed.iso) {
-      setStartDate(parsed.iso)
-      setStartDateTouched(true)
-      if (!halfTouched) setHalf(deriveHalf(parsed.iso))
-    }
-  }
 
   // Prefill from a monday.com board item — only task-level fields (name, code,
   // timeline → dates, size, people); it never touches the per-function tabs, so
@@ -1048,16 +1028,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
     // Map monday assignees → app people via the Settings monday-id map.
     const resolvedPeople = resolvePeopleFromMonday(hit.mondayPeopleIds, settings.peopleMondayIds, settings.people)
     if (resolvedPeople.length) setPeople(resolvedPeople)
-    // Green-dot the fields this fill actually populated.
-    setFilled(
-      new Set([
-        'identity',
-        ...(hit.startDate ? ['startDate'] : []),
-        ...(hit.endDate ? ['endDate'] : []),
-        ...(hit.size ? ['size'] : []),
-        ...(resolvedPeople.length ? ['people'] : []),
-      ]),
-    )
+    // The green dots follow live field values, so no extra bookkeeping is needed —
+    // the fields this fill populated now have values and go green on their own.
   }
 
   // The code is optional; if given, it must still be valid & unique. Everything
@@ -1091,8 +1063,14 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
     return errs
   }
 
-  // Recomputed each render so the submit button greys out until the form is valid.
+  // The submit button LOOKS greyed while invalid (a hint) but stays clickable —
+  // clicking runs validate() and surfaces what's missing (scrolled into view)
+  // instead of a silently-disabled button. `errorsRef` is that summary up top.
   const canSubmit = validate().length === 0
+  const errorsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (errors.length) errorsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [errors])
 
   // When editing, keep "Save changes" disabled until a field actually differs
   // from the loaded task. (New tasks have no baseline, so they're always "dirty".)
@@ -1271,7 +1249,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       ) : (
       <>
       {errors.length > 0 && (
-        <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
+        <div
+          ref={errorsRef}
+          className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300"
+        >
+          <p className="mb-1 font-semibold">Please fix the following before saving:</p>
           <ul className="list-disc space-y-0.5 pl-4">
             {errors.map((e) => (
               <li key={e}>{e}</li>
@@ -1287,15 +1269,15 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
         name={name}
         parsed={parsed}
         codeError={codeError}
-        filledIdentity={filled.has('identity')}
+        filledIdentity={!!name.trim()}
         applyIdentity={onNameChange}
-        setCode={(v) => {
-          setCode(v)
-          clearFilled('identity')
-        }}
+        setCode={setCode}
         setName={setName}
         mondayEnabled={mondayEnabled}
         mondayBoardIds={settings.mondayBoardIds}
+        resolvePeople={(hit) =>
+          resolvePeopleFromMonday(hit.mondayPeopleIds, settings.peopleMondayIds, settings.people)
+        }
         onPick={applyMondayHit}
       />
       {/* Duplicate code → jump straight to the task that owns it. */}
@@ -1313,8 +1295,13 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       {/* Squad, Campaign & Task size on one line */}
       <div className="grid gap-4 sm:grid-cols-[1fr_1fr_1.4fr]">
         <div>
-          <label className="label">Squad (stakeholder)</label>
-          <select className="input h-11" value={squad} onChange={(e) => setSquad(e.target.value)}>
+          <label className={cx('label', squad && 'is-filled')}>Squad (stakeholder)</label>
+          <select
+            className={cx('input h-11', !squad && 'text-muted')}
+            value={squad}
+            onChange={(e) => setSquad(e.target.value)}
+          >
+            <option value="">(select squad)</option>
             {!squadOptions.includes(squad) && squad && <option value={squad}>{squad}</option>}
             {squadOptions.map((s) => (
               <option key={s} value={s}>
@@ -1327,8 +1314,13 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           )}
         </div>
         <div>
-          <label className="label">Campaign</label>
-          <select className="input h-11" value={campaign} onChange={(e) => setCampaign(e.target.value)}>
+          <label className={cx('label', campaign && 'is-filled')}>Campaign</label>
+          <select
+            className={cx('input h-11', !campaign && 'text-muted')}
+            value={campaign}
+            onChange={(e) => setCampaign(e.target.value)}
+          >
+            <option value="">(select campaign)</option>
             {!campaignOptions.includes(campaign) && campaign && <option value={campaign}>{campaign}</option>}
             {campaignOptions.map((c) => (
               <option key={c} value={c}>
@@ -1338,7 +1330,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           </select>
         </div>
         <div>
-          <label className={cx('label', filled.has('size') && 'is-filled')}>Task size</label>
+          <label className="label is-filled">Task size</label>
           <div className="grid grid-cols-5 gap-1.5">
             {SIZES.map((s) => {
               const active = size === s
@@ -1347,10 +1339,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                 <button
                   key={s}
                   type="button"
-                  onClick={() => {
-                    setSize(s)
-                    clearFilled('size')
-                  }}
+                  onClick={() => setSize(s)}
                   title={SIZE_DESCRIPTIONS[s]}
                   className={cx(
                     'rounded-lg border px-1 py-1.5 text-xs font-bold transition',
@@ -1619,20 +1608,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       {/* People + Note on one line */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className={cx('label', filled.has('people') && 'is-filled')}>Person(s) in charge</label>
+          <label className={cx('label', people.length > 0 && 'is-filled')}>Person(s) in charge</label>
           <MultiSelect
             options={peopleOptions}
             value={people}
-            onChange={(next) => {
-              clearFilled('people')
-              setPeople(next)
-            }}
+            onChange={setPeople}
             placeholder="Assign team members…"
             overflowCollapse
           />
         </div>
         <div>
-          <label className="label">Note</label>
+          <label className="label is-optional">Note</label>
           <input
             type="text"
             className="input h-11"
@@ -1650,7 +1636,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           extends to cover it — highlighted amber so the extension is obvious. */}
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
-          <label className={cx('label', filled.has('startDate') && 'is-filled')}>Start date</label>
+          <label className={cx('label', effectiveStart && 'is-filled')}>Start date</label>
           <input
             type="date"
             className={cx(
@@ -1665,15 +1651,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               <CalendarClock className="h-3.5 w-3.5" /> Extended to cover {fnRange.minFn} Team’s timeline
             </p>
           )}
-          {!startExtended && parsed.valid && parsed.iso && parsed.iso !== startDate && (
-            <button
-              type="button"
-              onClick={applyDateFromCode}
-              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-rmit-red hover:underline"
-            >
-              <CalendarClock className="h-3.5 w-3.5" /> Use date from code ({parsed.iso})
-            </button>
-          )}
           {!startExtended && !startDateTouched && parsed.valid && parsed.iso && parsed.iso === startDate && (
             <p className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent-green">
               <Sparkles className="h-3.5 w-3.5" /> Auto-set from code
@@ -1681,7 +1658,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           )}
         </div>
         <div>
-          <label className={cx('label', filled.has('endDate') && 'is-filled')}>End date</label>
+          <label className={cx('label', effectiveEnd && 'is-filled')}>End date</label>
           <input
             type="date"
             className={cx(
@@ -1701,15 +1678,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             <p className="mt-1.5 text-xs text-accent-green">
               Auto-set from {size} size ({durationLabel})
             </p>
-          )}
-          {!endExtended && suggestedEnd && endDate !== suggestedEnd && (
-            <button
-              type="button"
-              onClick={applyEstimatedEnd}
-              className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-rmit-red hover:underline"
-            >
-              <Sparkles className="h-3.5 w-3.5" /> Auto-set from {size} size ({durationLabel})
-            </button>
           )}
         </div>
         <div>
@@ -1782,7 +1750,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               Cancel
             </button>
           )}
-          <button type="submit" className="btn-primary" disabled={submitting || !canSubmit || !dirty}>
+          <button
+            type="submit"
+            className={cx('btn-primary', !canSubmit && !submitting && dirty && 'opacity-50')}
+            disabled={submitting || !dirty}
+          >
             {submitting ? 'Saving…' : submitLabel}
           </button>
         </div>
