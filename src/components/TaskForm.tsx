@@ -27,7 +27,7 @@ import { useStore } from '../data/store'
 import { MultiSelect } from './ui/MultiSelect'
 import { Modal } from './ui/Modal'
 import { ImageLightbox } from './ui/ImageLightbox'
-import { addDaysISO, cx, toMessage } from '../lib/format'
+import { addDaysISO, cx, todayISO, toMessage } from '../lib/format'
 import { compressToWebP, ACCEPTED_IMAGE_TYPES } from '../lib/image'
 import { deriveHalf, parseTaskCode, type ParsedCode } from '../lib/taskCode'
 import { isMondayLookupEnabled, resolvePeopleFromMonday, searchMonday, type MondayHit } from '../lib/monday'
@@ -917,6 +917,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const startExtended = effectiveStart !== startDate
   const endExtended = effectiveEnd !== endDate
 
+  // Half of year follows the END date (falls back to today's half when no end date
+  // yet), until the user picks H1/H2 themselves (`halfTouched`).
+  useEffect(() => {
+    if (!halfTouched) setHalf(deriveHalf(effectiveEnd || todayISO()))
+  }, [effectiveEnd, halfTouched])
+
   // "Created" metadata shown beside the delete button when editing an existing task.
   const createdMeta = useMemo(() => {
     if (!initial?.createdAt) return null
@@ -972,11 +978,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   }
 
   // Auto-fill the start date from a valid code — unless the user has set it themselves.
+  // (Half of year follows the END date, handled by the effect below.)
   const fillDateFromCode = (codeValue: string) => {
     const p = parseTaskCode(codeValue)
     if (p.valid && p.iso && !startDateTouched) {
       setStartDate(p.iso)
-      if (!halfTouched) setHalf(deriveHalf(p.iso))
     }
   }
 
@@ -996,7 +1002,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const onStartDateChange = (value: string) => {
     setStartDate(value)
     setStartDateTouched(true)
-    if (!halfTouched) setHalf(deriveHalf(value || null))
   }
 
   const onEndDateChange = (value: string) => {
@@ -1015,7 +1020,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
     if (hit.startDate) {
       setStartDate(hit.startDate)
       setStartDateTouched(true)
-      if (!halfTouched) setHalf(deriveHalf(hit.startDate))
     } else if (hit.code) {
       // No timeline on the item — fall back to the code-derived start date.
       fillDateFromCode(hit.code)
@@ -1505,7 +1509,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               {tabStrip}
               <div className="space-y-4 rounded-xl border-2 bg-card p-4" style={{ borderColor: col.hex }}>
                 <div>
-                  <label className="label">Work type(s)</label>
+                  <label className={cx('label', d.types.length > 0 && 'is-filled')}>Work type(s)</label>
                   <div className="flex flex-wrap gap-2">
                     {tabTypes.map((t) => {
                       const active = d.types.includes(t)
@@ -1531,7 +1535,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
 
                 <div>
                   <div className="mb-2 flex items-center gap-2">
-                    <label className="label !mb-0">Assets</label>
+                    <label className={cx('label !mb-0', tabTotal > 0 && 'is-filled')}>Assets</label>
                     <span className="rounded-full border border-line bg-card px-2.5 py-0.5 text-xs font-semibold text-ink">
                       {tabTotal} total
                     </span>
@@ -1577,7 +1581,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   {d.timelineOn && (
                     <div className="mt-3 grid gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="label">Start date</label>
+                        <label className={cx('label', d.startDate && 'is-filled')}>Start date</label>
                         <input
                           type="date"
                           className="input h-11"
@@ -1586,7 +1590,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                         />
                       </div>
                       <div>
-                        <label className="label">End date</label>
+                        <label className={cx('label', d.endDate && 'is-filled')}>End date</label>
                         <input
                           type="date"
                           className="input h-11"
@@ -1681,7 +1685,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           )}
         </div>
         <div>
-          <label className="label">Half of year</label>
+          <label className="label is-filled">Half of year</label>
           <div className="flex gap-2">
             {(['H1', 'H2'] as Half[]).map((h) => (
               <button
