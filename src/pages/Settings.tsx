@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Tag, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Archive, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Tag, Trash2, Users, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -14,6 +14,7 @@ import {
   FUNCTION_COLOR_KEYS,
   functionColor,
   sortAlpha,
+  withFallback,
   parseKeywords,
   formatDurationDays,
   DEFAULT_SIZE_DURATIONS,
@@ -1206,6 +1207,8 @@ function FunctionsCard() {
   const [editValue, setEditValue] = useState('')
   const [blockedRemove, setBlockedRemove] = useState<string | null>(null)
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
+  const [picModalFn, setPicModalFn] = useState<string | null>(null)
+  const [picSearch, setPicSearch] = useState('')
   const listRef = useScrollFade<HTMLUListElement>()
 
   const add = () => {
@@ -1222,7 +1225,7 @@ function FunctionsCard() {
       ...settings,
       functions: [
         ...functions,
-        { name: v, color, workTypes: [...settings.types], assetTypes: [...settings.assetTypes] },
+        { name: v, color, workTypes: [...settings.types], assetTypes: [...settings.assetTypes], people: [] },
       ],
     })
     setDraft('')
@@ -1257,7 +1260,7 @@ function FunctionsCard() {
     <Card className="bg-subtle">
       <CardHeader
         title="Functions"
-        subtitle="GCMC functions that record workload — each gets its own tab in the task form. Expand one to pick its colour and the types its tab offers."
+        subtitle="GCMC functions that record workload — each gets its own tab in the task form. Expand one to pick its colour, type offers, and auto-enable PICs."
       />
       <div className="mb-3 flex gap-2">
         <input
@@ -1322,10 +1325,28 @@ function FunctionsCard() {
                     </button>
                     <span className="flex shrink-0 items-center gap-1">
                       {count > 0 && (
-                        <span className="text-[11px] text-muted">
+                        <span className="mr-2 text-[11px] text-muted">
                           {count} task{count === 1 ? '' : 's'}
                         </span>
                       )}
+                      <button
+                        type="button"
+                        className={cx(
+                          'relative rounded-md p-1 transition-colors hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white',
+                          (f.people?.length ?? 0) > 0 ? 'text-rmit-navy dark:text-white' : 'text-faint',
+                        )}
+                        onClick={() => setPicModalFn(f.name)}
+                        title={
+                          (f.people?.length ?? 0) > 0
+                            ? `Auto-enable PICs (${f.people?.length} assigned): ${f.people?.join(', ')}`
+                            : 'Assign auto-enable PICs'
+                        }
+                      >
+                        <Users className="h-3.5 w-3.5" />
+                        {(f.people?.length ?? 0) > 0 && (
+                          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-accent-green" />
+                        )}
+                      </button>
                       <button
                         className="rounded-md p-1 text-faint hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white"
                         onClick={() => {
@@ -1397,6 +1418,99 @@ function FunctionsCard() {
         })}
         {functions.length === 0 && <li className="py-2 text-sm text-muted">No functions yet — add one above.</li>}
       </ul>
+
+      {/* Pop-up modal to pick assigned PICs from the actual live people list */}
+      {picModalFn && (() => {
+        const targetFn = functions.find((f) => f.name === picModalFn)
+        if (!targetFn) return null
+        const currentPics = targetFn.people ?? []
+        const allPeople = withFallback(settings.people)
+        const filteredPeople = allPeople.filter((p: string) => p.toLowerCase().includes(picSearch.toLowerCase().trim()))
+
+        const togglePerson = (person: string) => {
+          const next = currentPics.includes(person)
+            ? currentPics.filter((p: string) => p !== person)
+            : [...currentPics, person]
+          patch(targetFn.name, { people: next })
+        }
+
+        const selectAll = () => patch(targetFn.name, { people: [...allPeople] })
+        const clearAll = () => patch(targetFn.name, { people: [] })
+
+        return (
+          <Modal
+            open={true}
+            onClose={() => {
+              setPicModalFn(null)
+              setPicSearch('')
+            }}
+            title={`Auto-enable PICs — ${targetFn.name}`}
+            footer={
+              <button
+                className="btn-navy"
+                type="button"
+                onClick={() => {
+                  setPicModalFn(null)
+                  setPicSearch('')
+                }}
+              >
+                Done
+              </button>
+            }
+          >
+            <div className="space-y-4">
+              <p className="text-xs leading-relaxed text-muted">
+                When any of these selected people are chosen in the task form's <strong className="text-ink">Person(s) in charge</strong> field, the <strong className="text-ink">{targetFn.name}</strong> function tab will turn on automatically.
+              </p>
+
+              <div className="flex items-center justify-between gap-2">
+                <input
+                  className="input h-9 flex-1 text-xs"
+                  placeholder="Search live PIC list…"
+                  value={picSearch}
+                  onChange={(e) => setPicSearch(e.target.value)}
+                  autoFocus
+                />
+                <div className="flex shrink-0 items-center gap-1.5 text-xs font-semibold">
+                  <button type="button" onClick={selectAll} className="text-rmit-navy hover:underline dark:text-brand-300">
+                    Select all
+                  </button>
+                  <span className="text-faint">|</span>
+                  <button type="button" onClick={clearAll} className="text-faint hover:underline hover:text-rmit-red">
+                    Clear all
+                  </button>
+                </div>
+              </div>
+
+              <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-line bg-card/50 p-2">
+                {filteredPeople.map((person: string) => {
+                  const checked = currentPics.includes(person)
+                  return (
+                    <label
+                      key={person}
+                      className={cx(
+                        'flex cursor-pointer items-center justify-between rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                        checked ? 'bg-navy-50 text-rmit-navy dark:bg-white/10 dark:text-white font-semibold' : 'text-ink hover:bg-subtle',
+                      )}
+                    >
+                      <span>{person}</span>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => togglePerson(person)}
+                        className="h-4 w-4 rounded border-line text-rmit-navy focus:ring-rmit-navy"
+                      />
+                    </label>
+                  )
+                })}
+                {filteredPeople.length === 0 && (
+                  <p className="py-4 text-center text-xs text-faint">No matching people found in the live list.</p>
+                )}
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {/* Removal blocked: per-function workload has no fallback to absorb it. */}
       <Modal

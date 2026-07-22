@@ -151,7 +151,7 @@ export function normalizeFunctions(
   masterAssetTypes: string[] = DEFAULT_ASSET_TYPES,
 ): FunctionConfig[] {
   const cloneDefaults = () =>
-    DEFAULT_FUNCTIONS.map((f) => ({ ...f, workTypes: [...f.workTypes], assetTypes: [...f.assetTypes] }))
+    DEFAULT_FUNCTIONS.map((f) => ({ ...f, workTypes: [...f.workTypes], assetTypes: [...f.assetTypes], people: f.people ? [...f.people] : [] }))
   if (!Array.isArray(raw)) return cloneDefaults()
   const strings = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : []
@@ -178,6 +178,7 @@ export function normalizeFunctions(
       color: typeof rec.color === 'string' ? rec.color : 'plum',
       workTypes: resolve(rec, 'workTypes', 'hiddenWorkTypes', masterWorkTypes),
       assetTypes: resolve(rec, 'assetTypes', 'hiddenAssetTypes', masterAssetTypes),
+      people: Array.isArray(rec.people) ? rec.people.filter((p): p is string => typeof p === 'string') : [],
     })
   }
   return out.length ? out : cloneDefaults()

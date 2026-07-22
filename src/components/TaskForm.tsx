@@ -941,6 +941,52 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   // Tab whose disable needs confirming because the save would drop its values.
   const [pendingDisable, setPendingDisable] = useState<string | null>(null)
 
+  // Auto-enable function tab(s) when assigned PICs match a function's configured people list
+  useEffect(() => {
+    if (!people || people.length === 0) return
+    let firstMatchedFn: string | null = null
+
+    for (const fnConfig of settings.functions) {
+      if (!fnConfig.people || fnConfig.people.length === 0) continue
+      if (fnConfig.people.some((p) => people.includes(p))) {
+        if (!firstMatchedFn) firstMatchedFn = fnConfig.name
+      }
+    }
+
+    setFnDrafts((prev) => {
+      let changed = false
+      const next = { ...prev }
+      for (const fnConfig of settings.functions) {
+        if (!fnConfig.people || fnConfig.people.length === 0) continue
+        const hasMatch = fnConfig.people.some((p) => people.includes(p))
+        if (hasMatch) {
+          const current = next[fnConfig.name] ?? emptyDraft()
+          if (!current.enabled) {
+            next[fnConfig.name] = { ...current, enabled: true }
+            changed = true
+          }
+        }
+      }
+      return changed ? next : prev
+    })
+
+    if (firstMatchedFn) {
+      setActiveFn(firstMatchedFn)
+    }
+  }, [people, settings.functions])
+
+  // Guarantee that activeFn always points to an enabled function whenever at least one function is on
+  useEffect(() => {
+    const activeCfg = functionConfigs.find((f) => f.name === activeFn)
+    const activeDraft = activeCfg ? fnDrafts[activeCfg.name] : null
+    if (!activeDraft?.enabled) {
+      const firstEnabled = functionConfigs.find((f) => fnDrafts[f.name]?.enabled)?.name
+      if (firstEnabled) {
+        setActiveFn(firstEnabled)
+      }
+    }
+  }, [fnDrafts, activeFn, functionConfigs])
+
   // Tabs share the row (flex), so each name slot's width is dynamic. Measure how
   // far a clipped name must scroll to reveal its tail and stash it as a CSS var
   // the hover rule uses (`--marquee-shift`). Re-measured on any layout change.

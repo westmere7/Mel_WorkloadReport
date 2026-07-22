@@ -122,6 +122,8 @@ export interface FunctionConfig {
   workTypes: string[]
   /** Asset types this function offers on its tab (same inclusion semantics). */
   assetTypes: string[]
+  /** Associated people (PICs). When selected in task form, auto-enables this function tab. */
+  people?: string[]
 }
 
 /** User-editable lists + app preferences. */
