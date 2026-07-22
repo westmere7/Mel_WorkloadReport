@@ -113,6 +113,19 @@
   animation: dotFade 1.2s infinite 0.4s;
 }
 
+@keyframes lightSweep {
+  0% {
+    transform: translateX(-150%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(250%) skewX(-20deg);
+  }
+}
+
+.animate-light-sweep {
+  animation: lightSweep 1.8s ease-in-out infinite;
+}
+
 @layer components {
   /* Flat panels — distinguished from the page purely by their surface colour,
      no shadow or outline (kept intentionally minimal in both themes). */

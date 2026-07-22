@@ -118,7 +118,7 @@ export async function searchMonday(query: string, boardIds?: string[]): Promise<
 
   const activeBoardIds = boardIds?.filter(Boolean) ?? []
 
-  return (data.items ?? []).map((it) => {
+  const parsedHits = (data.items ?? []).map((it) => {
     const { code, name } = splitCodeFromName(it.name ?? '', it.code)
     const idStr = String(it.id)
     const bid = it.boardId || (activeBoardIds.length > 0 ? activeBoardIds[0] : null)
@@ -134,6 +134,25 @@ export async function searchMonday(query: string, boardIds?: string[]): Promise<
       mondayPeopleIds: (it.mondayPeopleIds ?? []).map(String),
       url,
     }
+  })
+
+  // Strict relevance filter: discard hits that do not contain any of the query words/code
+  const queryLower = q.toLowerCase()
+  const queryWords = queryLower
+    .replace(/[^\w\s.-]/g, '')
+    .split(/\s+/)
+    .filter((w) => w.length > 1 && !['the', 'be', 'in', 'is', 'a', 'an', 'and', 'or', 'to', 'for', 'of', 'on', 'it', 'not'].includes(w))
+
+  if (queryWords.length === 0) {
+    return parsedHits.filter((hit) => {
+      const fullText = `${hit.code} ${hit.name}`.toLowerCase()
+      return fullText.includes(queryLower)
+    })
+  }
+
+  return parsedHits.filter((hit) => {
+    const fullText = `${hit.code} ${hit.name}`.toLowerCase()
+    return queryWords.some((word) => fullText.includes(word))
   })
 }
 

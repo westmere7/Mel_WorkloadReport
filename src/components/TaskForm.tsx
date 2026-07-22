@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   CalendarClock,
-  Check,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -607,8 +606,9 @@ function CodeNameField({
     })
   }
 
-  const autoFilledQueryRef = useRef<string | null>(null)
   const query = [name.trim(), code.trim()].filter(Boolean).join(' ')
+  const initialQueryRef = useRef<string>(query.toLowerCase().trim())
+  const autoFilledQueryRef = useRef<string | null>(initialQueryRef.current || null)
 
   const doAutoFill = (hit: MondayHit) => {
     autoFilledQueryRef.current = query.toLowerCase().trim()
@@ -649,8 +649,8 @@ function CodeNameField({
       autoFilledQueryRef.current = null
     }
 
-    // Stop searching if disabled, query is too short, or auto-fill was ALREADY performed for this exact text
-    if (!mondayEnabled || cleanQuery.length < 3 || autoFilledQueryRef.current === cleanQuery) {
+    // Stop searching if disabled, code has error (e.g. duplicate code), query is too short, or auto-fill was ALREADY performed
+    if (!mondayEnabled || codeError || cleanQuery.length < 3 || autoFilledQueryRef.current === cleanQuery) {
       setPerfectMatchHit(null)
       setBgSearching(false)
       return
@@ -694,13 +694,16 @@ function CodeNameField({
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [query, mondayEnabled, mondayBoardIds, code, name, autoFillEnabled, onPick])
+  }, [query, mondayEnabled, mondayBoardIds, code, name, codeError, autoFillEnabled, onPick])
 
   const handleButtonClick = () => {
+    if (loading || bgSearching || codeError) return
     if (!query) {
       toggleAutoFill()
     } else if (perfectMatchHit) {
       doAutoFill(perfectMatchHit)
+    } else if (hits !== null) {
+      setOpen((o) => !o)
     } else {
       runSearch()
     }
@@ -830,46 +833,77 @@ function CodeNameField({
             <button
               type="button"
               onClick={handleButtonClick}
-              disabled={loading}
+              disabled={loading || bgSearching}
               title={
                 !query
                   ? `Auto-fill is ${autoFillEnabled ? 'ON' : 'OFF'} — click to toggle`
-                  : perfectMatchHit
-                    ? '1 perfect match found! Click to auto-fill'
-                    : bgSearching
-                      ? 'Searching monday.com in background…'
-                      : 'Search monday.com for this task'
+                  : bgSearching
+                    ? 'Searching monday.com in background…'
+                    : perfectMatchHit
+                      ? '1 perfect match found! Click to auto-fill'
+                      : hits && hits.length > 1
+                        ? `Found ${hits.length} matching tasks — click to choose`
+                        : hits && hits.length === 0
+                          ? 'No matching tasks found on monday.com'
+                          : 'Search monday.com for this task'
               }
               className={cx(
                 'relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all',
                 !query
                   ? 'border border-line bg-card text-ink hover:bg-subtle'
-                  : perfectMatchHit
-                    ? 'border-2 border-accent-green bg-accent-green/10 text-accent-green dark:bg-accent-green/20 shadow-sm'
-                    : bgSearching
-                      ? 'border border-line bg-subtle text-ink'
-                      : 'border border-line bg-card text-ink hover:bg-subtle',
+                  : bgSearching
+                    ? 'border border-line bg-subtle text-ink dark:text-white cursor-wait opacity-80'
+                    : perfectMatchHit
+                      ? 'border-2 border-accent-green bg-accent-green/10 text-accent-green dark:bg-accent-green/20 shadow-sm'
+                      : hits && hits.length > 1
+                        ? 'border border-amber-500/60 bg-amber-50 text-amber-900 dark:border-amber-400/60 dark:bg-amber-500/20 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/30 font-semibold'
+                        : hits && hits.length === 0
+                          ? 'border border-rmit-red/30 bg-rmit-red/10 text-rmit-red dark:border-rmit-red/40 dark:bg-rmit-red/20 dark:text-brand-300 opacity-80 hover:opacity-100'
+                          : 'border border-line bg-card text-ink hover:bg-subtle',
               )}
             >
+              {/* Light beam sweeping through the button body when searching */}
+              {query && bgSearching && (
+                <span className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
+                  <span className="animate-light-sweep absolute inset-y-0 -left-1/2 w-16 bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/30" />
+                </span>
+              )}
 
               {loading ? (
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
               ) : (
-                <img src="/monday.svg" alt="" className="h-4 w-4 shrink-0" />
+                <img
+                  src="/monday.svg"
+                  alt=""
+                  className={cx(
+                    'h-4 w-4 shrink-0 transition-all duration-200',
+                    !query && !autoFillEnabled ? 'opacity-60' : 'opacity-100',
+                  )}
+                />
               )}
 
               {!query ? (
-                <span className="flex items-center gap-1.5">
-                  <span>auto-fill</span>
+                <span
+                  className={cx(
+                    'flex items-center gap-1.5 transition-opacity duration-200',
+                    !autoFillEnabled ? 'opacity-60' : 'opacity-100',
+                  )}
+                >
+                  <span className="text-muted">auto-fill</span>
                   <span
                     className={cx(
-                      'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
-                      autoFillEnabled
-                        ? 'border-accent-green bg-accent-green text-white'
-                        : 'border-line bg-card text-transparent',
+                      'relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors',
+                      autoFillEnabled ? 'bg-rmit-navy dark:bg-navy-300' : 'bg-line',
                     )}
                   >
-                    <Check className={cx('h-3 w-3 stroke-[3]', autoFillEnabled ? 'opacity-100' : 'opacity-0')} />
+                    <span
+                      className={cx(
+                        'inline-block h-2.5 w-2.5 transform rounded-full shadow transition-transform',
+                        autoFillEnabled
+                          ? 'translate-x-3 bg-white dark:bg-navy-950'
+                          : 'translate-x-0.5 bg-card dark:bg-navy-600',
+                      )}
+                    />
                   </span>
                 </span>
               ) : bgSearching ? (
@@ -878,6 +912,10 @@ function CodeNameField({
                 </span>
               ) : perfectMatchHit ? (
                 <span>Auto-fill</span>
+              ) : hits && hits.length > 1 ? (
+                <span>Select match ({hits.length})</span>
+              ) : hits && hits.length === 0 ? (
+                <span>No match</span>
               ) : (
                 <span>auto-fill</span>
               )}
