@@ -30,6 +30,33 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.4.0',
+    date: '2026-07-22',
+    title: 'Auto-select keywords & quick edits',
+    notes: [
+      {
+        kind: 'new',
+        text: 'Squad & Campaign items can carry auto-select keywords (the tag button in Settings): when a new task’s name contains one, that squad/campaign is picked for you automatically. Your manual choice always wins.',
+      },
+      {
+        kind: 'new',
+        text: 'On a function tab you can “+ Add” a work or asset type on the spot — pick one that tab doesn’t offer yet, or type a brand-new name to create it. New types are saved to Settings automatically, no detour needed.',
+      },
+      {
+        kind: 'improved',
+        text: 'monday.com auto-fill is much faster — each board is fetched in a single request, all boards in parallel, with a short cache so repeat searches are near-instant.',
+      },
+      {
+        kind: 'improved',
+        text: 'Removing anything from a Settings list now always asks first — even items no task uses.',
+      },
+      {
+        kind: 'improved',
+        text: 'Clearing a task’s name also clears its code, a work/asset picker has a one-tap “Clear”, and long Settings lists fade at the bottom while there’s more to scroll.',
+      },
+    ],
+  },
+  {
     version: '0.3.0',
     date: '2026-07-21',
     title: 'Workload by function',
@@ -41,26 +68,6 @@ export const CHANGELOG: Release[] = [
       {
         kind: 'new',
         text: 'Settings → Functions: add, rename, colour and remove functions, and tick exactly which work / asset types each function’s tab offers. Newly added types stay off every tab until you opt a function in — renaming or removing a type updates those tabs automatically. Work types and asset types now share one “Types” card.',
-      },
-      {
-        kind: 'improved',
-        text: 'Removing anything from a Settings list now always asks first — even items no task uses.',
-      },
-      {
-        kind: 'improved',
-        text: 'monday.com auto-fill is much faster — each board is fetched in a single request, all boards in parallel, with a short cache so repeat searches are near-instant.',
-      },
-      {
-        kind: 'improved',
-        text: 'Long Settings lists fade at the bottom edge while there’s more to scroll, so it’s clear the list continues.',
-      },
-      {
-        kind: 'new',
-        text: 'On a function tab you can “+ Add” a work or asset type on the spot — pick one not offered on that tab, or type a brand-new name to create it. New types are saved to Settings automatically, no detour needed.',
-      },
-      {
-        kind: 'new',
-        text: 'Squad & Campaign items can carry auto-select keywords (the tag button in Settings): when a new task’s name contains one, that squad/campaign is picked for you. Your manual choice always wins.',
       },
       {
         kind: 'new',
