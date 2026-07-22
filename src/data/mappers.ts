@@ -20,6 +20,10 @@ export interface TaskRow {
   images: TaskImage[] | null
   /** Per-function workload slices; null for legacy rows (pre-functions). */
   function_data: FunctionData | null
+  /** Draft flag — saved with only a name; excluded from the dashboard. */
+  draft: boolean | null
+  /** User "starred" flag — a personal marker for quick filtering. */
+  starred: boolean | null
   created_at: string
   updated_at: string
   created_by: string | null
@@ -44,6 +48,8 @@ export function rowToTask(row: TaskRow): Task {
     images: Array.isArray(row.images) ? row.images : [],
     note: row.note ?? '',
     functionData: normalizeFunctionData(row.function_data),
+    draft: row.draft === true,
+    starred: row.starred === true,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by ?? null,
@@ -80,5 +86,7 @@ export function taskInputToRow(input: TaskInput): Omit<TaskRow, 'id' | 'created_
     images: input.images ?? [],
     note: input.note ?? '',
     function_data: input.functionData ?? null,
+    draft: input.draft === true,
+    starred: input.starred === true,
   }
 }

@@ -624,11 +624,13 @@ function taskToProject(t: Task): ShowcaseProject {
  * reflect the real year); only the projects section uses the selection.
  */
 export function buildShowcaseConfig(
-  tasks: Task[],
+  allTasks: Task[],
   settings: AppSettings,
   draft: ShowcaseDraft,
   createdBy: string | null,
 ): ShowcaseRecord {
+  // Draft tasks contribute nothing to derived reporting (same rule as the dashboard).
+  const tasks = allTasks.filter((t) => !t.draft)
   const yearTasks = filterBySpan(tasks, 'year', draft.year, 'H1')
   const byId = new Map(tasks.map((t) => [t.id, t]))
 

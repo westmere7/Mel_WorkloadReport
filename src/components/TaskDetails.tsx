@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarClock } from 'lucide-react'
+import { CalendarClock, Star } from 'lucide-react'
 import { Badge, toneForLabel } from './ui/Badge'
 import { ImageLightbox } from './ui/ImageLightbox'
 import { useStore } from '../data/store'
@@ -84,11 +84,22 @@ export function TaskDetails({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="font-mono text-xs text-muted">{task.code || 'No code'}</p>
-            <h3 className="mt-1 text-lg font-bold leading-snug text-ink">{task.name}</h3>
+            <h3 className="mt-1 flex items-center gap-1.5 text-lg font-bold leading-snug text-ink">
+              {task.starred && <Star className="h-3.5 w-3.5 shrink-0 fill-current text-amber-400" strokeWidth={1.5} aria-label="Starred" />}
+              {task.name}
+            </h3>
           </div>
-          <Badge tone={SIZE_TONE[task.size]} className="shrink-0">
-            {task.size}
-          </Badge>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {task.draft && (
+              <span
+                className="rounded border border-dashed border-faint px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-faint"
+                title="Draft — required fields missing; not counted in the dashboard"
+              >
+                Draft
+              </span>
+            )}
+            <Badge tone={SIZE_TONE[task.size]}>{task.size}</Badge>
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Badge tone={toneForLabel(task.squad)}>{task.squad}</Badge>

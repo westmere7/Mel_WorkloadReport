@@ -1,5 +1,5 @@
-import type { Half, Size, Squad, Task, TaskInput } from '../types'
-import { SIZES } from '../constants'
+import type { FunctionData, Half, Size, Squad, Task, TaskInput } from '../types'
+import { SIZES, normalizeFunctionData } from '../constants'
 import { deriveHalf } from './taskCode'
 
 // Required columns; every column outside NON_ASSET_HEADERS is treated as an asset type.
@@ -17,10 +17,11 @@ const CORE_HEADERS = [
   'Size',
 ]
 
-// Non-asset columns: core + optional extras (No., Note) that also aren't asset
-// types. "No." is a derived add-order index — kept out of asset detection so a
-// re-imported export doesn't turn it into a bogus asset type.
-const NON_ASSET_HEADERS = [...CORE_HEADERS, 'Note', 'No.', 'Images']
+// Non-asset columns: core + optional extras that also aren't asset types.
+// "No." is a derived add-order index; "Function data" is the JSON of the
+// per-function slices; "Draft" is the incomplete-task flag — all kept out of
+// asset detection so a re-imported export doesn't turn them into bogus assets.
+const NON_ASSET_HEADERS = [...CORE_HEADERS, 'Note', 'No.', 'Images', 'Function data', 'Draft', 'Starred']
 
 function esc(value: string | number): string {
   const s = String(value ?? '')
@@ -59,6 +60,11 @@ export function exportTasksCsv(
     'Size',
     'Note',
     'Images',
+    'Draft',
+    'Starred',
+    // JSON of the per-function slices so a backup round-trips the function
+    // structure; blank for legacy tasks. Last column to keep the rest readable.
+    'Function data',
   ]
 
   const rows = ordered.map((t) => [
@@ -77,6 +83,9 @@ export function exportTasksCsv(
     t.size,
     t.note ?? '',
     t.images?.length ?? 0,
+    t.draft ? 'yes' : '',
+    t.starred ? 'yes' : '',
+    t.functionData ? JSON.stringify(t.functionData) : '',
   ])
 
   const csv = [headers, ...rows].map((r) => r.map(esc).join(',')).join('\n')
@@ -178,6 +187,21 @@ export function parseTasksCsv(text: string): TaskInput[] {
     // Squads are user-editable, so accept any value (default blank → the "Others" fallback).
     const squad: Squad = get('Squad').trim() || 'Others'
 
+    // Per-function slices, if the export carried them. Invalid/empty/absent →
+    // `undefined` (not null), so a MERGE import can keep a matched task's existing
+    // slices when its combined types/assets are unchanged (see store.importTasks).
+    let functionData: FunctionData | undefined
+    const fdRaw = header.includes('Function data') ? get('Function data') : ''
+    if (fdRaw) {
+      try {
+        functionData = normalizeFunctionData(JSON.parse(fdRaw)) ?? undefined
+      } catch {
+        functionData = undefined
+      }
+    }
+    const draft = /^(yes|true|1)$/i.test(get('Draft'))
+    const starred = /^(yes|true|1)$/i.test(get('Starred'))
+
     return {
       squad,
       campaign: get('Campaign'),
@@ -195,6 +219,9 @@ export function parseTasksCsv(text: string): TaskInput[] {
       // Images live in Storage, not the CSV. New rows start with none; on a
       // merge import, existing tasks keep their images (see store.importTasks).
       images: [],
+      functionData,
+      draft,
+      starred,
     }
   })
 }

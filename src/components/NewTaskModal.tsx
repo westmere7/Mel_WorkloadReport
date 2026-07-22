@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import { useNavigate } from 'react-router-dom'
 import { Modal } from './ui/Modal'
 import { TaskForm } from './TaskForm'
+import { StarButton, TaskStar } from './TaskStar'
 import { useStore } from '../data/store'
 import type { Task, TaskInput } from '../types'
 
@@ -20,16 +21,23 @@ export function useNewTask(): NewTaskContextValue {
 
 export function NewTaskProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  // Star for the new task (saved with it — including when saved as a draft).
+  const [starred, setStarred] = useState(false)
   // Task opened via "edit the existing task instead" (duplicate-code handoff).
   const [editTask, setEditTask] = useState<Task | null>(null)
   const { createTask, updateTask, tasks } = useStore()
   const navigate = useNavigate()
 
+  const openNew = () => {
+    setStarred(false) // fresh star each time the dialog opens
+    setOpen(true)
+  }
+
   // A new task is the most recent, so it takes the next number at the top of the
   // list. This is just its position — it re-flows as tasks are added/removed.
   const nextNo = tasks.length + 1
 
-  const value = useMemo<NewTaskContextValue>(() => ({ openNewTask: () => setOpen(true) }), [])
+  const value = useMemo<NewTaskContextValue>(() => ({ openNewTask: openNew }), [])
 
   const handleSubmit = async (input: TaskInput) => {
     await createTask(input)
@@ -52,6 +60,7 @@ export function NewTaskProvider({ children }: { children: ReactNode }) {
             >
               No. {nextNo}
             </span>
+            <StarButton starred={starred} onToggle={() => setStarred((v) => !v)} />
           </span>
         }
         wide
@@ -59,6 +68,7 @@ export function NewTaskProvider({ children }: { children: ReactNode }) {
       >
         <TaskForm
           submitLabel="Register task"
+          starred={starred}
           onSubmit={handleSubmit}
           onCancel={() => setOpen(false)}
           onOpenExisting={(t) => {
@@ -72,7 +82,12 @@ export function NewTaskProvider({ children }: { children: ReactNode }) {
       <Modal
         open={editTask !== null}
         onClose={() => setEditTask(null)}
-        title="Edit task"
+        title={
+          <span className="flex items-center gap-2">
+            Edit task
+            {editTask && <TaskStar id={editTask.id} />}
+          </span>
+        }
         wide
         closeOnBackdrop={false}
       >

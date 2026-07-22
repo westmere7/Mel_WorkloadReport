@@ -1102,7 +1102,9 @@ function BoardNameInput({ value, onCommit }: { value: string; onCommit: (v: stri
   }
   return (
     <input
-      className="input h-7 min-w-0 flex-1 px-2 py-0 text-sm"
+      // Borderless so it reads as part of the row (no box-in-a-box); a subtle
+      // hover/focus tint hints it's editable.
+      className="h-7 min-w-0 flex-1 rounded-md border-0 bg-transparent px-1.5 text-sm font-medium text-ink outline-none transition placeholder:font-normal placeholder:text-faint hover:bg-subtle/60 focus:bg-subtle"
       placeholder="Name this board (optional)"
       value={v}
       onChange={(e) => setV(e.target.value)}

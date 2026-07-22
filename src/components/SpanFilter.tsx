@@ -11,6 +11,7 @@ export function SpanFilter({
   onMode,
   onYear,
   onHalf,
+  hideHalf = false,
 }: {
   mode: SpanMode
   year: number
@@ -19,17 +20,23 @@ export function SpanFilter({
   onMode: (m: SpanMode) => void
   onYear: (y: number) => void
   onHalf: (h: Half) => void
+  /** Hide the "By half" segment + H1/H2 toggle (e.g. the task list). */
+  hideHalf?: boolean
 }) {
+  const modes: [SpanMode, string][] = hideHalf
+    ? [
+        ['total', 'Total'],
+        ['year', 'By year'],
+      ]
+    : [
+        ['total', 'Total'],
+        ['year', 'By year'],
+        ['half', 'By half'],
+      ]
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-0.5 rounded-lg bg-card p-1 shadow-soft">
-        {(
-          [
-            ['total', 'Total'],
-            ['year', 'By year'],
-            ['half', 'By half'],
-          ] as [SpanMode, string][]
-        ).map(([m, label]) => (
+        {modes.map(([m, label]) => (
           <button
             key={m}
             type="button"

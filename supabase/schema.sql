@@ -55,6 +55,17 @@ alter table public.tasks
 alter table public.tasks
   add column if not exists function_data jsonb;
 
+-- Draft flag (idempotent). A draft was saved with only a name — required fields
+-- still missing. Shown faded in the task list; contributes NOTHING to the
+-- dashboard. Cleared automatically when the task is completed and re-saved.
+alter table public.tasks
+  add column if not exists draft boolean not null default false;
+
+-- Starred flag (idempotent). A personal quick-filter marker; no effect on the
+-- dashboard or reporting.
+alter table public.tasks
+  add column if not exists starred boolean not null default false;
+
 create index if not exists tasks_created_at_idx on public.tasks (created_at desc);
 create index if not exists tasks_squad_idx      on public.tasks (squad);
 create index if not exists tasks_campaign_idx   on public.tasks (campaign);

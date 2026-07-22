@@ -44,6 +44,12 @@ interface TaskFormProps {
   onDelete?: () => void
   /** New-task flow: jump to the task that already uses the entered code. */
   onOpenExisting?: (task: Task) => void
+  /**
+   * Starred value for the NEW-task flow (controlled by the modal-header star).
+   * When editing, leave undefined — the form reads the live value from the store
+   * so the header's immediate toggle isn't clobbered on save.
+   */
+  starred?: boolean
 }
 
 function sumBreakdown(b: AssetBreakdown): number {
@@ -834,7 +840,7 @@ function Section({
   )
 }
 
-export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, onOpenExisting }: TaskFormProps) {
+export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, onOpenExisting, starred: starredProp }: TaskFormProps) {
   const { settings, tasks, supportsImages, uploadImage, deleteImage, saveSettings } = useStore()
 
   // Editable lists always include the reserved "Others" fallback as an option.
@@ -854,6 +860,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const [code, setCode] = useState(initial?.code ?? '')
   const [name, setName] = useState(initial?.name ?? '')
   const [people, setPeople] = useState<string[]>(initial?.people ?? [])
+  // Starred value written on save. New tasks: the controlled `starredProp` from
+  // the modal header. Editing: the LIVE store value (the header star persists on
+  // click, so this just prevents Save from clobbering it).
+  const liveStarred = initial
+    ? (tasks.find((t) => t.id === initial.id)?.starred ?? initial.starred ?? false)
+    : (starredProp ?? false)
 
   // Auto-select squad/campaign from the task name via the keyword maps set in
   // Settings — until the user picks one by hand (no match → leave as-is).
@@ -994,6 +1006,9 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const [lightbox, setLightbox] = useState<string | null>(null) // enlarged image URL
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
+  // True once the user has clicked the (greyed) register button and seen the
+  // validation errors — only THEN do we offer "Save as draft".
+  const [attempted, setAttempted] = useState(false)
 
   // Image bookkeeping for orphan cleanup. `sessionIds` = everything uploaded in
   // this form session; `initialIds` = what the task already had. Storage deletes
@@ -1096,15 +1111,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
     if (!halfTouched) setHalf(deriveHalf(effectiveEnd || todayISO()))
   }, [effectiveEnd, halfTouched])
 
-  // "Created" metadata shown beside the delete button when editing an existing task.
-  const createdMeta = useMemo(() => {
-    if (!initial?.createdAt) return null
-    const d = new Date(initial.createdAt)
-    if (Number.isNaN(d.getTime())) return null
-    const date = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-    const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    return `${date}, ${time}`
-  }, [initial])
 
   // End date estimated from start date + the (configurable) size duration.
   const suggestedEnd = useMemo(
@@ -1244,6 +1250,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   // clicking runs validate() and surfaces what's missing (scrolled into view)
   // instead of a silently-disabled button. `errorsRef` is that summary up top.
   const canSubmit = validate().length === 0
+  // Draft save: offered ONLY after the user has tried to register and seen the
+  // errors (`attempted`). A NAME is the one hard requirement (a code alone doesn't
+  // count), and a broken/duplicate code still blocks — codes must stay valid. While
+  // draftable the button flips to "Save as draft"; completing everything flips back.
+  const canDraft = attempted && !canSubmit && name.trim().length > 0 && !codeError
   const errorsRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (errors.length) errorsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
@@ -1297,8 +1308,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const errs = validate()
-    setErrors(errs)
-    if (errs.length) return
+    // Incomplete but named (and the code, if any, is clean) → save as a DRAFT:
+    // lands in the task list (faded) but contributes nothing to the dashboard.
+    // `canDraft` is only true AFTER a first failed attempt, so the very first
+    // click on an incomplete form just reveals the errors (never a silent draft).
+    const asDraft = errs.length > 0 && canDraft
+    if (errs.length && !asDraft) {
+      setAttempted(true) // reveal errors + unlock "Save as draft" for the next click
+      setErrors(errs)
+      return
+    }
+    setErrors([])
     setSubmitting(true)
     // Claim cleanup for this save up-front, so if the modal closes during/after
     // submit the unmount handler won't purge images we're about to keep. Released
@@ -1323,6 +1343,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
         note: note.trim(),
         images,
         functionData: draftsToFunctionData(fnDrafts),
+        // Completing a draft and saving normally clears the flag automatically.
+        draft: asDraft,
+        // Preserve the live starred value (toggled from the header, not this form).
+        starred: liveStarred,
       })
       reconcileSaved(new Set(images.map((i) => i.id)))
     } catch (err) {
@@ -1440,7 +1464,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       )}
 
       <Section first>
-      {/* Code + Name — the task's identity, in one combined field */}
+      {/* Code + Name — the task's identity, in one combined field. (The star
+          lives in the modal header, toggled live — see TaskStar.) */}
       <CodeNameField
         code={code}
         name={name}
@@ -1962,17 +1987,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               <Trash2 className="h-4 w-4" /> Remove task
             </button>
           )}
-          {initial && (
-            <div className="flex flex-col leading-tight text-[11px] text-muted">
-              <span>Created {createdMeta ?? '—'}</span>
-              <span
-                className="text-faint"
-                title={initial.createdBy ? `Created by ${initial.createdBy}` : 'Created before creator tracking was added'}
-              >
-                by {initial.createdBy || '—'}
-              </span>
-            </div>
-          )}
         </div>
         <div className="flex gap-2">
           {onCancel && (
@@ -1982,10 +1996,18 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           )}
           <button
             type="submit"
-            className={cx('btn-primary', !canSubmit && !submitting && dirty && 'opacity-50')}
+            className={cx(
+              // Draft-save gets a neutral treatment so it reads as the "incomplete"
+              // path, distinct from the normal red register/save.
+              canDraft
+                ? 'btn bg-subtle text-ink hover:bg-line focus:ring-2 focus:ring-line'
+                : 'btn-primary',
+              !canSubmit && !canDraft && !submitting && dirty && 'opacity-50',
+            )}
             disabled={submitting || !dirty}
+            title={canDraft ? 'Required fields are still missing — saves as a draft (kept out of the dashboard)' : undefined}
           >
-            {submitting ? 'Saving…' : submitLabel}
+            {submitting ? 'Saving…' : canDraft ? 'Save as draft' : submitLabel}
           </button>
         </div>
       </div>

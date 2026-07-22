@@ -43,6 +43,8 @@ interface StoreValue {
   refresh: () => Promise<void>
   createTask: (input: TaskInput) => Promise<Task>
   updateTask: (id: string, input: TaskInput) => Promise<Task>
+  /** Flip a task's starred flag, persisted immediately (independent of the edit form). */
+  toggleStar: (id: string) => Promise<void>
   deleteTask: (id: string) => Promise<void>
   deleteAllTasks: () => Promise<void>
   /** Bulk import from a parsed CSV: 'replace' wipes first, 'merge' adds new & updates matching codes. */
@@ -180,6 +182,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return task
     },
     [repo],
+  )
+
+  // Toggle starred from the task's CURRENT stored values (not any open edit form),
+  // so it persists immediately without touching in-progress edits.
+  const toggleStar = useCallback(
+    async (id: string) => {
+      const t = tasks.find((x) => x.id === id)
+      if (!t) return
+      const { id: _id, createdAt: _c, updatedAt: _u, createdBy: _b, ...input } = t
+      const saved = await repo.updateTask(id, { ...input, starred: !t.starred })
+      setTasks((prev) => prev.map((x) => (x.id === id ? saved : x)))
+    },
+    [repo, tasks],
   )
 
   const deleteTask = useCallback(
@@ -547,6 +562,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refresh,
       createTask,
       updateTask,
+      toggleStar,
       deleteTask,
       deleteAllTasks,
       importTasks,
@@ -584,6 +600,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refresh,
       createTask,
       updateTask,
+      toggleStar,
       deleteTask,
       deleteAllTasks,
       importTasks,

@@ -86,6 +86,14 @@ export interface Task {
    * the combined roll-up across functions.
    */
   functionData?: FunctionData | null
+  /**
+   * Draft = saved with only a name (required fields still missing). Shows faded
+   * in the task list and contributes NOTHING to the dashboard (not even task
+   * count). Cleared automatically when the task is completed and re-saved.
+   */
+  draft?: boolean
+  /** User-flagged "starred" task — a personal marker for quick filtering. */
+  starred?: boolean
   createdAt: string
   updatedAt: string
   /** Username that created the task; null for tasks created before this was tracked. */

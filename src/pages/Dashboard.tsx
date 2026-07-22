@@ -4,6 +4,7 @@ import { ArrowLeftRight } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { TaskDetails } from '../components/TaskDetails'
+import { TaskStar } from '../components/TaskStar'
 import { FunctionFilter } from '../components/FunctionFilter'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
@@ -54,7 +55,10 @@ function useToday(): string {
 }
 
 export function Dashboard() {
-  const { tasks, settings, updateTask, deleteTask } = useStore()
+  const { tasks: allTasks, settings, updateTask, deleteTask } = useStore()
+  // DRAFTS contribute nothing to the dashboard — not even the task count. Every
+  // aggregate below reads this filtered set.
+  const tasks = useMemo(() => allTasks.filter((t) => !t.draft), [allTasks])
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
   const squadColor = useSquadColor()
@@ -675,7 +679,17 @@ export function Dashboard() {
       </Modal>
 
       {/* Edit form — reached from the details view; never leaves the dashboard. */}
-      <Modal open={Boolean(editTask)} onClose={() => setEditTask(null)} title="Edit task" wide>
+      <Modal
+        open={Boolean(editTask)}
+        onClose={() => setEditTask(null)}
+        title={
+          <span className="flex items-center gap-2">
+            Edit task
+            {editTask && <TaskStar id={editTask.id} />}
+          </span>
+        }
+        wide
+      >
         {editTask && (
           <TaskForm
             initial={editTask}

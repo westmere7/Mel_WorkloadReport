@@ -217,6 +217,30 @@ function isMissingFunctionsColumn(err: unknown): boolean {
   return msg.includes('functions') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
+/** True if a Supabase error is complaining about a missing tasks `draft` column (pre-migration). */
+function isMissingDraftColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('draft') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** Drop the `draft` key from a row (used to retry when the column isn't there yet). */
+function stripDraft<T extends { draft?: unknown }>(row: T): Omit<T, 'draft'> {
+  const { draft: _drop, ...rest } = row
+  return rest
+}
+
+/** True if a Supabase error is complaining about a missing tasks `starred` column (pre-migration). */
+function isMissingStarredColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('starred') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** Drop the `starred` key from a row (used to retry when the column isn't there yet). */
+function stripStarred<T extends { starred?: unknown }>(row: T): Omit<T, 'starred'> {
+  const { starred: _drop, ...rest } = row
+  return rest
+}
+
 /**
  * Supabase-backed repository. Active automatically when VITE_SUPABASE_URL
  * and VITE_SUPABASE_ANON_KEY are set. Expects the schema in supabase/schema.sql.
@@ -272,6 +296,14 @@ export class SupabaseRepository implements Repository {
       row = stripFunctionData(row)
       ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
     }
+    if (error && isMissingDraftColumn(error)) {
+      row = stripDraft(row)
+      ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
+    }
+    if (error && isMissingStarredColumn(error)) {
+      row = stripStarred(row)
+      ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
+    }
     if (error) throw error
     return rowToTask(data)
   }
@@ -297,6 +329,14 @@ export class SupabaseRepository implements Repository {
       rows = rows.map(stripFunctionData)
       ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
     }
+    if (error && isMissingDraftColumn(error)) {
+      rows = rows.map(stripDraft)
+      ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
+    }
+    if (error && isMissingStarredColumn(error)) {
+      rows = rows.map(stripStarred)
+      ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
+    }
     if (error) throw error
     return (data ?? []).map(rowToTask)
   }
@@ -314,6 +354,14 @@ export class SupabaseRepository implements Repository {
     }
     if (error && isMissingFunctionDataColumn(error)) {
       row = stripFunctionData(row)
+      ;({ data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single())
+    }
+    if (error && isMissingDraftColumn(error)) {
+      row = stripDraft(row)
+      ;({ data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single())
+    }
+    if (error && isMissingStarredColumn(error)) {
+      row = stripStarred(row)
       ;({ data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single())
     }
     if (error) throw error
@@ -343,6 +391,14 @@ export class SupabaseRepository implements Repository {
     let { error } = await sb.from('tasks').insert(rows)
     if (error && isMissingFunctionDataColumn(error)) {
       rows = rows.map(stripFunctionData)
+      ;({ error } = await sb.from('tasks').insert(rows))
+    }
+    if (error && isMissingDraftColumn(error)) {
+      rows = rows.map(stripDraft)
+      ;({ error } = await sb.from('tasks').insert(rows))
+    }
+    if (error && isMissingStarredColumn(error)) {
+      rows = rows.map(stripStarred)
       ;({ error } = await sb.from('tasks').insert(rows))
     }
     if (error) throw error

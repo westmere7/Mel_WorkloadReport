@@ -8,8 +8,10 @@ import {
   ChevronRight,
   ChevronUp,
   DatabaseBackup,
+  FilePen,
   Images,
   Search,
+  Star,
   StickyNote,
   Trash2,
   X,
@@ -23,6 +25,7 @@ import { FunctionFilter } from '../components/FunctionFilter'
 import { ImportBackupModal } from '../components/ImportBackupModal'
 import { TaskForm } from '../components/TaskForm'
 import { TaskDetails } from '../components/TaskDetails'
+import { TaskStar } from '../components/TaskStar'
 import { useStore } from '../data/store'
 import { useAuth } from '../lib/auth'
 import { SIZES, SIZE_ORDER, SIZE_TONE, withFallback } from '../constants'
@@ -55,7 +58,12 @@ export function TaskList() {
   const [types, setTypes] = useState<string[]>(() => searchParams.getAll('type'))
   const [assetTypes, setAssetTypes] = useState<string[]>(() => searchParams.getAll('asset'))
   const [fnFilter, setFnFilter] = useState<string[]>(() => searchParams.getAll('function'))
+  const [draftsOnly, setDraftsOnly] = useState(false)
+  const [starredOnly, setStarredOnly] = useState(false)
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'no', dir: 'desc' })
+
+  const draftCount = useMemo(() => tasks.filter((t) => t.draft).length, [tasks])
+  const starredCount = useMemo(() => tasks.filter((t) => t.starred).length, [tasks])
 
   const [editing, setEditing] = useState<Task | null>(null)
   const [deleting, setDeleting] = useState<Task | null>(null)
@@ -80,9 +88,17 @@ export function TaskList() {
     // Ignore square brackets so a code pasted as "[26.0202.A] …" still matches —
     // we strip brackets from new tasks, but users paste them from other trackers.
     const strip = (s: string) => s.replace(/[[\]]/g, '')
-    const q = strip(query.trim().toLowerCase())
+    // Word-based search: split into terms and require EVERY term to appear
+    // somewhere in the code+name — so it's case-insensitive and order-agnostic
+    // ("wrap fleet" matches "Fleet Car Wrap").
+    const terms = strip(query.trim().toLowerCase()).split(/\s+/).filter(Boolean)
     const rows = filterBySpan(fnTasks, spanMode, activeYear, spanHalf).filter((t) => {
-      if (q && !strip(`${t.code} ${t.name}`.toLowerCase()).includes(q)) return false
+      if (draftsOnly && !t.draft) return false
+      if (starredOnly && !t.starred) return false
+      if (terms.length) {
+        const hay = strip(`${t.code} ${t.name}`.toLowerCase())
+        if (!terms.every((term) => hay.includes(term))) return false
+      }
       if (squads.length && !squads.includes(t.squad)) return false
       if (campaigns.length && !campaigns.includes(t.campaign)) return false
       if (sizes.length && !sizes.includes(t.size)) return false
@@ -100,7 +116,7 @@ export function TaskList() {
       const bv = b[sort.key]
       return String(av ?? '').localeCompare(String(bv ?? '')) * dir
     })
-  }, [fnTasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, sort, addedOrder])
+  }, [fnTasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, draftsOnly, starredOnly, sort, addedOrder])
 
   // Pagination — filter/sort first, then slice into pages of PAGE_SIZE.
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -113,7 +129,7 @@ export function TaskList() {
   // underlying tasks update — that would yank you off your current page).
   useEffect(() => {
     setPage(1)
-  }, [query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, fnFilter, sort])
+  }, [query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, fnFilter, draftsOnly, starredOnly, sort])
 
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
@@ -143,11 +159,15 @@ export function TaskList() {
     setTypes([])
     setAssetTypes([])
     setFnFilter([])
+    setDraftsOnly(false)
+    setStarredOnly(false)
   }
 
   const hasFilters =
     query ||
     spanMode !== 'total' ||
+    draftsOnly ||
+    starredOnly ||
     squads.length ||
     campaigns.length ||
     people.length ||
@@ -181,6 +201,23 @@ export function TaskList() {
             )}
           </div>
 
+          {/* Starred quick-filter — sits right after the search field. */}
+          <button
+            type="button"
+            onClick={() => setStarredOnly((v) => !v)}
+            aria-pressed={starredOnly}
+            title={starredOnly ? 'Showing starred only — click to show all' : 'Show only starred tasks'}
+            className={cx(
+              'inline-flex h-12 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition',
+              starredOnly
+                ? 'border-amber-400 bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300'
+                : 'border-line text-muted hover:border-faint hover:text-ink',
+            )}
+          >
+            <Star className={cx('h-3.5 w-3.5', starredOnly && 'fill-current')} strokeWidth={1.5} />
+            {starredCount > 0 && <span className="text-xs font-bold">{starredCount}</span>}
+          </button>
+
           <SpanFilter
             mode={spanMode}
             year={activeYear}
@@ -189,9 +226,36 @@ export function TaskList() {
             onMode={setSpanMode}
             onYear={setSpanYear}
             onHalf={setSpanHalf}
+            hideHalf
           />
 
           <FunctionFilter functions={settings.functions} selected={fnFilter} onChange={setFnFilter} />
+
+          <button
+            type="button"
+            onClick={() => setDraftsOnly((v) => !v)}
+            aria-pressed={draftsOnly}
+            title={draftsOnly ? 'Showing drafts only — click to show all tasks' : 'Show only draft tasks'}
+            className={cx(
+              'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition',
+              draftsOnly
+                ? 'border-rmit-red bg-brand-50 text-rmit-red dark:bg-brand-500/15 dark:text-brand-300'
+                : 'border-line text-muted hover:border-faint hover:text-ink',
+            )}
+          >
+            <FilePen className="h-4 w-4" />
+            Drafts
+            {draftCount > 0 && (
+              <span
+                className={cx(
+                  'rounded-full px-1.5 text-[10px] font-bold leading-4',
+                  draftsOnly ? 'bg-rmit-red text-white' : 'bg-subtle text-muted',
+                )}
+              >
+                {draftCount}
+              </span>
+            )}
+          </button>
 
           {canEdit && (
             <button className="btn-outline ml-auto" onClick={() => setIoOpen(true)}>
@@ -289,17 +353,29 @@ export function TaskList() {
               {paged.map((t) => (
                 <tr
                   key={t.id}
-                  className="group cursor-pointer transition-colors hover:bg-subtle"
+                  className={cx(
+                    'group cursor-pointer transition-colors hover:bg-subtle',
+                    // Drafts sit faded in the list — visible, but clearly not "real" yet.
+                    t.draft && 'opacity-45 hover:opacity-90',
+                  )}
                   onClick={() => setEditing(t)}
-                  title={canEdit ? 'Click to edit' : 'Click to view'}
+                  title={t.draft ? 'Draft — required fields missing (not counted anywhere). Click to complete.' : canEdit ? 'Click to edit' : 'Click to view'}
                 >
                   <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-faint">{taskNo(t)}</td>
                   <CodeCell code={t.code} />
                   <td className="px-3 py-3 font-medium text-ink">
                     <div className="flex max-w-[260px] items-center gap-1.5">
+                      {t.starred && (
+                        <Star className="h-3 w-3 shrink-0 fill-current text-amber-400" strokeWidth={1.5} aria-label="Starred" />
+                      )}
                       <span className="truncate" title={t.name}>
                         {t.name}
                       </span>
+                      {t.draft && (
+                        <span className="shrink-0 rounded border border-dashed border-faint px-1 text-[9px] font-bold uppercase tracking-wide text-faint">
+                          Draft
+                        </span>
+                      )}
                       {t.note ? (
                         <span title={t.note} className="shrink-0 cursor-help text-faint">
                           <StickyNote className="h-3.5 w-3.5" />
@@ -400,7 +476,12 @@ export function TaskList() {
       <Modal
         open={Boolean(editing)}
         onClose={() => setEditing(null)}
-        title={canEdit ? 'Edit task' : 'Task details'}
+        title={
+          <span className="flex items-center gap-2">
+            {canEdit ? 'Edit task' : 'Task details'}
+            {editing && canEdit && <TaskStar id={editing.id} />}
+          </span>
+        }
         wide
       >
         {editing &&
