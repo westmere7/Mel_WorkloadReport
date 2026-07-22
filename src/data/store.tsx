@@ -22,6 +22,7 @@ import {
   dataUrlToBlob,
   downloadJson,
   snapshotFilename,
+  tasksForSnapshotYears,
   type SnapshotInput,
   type SnapshotMeta,
 } from '../lib/snapshot'
@@ -275,7 +276,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const createSnapshot = useCallback(
     async (input: SnapshotInput, onProgress?: (done: number, total: number) => void) => {
-      const payload = await buildPayload(tasks, settings, input, user, onProgress)
+      // Capture only the selected years' tasks (all when the selection is empty).
+      const scoped = tasksForSnapshotYears(tasks, input.years)
+      const payload = await buildPayload(scoped, settings, input, user, onProgress)
       const meta = await repo.saveSnapshot(payload)
       setSnapshots((prev) => [meta, ...prev.filter((s) => s.id !== meta.id)])
       return meta

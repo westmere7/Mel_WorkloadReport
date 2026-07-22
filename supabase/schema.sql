@@ -258,6 +258,11 @@ create table if not exists public.snapshots (
 );
 create index if not exists snapshots_created_at_idx on public.snapshots (created_at desc);
 
+-- Years a snapshot is tagged with (empty [] = "all years"); the single `year`
+-- column above stays as the representative year for older rows + sorting.
+alter table public.snapshots
+  add column if not exists years jsonb not null default '[]'::jsonb;
+
 alter table public.snapshots enable row level security;
 drop policy if exists "anon full access to snapshots" on public.snapshots;
 create policy "anon full access to snapshots" on public.snapshots

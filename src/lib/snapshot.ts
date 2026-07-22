@@ -12,7 +12,12 @@ export const ADMIN_PASSWORD = '777776'
 /** Lightweight record shown in the Settings list (no heavy payload). */
 export interface SnapshotMeta {
   id: string
+  /** Representative year (max of `years`, or the current year for an all-years
+   *  snapshot) — kept for the filename, sort, and older snapshots. */
   year: number
+  /** Years this snapshot is tagged with. Empty = "all years". Snapshots always
+   *  capture the FULL state regardless; this is a label only. */
+  years: number[]
   name: string
   comment: string
   createdAt: string
@@ -41,9 +46,32 @@ export interface SnapshotPayload {
 }
 
 export interface SnapshotInput {
-  year: number
+  /** Years to tag the snapshot with; empty = "all years". Label only. */
+  years: number[]
   name: string
   comment: string
+}
+
+/**
+ * The years a snapshot is tagged with. An explicit array (even empty = "all
+ * years") is authoritative; only a truly missing field (older snapshots) falls
+ * back to the single `year`.
+ */
+export function snapshotYears(meta: Pick<SnapshotMeta, 'year' | 'years'>): number[] {
+  if (Array.isArray(meta.years)) return meta.years
+  return meta.year != null ? [meta.year] : []
+}
+
+/** Human label for a snapshot's years — "2025, 2026" or "All years". */
+export function snapshotYearsLabel(meta: Pick<SnapshotMeta, 'year' | 'years'>): string {
+  const ys = snapshotYears(meta)
+  return ys.length ? [...ys].sort((a, b) => a - b).join(', ') : 'All years'
+}
+
+/** Tasks a snapshot scoped to `years` captures — everything when `years` is empty. */
+export function tasksForSnapshotYears(tasks: Task[], years: number[]): Task[] {
+  if (years.length === 0) return tasks
+  return tasks.filter((t) => t.startDate != null && years.includes(Number(t.startDate.slice(0, 4))))
 }
 
 /** Fetch a (public) image URL and return it as a base64 data URL. */
@@ -119,7 +147,8 @@ export async function buildPayload(
 
   const meta: SnapshotMeta = {
     id: crypto.randomUUID(),
-    year: input.year,
+    years: [...input.years].sort((a, b) => a - b),
+    year: input.years.length ? Math.max(...input.years) : new Date().getFullYear(),
     name: input.name.trim(),
     comment: input.comment.trim(),
     createdAt: new Date().toISOString(),

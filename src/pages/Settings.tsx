@@ -5,7 +5,7 @@ import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { useStore } from '../data/store'
 import { taskYears } from '../lib/span'
-import { ADMIN_PASSWORD, formatBytes, type SnapshotMeta } from '../lib/snapshot'
+import { ADMIN_PASSWORD, formatBytes, snapshotYearsLabel, tasksForSnapshotYears, type SnapshotMeta } from '../lib/snapshot'
 import {
   SIZES,
   SIZE_DESCRIPTIONS,
@@ -402,11 +402,14 @@ function SnapshotsCard() {
     return Array.from(set).sort((a, b) => b - a)
   }, [tasks])
 
-  // Create-snapshot modal
+  // Create-snapshot modal. `selYears` empty = "all years" (snapshots always
+  // capture everything — the years are just a label).
   const [createOpen, setCreateOpen] = useState(false)
-  const [year, setYear] = useState<number>(years[0] ?? new Date().getFullYear())
+  const [selYears, setSelYears] = useState<number[]>([])
   const [name, setName] = useState('')
   const [comment, setComment] = useState('')
+  const toggleYear = (y: number) =>
+    setSelYears((prev) => (prev.includes(y) ? prev.filter((x) => x !== y) : [...prev, y]))
 
   // Revert (password-gated) + delete modals
   const [revertTarget, setRevertTarget] = useState<SnapshotMeta | null>(null)
@@ -419,7 +422,7 @@ function SnapshotsCard() {
   const progress = (label: string) => (done: number, total: number) => setBusy({ label, done, total })
 
   const openCreate = () => {
-    setYear(years[0] ?? new Date().getFullYear())
+    setSelYears(years[0] != null ? [years[0]] : [])
     setName('')
     setComment('')
     setError(null)
@@ -430,7 +433,7 @@ function SnapshotsCard() {
     setError(null)
     setBusy({ label: 'Freezing state…', done: 0, total: 0 })
     try {
-      await createSnapshot({ year, name, comment }, progress('Embedding images…'))
+      await createSnapshot({ years: selYears, name, comment }, progress('Embedding images…'))
       setCreateOpen(false)
     } catch (e) {
       setError(toMessage(e))
@@ -526,7 +529,7 @@ function SnapshotsCard() {
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="navy">{s.year}</Badge>
+                  <Badge tone="navy">{snapshotYearsLabel(s)}</Badge>
                   <span className="truncate font-semibold text-ink">{s.name || 'Untitled snapshot'}</span>
                 </div>
                 {s.comment && <p className="mt-1 text-sm text-muted">{s.comment}</p>}
@@ -596,32 +599,52 @@ function SnapshotsCard() {
         }
       >
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-[140px_1fr]">
-            <div>
-              <label className="label">Year</label>
-              <select
-                className="input h-11"
-                value={year}
-                onChange={(e) => setYear(Number(e.target.value))}
+          <div>
+            <label className="label">Years</label>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
                 disabled={Boolean(busy)}
+                onClick={() => setSelYears([])}
+                className={cx(
+                  'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                  selYears.length === 0
+                    ? 'border-rmit-navy bg-rmit-navy text-white dark:border-white/60 dark:bg-white/15'
+                    : 'border-line text-muted hover:border-ink/40',
+                )}
               >
-                {years.map((y) => (
-                  <option key={y} value={y}>
+                All years
+              </button>
+              {years.map((y) => {
+                const on = selYears.includes(y)
+                return (
+                  <button
+                    key={y}
+                    type="button"
+                    disabled={Boolean(busy)}
+                    onClick={() => toggleYear(y)}
+                    className={cx(
+                      'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                      on
+                        ? 'border-rmit-navy bg-rmit-navy text-white dark:border-white/60 dark:bg-white/15'
+                        : 'border-line text-muted hover:border-ink/40',
+                    )}
+                  >
                     {y}
-                  </option>
-                ))}
-              </select>
+                  </button>
+                )
+              })}
             </div>
-            <div>
-              <label className="label">Name</label>
-              <input
-                className="input h-11"
-                placeholder="e.g. End of 2026"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={Boolean(busy)}
-              />
-            </div>
+          </div>
+          <div>
+            <label className="label">Name</label>
+            <input
+              className="input h-11"
+              placeholder="e.g. End of 2026"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={Boolean(busy)}
+            />
           </div>
           <div>
             <label className="label">Comment</label>
@@ -634,8 +657,8 @@ function SnapshotsCard() {
             />
           </div>
           <p className="text-xs text-muted">
-            Freezes {tasks.length} tasks and their demo images into a self-contained JSON. Embedding
-            images can take a moment.
+            Freezes {tasksForSnapshotYears(tasks, selYears).length} tasks and their demo images into a
+            self-contained JSON. Embedding images can take a moment.
           </p>
           {error && <p className="text-sm font-medium text-rmit-red">{error}</p>}
         </div>
@@ -673,8 +696,10 @@ function SnapshotsCard() {
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <p>
               This <strong>replaces all current tasks and settings</strong> with{' '}
-              <strong>{revertTarget?.name || 'this snapshot'}</strong> ({revertTarget?.taskCount} tasks). Your
-              current data is not kept — snapshot it first if you need it. This can't be undone.
+              <strong>{revertTarget?.name || 'this snapshot'}</strong> — {revertTarget?.taskCount} tasks tagged{' '}
+              <strong>{revertTarget && snapshotYearsLabel(revertTarget)}</strong>. Any current data{' '}
+              {revertTarget && snapshotYearsLabel(revertTarget) !== 'All years' ? 'from other years ' : ''}is not
+              kept — snapshot it first if you need it. This can't be undone.
             </p>
           </div>
           <div>
@@ -715,7 +740,8 @@ function SnapshotsCard() {
         }
       >
         <p className="text-sm text-muted">
-          Delete <strong className="text-ink">{deleteTarget?.name || 'this snapshot'}</strong> ({deleteTarget?.year})?
+          Delete <strong className="text-ink">{deleteTarget?.name || 'this snapshot'}</strong>{' '}
+          ({deleteTarget && snapshotYearsLabel(deleteTarget)})?
           The saved JSON and its embedded images are removed. This cannot be undone.
         </p>
       </Modal>

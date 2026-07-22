@@ -68,6 +68,7 @@ function showcaseRowToMeta(row: ShowcaseRow): ShowcaseMeta {
 interface SnapshotRow {
   id: string
   year: number
+  years?: number[] | null
   name: string | null
   comment: string | null
   created_by: string | null
@@ -82,6 +83,8 @@ function snapshotRowToMeta(row: SnapshotRow): SnapshotMeta {
   return {
     id: row.id,
     year: row.year,
+    // Explicit column wins; older rows (no `years` column) fall back to [year].
+    years: Array.isArray(row.years) ? row.years : row.year != null ? [row.year] : [],
     name: row.name ?? '',
     comment: row.comment ?? '',
     createdAt: row.created_at,
@@ -96,6 +99,7 @@ function metaToSnapshotRow(meta: SnapshotMeta, path: string) {
   return {
     id: meta.id,
     year: meta.year,
+    years: meta.years,
     name: meta.name,
     comment: meta.comment,
     created_by: meta.createdBy,
@@ -148,6 +152,12 @@ function isMissingPeopleMondayColumn(err: unknown): boolean {
 function isMissingMondayBoardsColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
   return msg.includes('monday_boards') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** True if a Supabase error is complaining about a missing snapshot `years` column (pre-migration). */
+function isMissingSnapshotYearsColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('years') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
 /** True if a Supabase error is complaining about a missing `monday_board_names` column (pre-migration). */
@@ -606,11 +616,14 @@ export class SupabaseRepository implements Repository {
       .from(SNAPSHOT_BUCKET)
       .upload(path, blob, { contentType: 'application/json', upsert: true })
     if (upErr) throw new Error(isMissingRelation(upErr) ? SNAPSHOT_SETUP_MSG : upErr.message)
-    const { data, error } = await sb
-      .from('snapshots')
-      .insert(metaToSnapshotRow(meta, path))
-      .select('*')
-      .single()
+    const row = metaToSnapshotRow(meta, path)
+    let { data, error } = await sb.from('snapshots').insert(row).select('*').single()
+    // Retry without `years` if that column hasn't been migrated yet (still stored
+    // in the payload JSON, so nothing is lost — the list just shows the rep. year).
+    if (error && isMissingSnapshotYearsColumn(error)) {
+      const { years: _drop, ...rest } = row
+      ;({ data, error } = await sb.from('snapshots').insert(rest).select('*').single())
+    }
     if (error) {
       // Roll back the orphaned blob if the metadata insert fails.
       await sb.storage.from(SNAPSHOT_BUCKET).remove([path])
