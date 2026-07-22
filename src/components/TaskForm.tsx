@@ -580,6 +580,16 @@ function CodeNameField({
   const [editing, setEditing] = useState(false)
   const hasCode = code.trim().length > 0
 
+  // Nudge the user to start here: focus the name field on mount when it's empty
+  // (a fresh task). Existing tasks open already filled, so focus isn't stolen.
+  // A short timeout lets the modal's open transition settle before we grab focus.
+  useEffect(() => {
+    if (code || name.trim()) return
+    const t = setTimeout(() => inputRef.current?.focus(), 60)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // monday auto-fill dropdown state.
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -765,7 +775,13 @@ function CodeNameField({
       <label className={cx('label', filledIdentity && 'is-filled')}>Task code &amp; name</label>
       <div ref={wrapRef} className="relative">
         <div
-          className="flex h-14 items-center gap-2 rounded-xl border border-line bg-card px-3 transition focus-within:border-rmit-red focus-within:ring-2 focus-within:ring-brand-100 dark:focus-within:ring-brand-500/25"
+          className={cx(
+            'flex h-14 items-center gap-2 rounded-xl bg-card px-3 transition',
+            'focus-within:border-rmit-red focus-within:ring-2 focus-within:ring-brand-100 dark:focus-within:ring-brand-500/25',
+            // Empty → a thicker neutral outline draws the eye here first; reverts to
+            // the normal thin line the moment a code or name is entered.
+            !hasCode && !name.trim() ? 'border-2 border-navy-300' : 'border border-line',
+          )}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) inputRef.current?.focus()
           }}
