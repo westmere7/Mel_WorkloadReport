@@ -224,11 +224,19 @@ export function Dashboard() {
   }, [fnTasks, srcYear, ytd, todayMD])
 
   // ── Deep-link to the Task List, filtered to a single selection ──────────
-  // Each click passes exactly the chosen filter(s) via the URL query; the Task
-  // List seeds fresh from those params, so any prior filters are dropped.
+  // Each click passes the chosen filter(s) PLUS the dashboard's current scope
+  // (function selection + time span) via the URL query, so the Task List lands
+  // on exactly the same task set the clicked number was counted from.
   const goTasks = (params: Array<[string, string]>) => {
     const sp = new URLSearchParams()
     for (const [k, v] of params) sp.append(k, v)
+    for (const fn of fnFilter) sp.append('function', fn)
+    // `filtered` uses year-mode in compare; mirror that so counts line up.
+    const effSpan = compare ? 'year' : span
+    if (effSpan !== 'total') {
+      sp.append('year', String(activeYear))
+      if (effSpan === 'half') sp.append('half', half)
+    }
     navigate({ pathname: '/tasks', search: `?${sp.toString()}` })
   }
   const squadsInGroup = (group: string) =>

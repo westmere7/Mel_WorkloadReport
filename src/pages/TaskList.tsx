@@ -48,9 +48,13 @@ export function TaskList() {
   // (e.g. /tasks?squad=DOM&asset=Image). Keys may repeat for multi-value filters.
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState('')
-  const [spanMode, setSpanMode] = useState<SpanMode>('total')
-  const [spanYear, setSpanYear] = useState<number | null>(null)
-  const [spanHalf, setSpanHalf] = useState<Half>('H1')
+  // Span also seeds from the URL so a dashboard deep-link lands on the same
+  // time window it counted (?year=2026 → By year; +&half=H2 → that half).
+  const seedYear = searchParams.get('year')
+  const seedHalf = searchParams.get('half')
+  const [spanMode, setSpanMode] = useState<SpanMode>(seedYear ? (seedHalf ? 'half' : 'year') : 'total')
+  const [spanYear, setSpanYear] = useState<number | null>(seedYear ? Number(seedYear) : null)
+  const [spanHalf, setSpanHalf] = useState<Half>(seedHalf === 'H2' ? 'H2' : 'H1')
   const [squads, setSquads] = useState<string[]>(() => searchParams.getAll('squad'))
   const [campaigns, setCampaigns] = useState<string[]>(() => searchParams.getAll('campaign'))
   const [people, setPeople] = useState<string[]>(() => searchParams.getAll('person'))
