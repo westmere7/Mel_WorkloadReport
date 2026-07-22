@@ -56,6 +56,10 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'new',
+        text: 'On a function tab you can “+ Add” a work or asset type on the spot — pick one not offered on that tab, or type a brand-new name to create it. New types are saved to Settings automatically, no detour needed.',
+      },
+      {
+        kind: 'new',
         text: 'The master timeline auto-extends (highlighted) when a function’s timeline reaches outside it, and registering a task code that already exists is blocked with a jump to the existing task.',
       },
       {

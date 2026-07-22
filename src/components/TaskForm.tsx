@@ -8,6 +8,7 @@ import {
   ExternalLink,
   ImagePlus,
   Loader2,
+  Plus,
   Sparkles,
   Trash2,
   X,
@@ -17,6 +18,7 @@ import {
   SIZES,
   SIZE_DESCRIPTIONS,
   SIZE_COLORS,
+  FALLBACK_ITEM,
   formatDurationDays,
   functionColor,
   legacyOwnerName,
@@ -244,6 +246,131 @@ function evalMath(input: string): number | null {
     st.push(tok === '+' ? a + b : tok === '-' ? a - b : tok === '*' ? a * b : a / b)
   }
   return st.length === 1 && Number.isFinite(st[0]) ? st[0] : null
+}
+
+/**
+ * Inline "+ Add" control for a function tab's Work-type / Asset-type lists. Opens
+ * a small combobox to either PICK a master type this tab doesn't offer yet, or
+ * CREATE a brand-new one. Both add the type to the tab (and persist to Settings —
+ * new types join the master list, the type is opted into this function). Lets
+ * users extend a tab without leaving the task form.
+ */
+function AddTypeInline({
+  noun,
+  candidates,
+  masterAll,
+  onAdd,
+}: {
+  /** "work type" / "asset type" — for the button + placeholder copy. */
+  noun: string
+  /** Master types NOT yet offered on this tab (pickable from the list). */
+  candidates: string[]
+  /** Every master type name (to detect an already-existing name → no "create"). */
+  masterAll: string[]
+  /** Add `type` to this tab; `isNew` = it isn't in the master list yet. */
+  onAdd: (type: string, isNew: boolean) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    inputRef.current?.focus()
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const close = () => {
+    setOpen(false)
+    setQ('')
+  }
+  const query = q.trim()
+  const ql = query.toLowerCase()
+  const filtered = candidates.filter((c) => c.toLowerCase().includes(ql))
+  const exactExists = masterAll.some((t) => t.toLowerCase() === ql)
+  const canCreate = query.length > 0 && !exactExists && ql !== FALLBACK_ITEM.toLowerCase()
+
+  return (
+    <div ref={wrapRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => (open ? close() : setOpen(true))}
+        className="inline-flex items-center gap-1 rounded-xl border border-dashed border-line px-3 py-2 text-xs font-medium text-muted transition hover:border-navy-300 hover:text-ink"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add
+      </button>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-50 w-60 rounded-xl border border-line bg-subtle p-1.5 shadow-2xl ring-1 ring-black/10 dark:ring-white/10">
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={`Find or create a ${noun}…`}
+            className="mb-1 w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-xs text-ink outline-none placeholder:text-faint focus:border-rmit-red"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                if (filtered.length) {
+                  onAdd(filtered[0], false)
+                  close()
+                } else if (canCreate) {
+                  onAdd(query, true)
+                  close()
+                }
+              }
+            }}
+          />
+          <ul className="max-h-52 overflow-y-auto">
+            {filtered.map((c) => (
+              <li key={c}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAdd(c, false)
+                    close()
+                  }}
+                  className="flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-xs text-ink transition hover:bg-card"
+                >
+                  {c}
+                </button>
+              </li>
+            ))}
+            {canCreate && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAdd(query, true)
+                    close()
+                  }}
+                  className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-accent-green transition hover:bg-card"
+                >
+                  <Plus className="h-3.5 w-3.5 shrink-0" />
+                  Create “{query}”
+                </button>
+              </li>
+            )}
+            {filtered.length === 0 && !canCreate && (
+              <li className="px-2.5 py-1.5 text-xs text-faint">
+                {query && exactExists ? 'Already on this tab.' : `No other ${noun}s.`}
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
 }
 
 /**
@@ -695,7 +822,7 @@ function Section({
 }
 
 export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, onOpenExisting }: TaskFormProps) {
-  const { settings, tasks, supportsImages, uploadImage, deleteImage } = useStore()
+  const { settings, tasks, supportsImages, uploadImage, deleteImage, saveSettings } = useStore()
 
   // Editable lists always include the reserved "Others" fallback as an option.
   // (Work/asset type options are per-function — computed on each tab below.)
@@ -1518,6 +1645,30 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             ),
           )
           const tabTotal = sumBreakdown(d.breakdown)
+
+          // "+ Add" pickers: master types this tab doesn't offer yet (the fallback
+          // is always present, so it's never a candidate).
+          const workCandidates = settings.types.filter((t) => !tabTypes.includes(t) && t !== FALLBACK_ITEM)
+          const assetCandidates = settings.assetTypes.filter((t) => !tabAssets.includes(t) && t !== FALLBACK_ITEM)
+          // Adding a type opts THIS function into it (persisted) and, if brand-new,
+          // appends it to the master list too — so it propagates to Settings. Work
+          // types are also selected on the draft; assets just gain a counter.
+          const addWorkType = (type: string, isNew: boolean) => {
+            const nextTypes = isNew && !settings.types.includes(type) ? [...settings.types, type] : settings.types
+            const nextFns = settings.functions.map((fc) =>
+              fc.name === f.name && !fc.workTypes.includes(type) ? { ...fc, workTypes: [...fc.workTypes, type] } : fc,
+            )
+            void saveSettings({ ...settings, types: nextTypes, functions: nextFns })
+            if (!d.types.includes(type)) toggleDraftType(f.name, type)
+          }
+          const addAssetType = (type: string, isNew: boolean) => {
+            const nextAssets =
+              isNew && !settings.assetTypes.includes(type) ? [...settings.assetTypes, type] : settings.assetTypes
+            const nextFns = settings.functions.map((fc) =>
+              fc.name === f.name && !fc.assetTypes.includes(type) ? { ...fc, assetTypes: [...fc.assetTypes, type] } : fc,
+            )
+            void saveSettings({ ...settings, assetTypes: nextAssets, functions: nextFns })
+          }
           return (
             <div>
               {tabStrip}
@@ -1544,6 +1695,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                         </button>
                       )
                     })}
+                    <AddTypeInline
+                      noun="work type"
+                      candidates={workCandidates}
+                      masterAll={settings.types}
+                      onAdd={addWorkType}
+                    />
                   </div>
                 </div>
 
@@ -1563,6 +1720,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                         onChange={(v) => setDraftBreakdown(f.name, assetName, v)}
                       />
                     ))}
+                    <AddTypeInline
+                      noun="asset type"
+                      candidates={assetCandidates}
+                      masterAll={settings.assetTypes}
+                      onAdd={addAssetType}
+                    />
                   </div>
                 </div>
 

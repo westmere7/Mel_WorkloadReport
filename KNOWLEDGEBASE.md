@@ -848,6 +848,16 @@ LATER phase; the data is already captured for it.
   (the function's INCLUSION lists intersected with the live master lists, plus any values
   the task already has), a per-tab total chip, and a timeline switch (off = follows the
   master timeline).
+- **Inline "+ Add" type (from the task form)**: each tab's Work-type and Asset rows end with
+  an `AddTypeInline` combobox — PICK a master type this tab doesn't offer yet, or type a
+  brand-new name to CREATE one. Both call `saveSettings` immediately (independent of the task
+  submit): a new name is appended to the master list (`settings.types`/`assetTypes`) AND the
+  active function is opted into it (`FunctionConfig.workTypes`/`assetTypes`), so it PROPAGATES
+  to Settings without leaving the form. Work types are also selected on the draft; assets just
+  gain a 0-count counter. Candidates = master types minus what the tab already shows (fallback
+  excluded); a name that already exists shows "Already on this tab" instead of a create option.
+  Needs `saveSettings` from the store (added to TaskForm's `useStore`). Existing tasks are
+  never touched — this only grows the offered lists.
 - **Master-timeline envelope**: the Start/End inputs display
   `effectiveStart/effectiveEnd` = the entered dates extended by any enabled function
   timeline that reaches outside them; extended inputs get an amber ring + "Extended to
