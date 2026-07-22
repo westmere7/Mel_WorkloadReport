@@ -95,7 +95,8 @@ export interface FunctionColorSet {
 }
 
 export const FUNCTION_COLORS: Record<string, FunctionColorSet> = {
-  red: { hex: '#DC2626' },
+  // NB: no `red` — that hue is reserved for the app's own UI accents (RMIT red),
+  // so functions can't pick it and clash with buttons/required cues.
   orange: { hex: '#EA580C' },
   gold: { hex: '#EAB308' },
   green: { hex: '#16A34A' },
@@ -121,7 +122,7 @@ export function functionColor(key: string | undefined): FunctionColorSet {
  * function in (inclusion model).
  */
 export const DEFAULT_FUNCTIONS: FunctionConfig[] = [
-  { name: 'Vietnam Design', color: 'red', workTypes: [...DEFAULT_TYPES], assetTypes: [...DEFAULT_ASSET_TYPES] },
+  { name: 'Vietnam Design', color: 'blue', workTypes: [...DEFAULT_TYPES], assetTypes: [...DEFAULT_ASSET_TYPES] },
   { name: 'Melbourne Design', color: 'teal', workTypes: [...DEFAULT_TYPES], assetTypes: [...DEFAULT_ASSET_TYPES] },
   { name: 'Production', color: 'gold', workTypes: [...DEFAULT_TYPES], assetTypes: [...DEFAULT_ASSET_TYPES] },
   { name: 'Contents', color: 'green', workTypes: [...DEFAULT_TYPES], assetTypes: [...DEFAULT_ASSET_TYPES] },
