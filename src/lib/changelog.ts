@@ -60,6 +60,10 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'new',
+        text: 'Squad & Campaign items can carry auto-select keywords (the tag button in Settings): when a new task’s name contains one, that squad/campaign is picked for you. Your manual choice always wins.',
+      },
+      {
+        kind: 'new',
         text: 'The master timeline auto-extends (highlighted) when a function’s timeline reaches outside it, and registering a task code that already exists is blocked with a jump to the existing task.',
       },
       {

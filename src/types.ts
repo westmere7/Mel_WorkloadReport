@@ -133,6 +133,11 @@ export interface AppSettings {
   /** monday.com board ids the New Task auto-fill searches (all at once). Editable
    *  in Settings; the columns mapped are shared across boards (set via secrets). */
   mondayBoardIds: string[]
+  /** Squad NAME → keyword list. When a task name contains any of a squad's keywords,
+   *  the task form auto-selects that squad (first match wins; ignored if no match). */
+  squadKeywords: Record<string, string[]>
+  /** Campaign NAME → keyword list (same auto-select-on-name-match behaviour). */
+  campaignKeywords: Record<string, string[]>
 }
 
 /** Empty breakdown helper. */

@@ -8,6 +8,7 @@ import {
   canonicalAssetName,
   normalizeFunctionData,
   normalizeFunctions,
+  normalizeKeywordMap,
   normalizeMondayBoards,
   normalizeSizeDurations,
 } from '../constants'
@@ -147,6 +148,15 @@ function isMissingPeopleMondayColumn(err: unknown): boolean {
 function isMissingMondayBoardsColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
   return msg.includes('monday_boards') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** True if a Supabase error is complaining about a missing keyword column (pre-migration). */
+function isMissingKeywordsColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return (
+    (msg.includes('squad_keywords') || msg.includes('campaign_keywords')) &&
+    (msg.includes('column') || msg.includes('schema cache'))
+  )
 }
 
 /** True if a Supabase error is complaining about a missing `created_by` column (pre-migration). */
@@ -481,6 +491,8 @@ export class SupabaseRepository implements Repository {
         data.asset_types ?? DEFAULT_SETTINGS.assetTypes,
       ),
       mondayBoardIds: normalizeMondayBoards(data.monday_boards),
+      squadKeywords: normalizeKeywordMap(data.squad_keywords),
+      campaignKeywords: normalizeKeywordMap(data.campaign_keywords),
     }
   }
 
@@ -504,9 +516,16 @@ export class SupabaseRepository implements Repository {
       people_monday: settings.peopleMondayIds,
       functions: settings.functions,
       monday_boards: settings.mondayBoardIds,
+      squad_keywords: settings.squadKeywords,
+      campaign_keywords: settings.campaignKeywords,
     }
     let { data, error } = await upsert(payload)
     // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
+    if (error && isMissingKeywordsColumn(error)) {
+      delete payload.squad_keywords
+      delete payload.campaign_keywords
+      ;({ data, error } = await upsert(payload))
+    }
     if (error && isMissingMondayBoardsColumn(error)) {
       delete payload.monday_boards
       ;({ data, error } = await upsert(payload))
@@ -545,6 +564,10 @@ export class SupabaseRepository implements Repository {
         ? normalizeFunctions(data.functions, data.types ?? settings.types, data.asset_types ?? settings.assetTypes)
         : settings.functions,
       mondayBoardIds: data.monday_boards ? normalizeMondayBoards(data.monday_boards) : settings.mondayBoardIds,
+      squadKeywords: data.squad_keywords ? normalizeKeywordMap(data.squad_keywords) : settings.squadKeywords,
+      campaignKeywords: data.campaign_keywords
+        ? normalizeKeywordMap(data.campaign_keywords)
+        : settings.campaignKeywords,
     }
   }
 

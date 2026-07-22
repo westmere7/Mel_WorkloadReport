@@ -104,6 +104,13 @@ alter table public.settings
 alter table public.settings
   add column if not exists monday_boards jsonb not null default '["1967557512","5026397227"]'::jsonb;
 
+-- Squad/Campaign auto-select keywords: { "<name>": ["keyword", …] }. When a task
+-- name contains any of a squad/campaign's keywords, the task form auto-selects it.
+alter table public.settings
+  add column if not exists squad_keywords jsonb not null default '{}'::jsonb;
+alter table public.settings
+  add column if not exists campaign_keywords jsonb not null default '{}'::jsonb;
+
 -- GCMC functions that record workload (task-form tabs). Array of
 -- { name, color, workTypes, assetTypes }; order = tab order. The type lists are
 -- INCLUSIONS (only listed types appear on that tab); the seed offers the full

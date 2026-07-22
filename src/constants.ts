@@ -239,6 +239,53 @@ export const DEFAULT_SIZE_DURATIONS: Record<Size, number> = {
  */
 export const DEFAULT_MONDAY_BOARDS: string[] = ['1967557512', '5026397227']
 
+/**
+ * Coerce a stored keyword map (squad/campaign NAME → keyword[]) into a clean
+ * shape: string keys → deduped, trimmed, non-empty string arrays. Junk-tolerant.
+ */
+export function normalizeKeywordMap(raw: unknown): Record<string, string[]> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out: Record<string, string[]> = {}
+  for (const [name, list] of Object.entries(raw as Record<string, unknown>)) {
+    if (!name.trim() || !Array.isArray(list)) continue
+    const kws: string[] = []
+    for (const k of list) {
+      const s = typeof k === 'string' ? k.trim() : ''
+      if (s && !kws.some((x) => x.toLowerCase() === s.toLowerCase())) kws.push(s)
+    }
+    if (kws.length) out[name] = kws
+  }
+  return out
+}
+
+/** Split a comma-separated keyword string into a clean, deduped list. */
+export function parseKeywords(raw: string): string[] {
+  const out: string[] = []
+  for (const part of raw.split(',')) {
+    const s = part.trim()
+    if (s && !out.some((x) => x.toLowerCase() === s.toLowerCase())) out.push(s)
+  }
+  return out
+}
+
+/**
+ * First list item whose keywords appear (case-insensitive substring) in `name`.
+ * `order` gives the items to scan, in priority order; returns null on no match.
+ */
+export function matchByKeywords(
+  name: string,
+  keywordMap: Record<string, string[]>,
+  order: string[],
+): string | null {
+  const n = name.toLowerCase()
+  if (!n.trim()) return null
+  for (const item of order) {
+    const kws = keywordMap[item]
+    if (kws && kws.some((k) => k && n.includes(k.toLowerCase()))) return item
+  }
+  return null
+}
+
 /** Coerce a stored `monday_boards` value into a clean, deduped list of id strings. */
 export function normalizeMondayBoards(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [...DEFAULT_MONDAY_BOARDS]
@@ -265,6 +312,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   allowRemoveUsed: false,
   peopleMondayIds: {},
   mondayBoardIds: [...DEFAULT_MONDAY_BOARDS],
+  squadKeywords: {},
+  campaignKeywords: {},
 }
 
 /** Legacy fixed breakdown keys → their default display names, for migrating old data. */

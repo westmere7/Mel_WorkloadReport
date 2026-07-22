@@ -212,8 +212,10 @@ happens** (see §6).
   to look like a heading. `PrefRow`/`Switch`/`CollapsibleSection` are the shared building blocks.
 - **Groups section**: five `ListEditor`s (**squads**/campaigns/work types/asset types/people)
   with add/rename/remove + a locked **"Others"** fallback row, plus a locked Task-sizes card
-  (`SizeDurationsCard`). Squads are editable **except DOM & INTON** (`locked` prop, since
-  `stakeholderGroup()` keys off those names). At the top of the section is the governance toggle
+  (`SizeDurationsCard`). Squads are rename/remove-locked for **DOM & INTON** (`locked` prop, since
+  `stakeholderGroup()` in `lib/analytics.ts` keys the demand chart off those literal names) — BUT
+  their auto-select **keywords stay editable**: `ListEditor`'s locked-row branch still renders the
+  keyword Tag button (guarded by `onKeywords`), just not rename/remove. At the top of the section is the governance toggle
   **"Allow removing groups already associated with tasks"** (`settings.allowRemoveUsed`, default
   **off**): when off, `ListEditor.requestRemove` **blocks** removing an item with `usage>0` (shows
   a "can't remove — turn on the setting" modal); when on, removing a used item pops the
@@ -910,6 +912,29 @@ LATER phase; the data is already captured for it.
   / "Asset types"), each tab rendering a `ListEditor` with the `bare` + `hideHeading` props
   (renders without its own Card wrapper). All Settings list panels are height-capped +
   scrollable (`max-h-*` + `overflow-y-auto`).
+
+### Squad / Campaign auto-select keywords
+
+- **Data**: `AppSettings.squadKeywords` / `campaignKeywords` = `Record<name, string[]>`
+  (`squad_keywords` / `campaign_keywords` jsonb columns; `normalizeKeywordMap` +
+  `parseKeywords` in constants; guarded write via `isMissingKeywordsColumn` strips BOTH
+  keys and retries). Store `renameListItem`/`removeListItem` carry/drop a squad/campaign's
+  keyword entry alongside the rename/remove (mirrors `peopleMondayIds`).
+- **Settings UI**: `ListEditor` gained `keywords` + `onKeywords`; each squad/campaign row shows
+  a **Tag button** (green dot when set) opening a modal that edits a comma-separated list
+  (`parseKeywords` → deduped array; empty = entry removed). Wired only on the Squads & Campaigns
+  cards (`setKeywords('squadKeywords'|'campaignKeywords', …)` in `SettingsPage`).
+- **Task form**: two effects call `matchByKeywords(name, map, orderList)` (constants — first
+  list item whose keyword is a case-insensitive substring of the name; null on no match) and
+  `setSquad`/`setCampaign` on a hit. They ONLY set on a match (never clear — "ignore if no
+  match"), and stop once the user picks by hand: `squadTouched`/`campaignTouched` start
+  `Boolean(initial)` (editing = pre-touched so a saved value is never overridden) and flip
+  true in the selects' `onChange`.
+- **Persistence**: the `squad_keywords` / `campaign_keywords` jsonb columns are MIGRATED (operator
+  ran `schema.sql`) — keywords now persist across reloads (verified: a set keyword survived a full
+  reload). The guarded-write strip + `isMissingKeywordsColumn` stays as a safety net for any
+  un-migrated environment. Auto-select verified end-to-end: a name containing a keyword selects the
+  squad/campaign and sticks (the effect only sets on a match, never clears).
 
 ### Testing gotchas (browser evals)
 

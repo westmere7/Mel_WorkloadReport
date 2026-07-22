@@ -22,6 +22,7 @@ import {
   formatDurationDays,
   functionColor,
   legacyOwnerName,
+  matchByKeywords,
   withFallback,
 } from '../constants'
 import { useStore } from '../data/store'
@@ -834,9 +835,26 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   // meaningful — the dot turns green once a value is chosen (live status).
   const [squad, setSquad] = useState<Squad>(initial?.squad ?? '')
   const [campaign, setCampaign] = useState<string>(initial?.campaign ?? '')
+  // Keyword auto-select stops once the user picks a squad/campaign by hand. Editing
+  // an existing task starts "touched" so a name match never overrides the saved value.
+  const [squadTouched, setSquadTouched] = useState(Boolean(initial))
+  const [campaignTouched, setCampaignTouched] = useState(Boolean(initial))
   const [code, setCode] = useState(initial?.code ?? '')
   const [name, setName] = useState(initial?.name ?? '')
   const [people, setPeople] = useState<string[]>(initial?.people ?? [])
+
+  // Auto-select squad/campaign from the task name via the keyword maps set in
+  // Settings — until the user picks one by hand (no match → leave as-is).
+  useEffect(() => {
+    if (squadTouched) return
+    const m = matchByKeywords(name, settings.squadKeywords, settings.squads)
+    if (m && m !== squad) setSquad(m as Squad)
+  }, [name, squadTouched, settings.squadKeywords, settings.squads, squad])
+  useEffect(() => {
+    if (campaignTouched) return
+    const m = matchByKeywords(name, settings.campaignKeywords, settings.campaigns)
+    if (m && m !== campaign) setCampaign(m)
+  }, [name, campaignTouched, settings.campaignKeywords, settings.campaigns, campaign])
 
   // ── GCMC function tabs ─────────────────────────────────────────
   // Configured functions + any orphan keys still on the task, so a slice whose
@@ -1446,7 +1464,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           <select
             className={cx('input h-11', !squad && 'text-muted')}
             value={squad}
-            onChange={(e) => setSquad(e.target.value)}
+            onChange={(e) => {
+              setSquadTouched(true)
+              setSquad(e.target.value)
+            }}
           >
             <option value="">(select squad)</option>
             {!squadOptions.includes(squad) && squad && <option value={squad}>{squad}</option>}
@@ -1462,7 +1483,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           <select
             className={cx('input h-11', !campaign && 'text-muted')}
             value={campaign}
-            onChange={(e) => setCampaign(e.target.value)}
+            onChange={(e) => {
+              setCampaignTouched(true)
+              setCampaign(e.target.value)
+            }}
           >
             <option value="">(select campaign)</option>
             {!campaignOptions.includes(campaign) && campaign && <option value={campaign}>{campaign}</option>}

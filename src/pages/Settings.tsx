@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Archive, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Tag, Trash2, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -14,6 +14,7 @@ import {
   FUNCTION_COLOR_KEYS,
   functionColor,
   sortAlpha,
+  parseKeywords,
   formatDurationDays,
   DEFAULT_SIZE_DURATIONS,
 } from '../constants'
@@ -77,6 +78,14 @@ export function SettingsPage() {
     void saveSettings({ ...settings, peopleMondayIds: next })
   }
 
+  // Set/clear a squad/campaign's auto-select keywords (empty list = remove the entry).
+  const setKeywords = (field: 'squadKeywords' | 'campaignKeywords', name: string, kws: string[]) => {
+    const next = { ...settings[field] }
+    if (kws.length) next[name] = kws
+    else delete next[name]
+    void saveSettings({ ...settings, [field]: next })
+  }
+
   const usageCount = (key: ListKey, value: string): number => {
     if (key === 'squads') return tasks.filter((t) => t.squad === value).length
     if (key === 'campaigns') return tasks.filter((t) => t.campaign === value).length
@@ -110,7 +119,7 @@ export function SettingsPage() {
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           <ListEditor
             title="Squads"
-            description="Requesting stakeholder teams. DOM & INTON are locked (used by the demand chart)."
+            description="Requesting stakeholder teams. DOM & INTON are locked (used by the demand chart) but their keywords stay editable."
             items={settings.squads}
             fallback={FALLBACK_ITEM}
             locked={['DOM', 'INTON']}
@@ -119,6 +128,8 @@ export function SettingsPage() {
             onRemove={(v) => removeListItem('squads', v)}
             onRename={(o, n) => renameListItem('squads', o, n)}
             usage={(v) => usageCount('squads', v)}
+            keywords={settings.squadKeywords}
+            onKeywords={(item, kws) => setKeywords('squadKeywords', item, kws)}
           />
           <ListEditor
             title="Campaigns"
@@ -131,6 +142,8 @@ export function SettingsPage() {
             onRemove={(v) => removeListItem('campaigns', v)}
             onRename={(o, n) => renameListItem('campaigns', o, n)}
             usage={(v) => usageCount('campaigns', v)}
+            keywords={settings.campaignKeywords}
+            onKeywords={(item, kws) => setKeywords('campaignKeywords', item, kws)}
           />
           {/* Work + asset types share one 2-tabbed card */}
           <TypesCard />
@@ -1430,6 +1443,8 @@ function ListEditor({
   dotColor = 'bg-rmit-red',
   mondayIds,
   onMondayId,
+  keywords,
+  onKeywords,
   className,
   bare,
   hideHeading,
@@ -1451,6 +1466,9 @@ function ListEditor({
   /** When set, each row gets a small monday.com user-id input (People panel only). */
   mondayIds?: Record<string, string>
   onMondayId?: (item: string, id: string) => void
+  /** When set, each row gets a "keywords" button (auto-select-on-name-match). */
+  keywords?: Record<string, string[]>
+  onKeywords?: (item: string, keywords: string[]) => void
   /** Extra classes on the card wrapper — e.g. a grid col-span for the wider People panel. */
   className?: string
   /** Render without the Card wrapper (a compact heading instead) — for combined cards. */
@@ -1465,7 +1483,19 @@ function ListEditor({
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
   // Item whose removal is blocked because it's in use and the setting is off.
   const [blockedRemove, setBlockedRemove] = useState<string | null>(null)
+  // Item whose auto-select keywords are being edited (+ its comma-separated draft).
+  const [keywordItem, setKeywordItem] = useState<string | null>(null)
+  const [keywordDraft, setKeywordDraft] = useState('')
   const listRef = useScrollFade<HTMLUListElement>()
+
+  const openKeywords = (item: string) => {
+    setKeywordDraft((keywords?.[item] ?? []).join(', '))
+    setKeywordItem(item)
+  }
+  const saveKeywords = () => {
+    if (keywordItem && onKeywords) onKeywords(keywordItem, parseKeywords(keywordDraft))
+    setKeywordItem(null)
+  }
 
   // Shown alphabetically (matches the task-form order via withFallback).
   const sortedItems = sortAlpha(items)
@@ -1564,6 +1594,26 @@ function ListEditor({
                         {count} task{count === 1 ? '' : 's'}
                       </span>
                     )}
+                    {/* Locked from rename/remove, but keywords stay editable. */}
+                    {onKeywords && (
+                      <button
+                        className={cx(
+                          'relative rounded-md p-1 hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white',
+                          (keywords?.[item]?.length ?? 0) > 0 ? 'text-rmit-navy dark:text-white' : 'text-faint',
+                        )}
+                        onClick={() => openKeywords(item)}
+                        title={
+                          (keywords?.[item]?.length ?? 0) > 0
+                            ? `Auto-select keywords: ${keywords?.[item]?.join(', ')}`
+                            : 'Add auto-select keywords'
+                        }
+                      >
+                        <Tag className="h-3.5 w-3.5" />
+                        {(keywords?.[item]?.length ?? 0) > 0 && (
+                          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-accent-green" />
+                        )}
+                      </button>
+                    )}
                     <span className="text-[11px] uppercase tracking-wide text-faint">locked</span>
                   </span>
                 </>
@@ -1630,6 +1680,25 @@ function ListEditor({
                           {count} task{count === 1 ? '' : 's'}
                         </span>
                       )
+                    )}
+                    {onKeywords && (
+                      <button
+                        className={cx(
+                          'relative rounded-md p-1 hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white',
+                          (keywords?.[item]?.length ?? 0) > 0 ? 'text-rmit-navy dark:text-white' : 'text-faint',
+                        )}
+                        onClick={() => openKeywords(item)}
+                        title={
+                          (keywords?.[item]?.length ?? 0) > 0
+                            ? `Auto-select keywords: ${keywords?.[item]?.join(', ')}`
+                            : 'Add auto-select keywords'
+                        }
+                      >
+                        <Tag className="h-3.5 w-3.5" />
+                        {(keywords?.[item]?.length ?? 0) > 0 && (
+                          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-accent-green" />
+                        )}
+                      </button>
                     )}
                     <button
                       className="rounded-md p-1 text-faint hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white"
@@ -1737,6 +1806,51 @@ function ListEditor({
             </p>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={keywordItem !== null}
+        onClose={() => setKeywordItem(null)}
+        title={`Auto-select keywords${keywordItem ? ` — ${keywordItem}` : ''}`}
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setKeywordItem(null)}>
+              Cancel
+            </button>
+            <button className="btn-primary" onClick={saveKeywords}>
+              Save
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            When a new task’s name contains any of these keywords, <strong className="text-ink">{keywordItem}</strong>{' '}
+            is selected automatically. Separate keywords with commas; matching ignores case. Leave empty to turn off.
+          </p>
+          <input
+            className="input"
+            autoFocus
+            placeholder="e.g. open day, openday, campus tour"
+            value={keywordDraft}
+            onChange={(e) => setKeywordDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                saveKeywords()
+              }
+            }}
+          />
+          {parseKeywords(keywordDraft).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {parseKeywords(keywordDraft).map((k) => (
+                <span key={k} className="chip bg-subtle text-muted">
+                  {k}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </Modal>
     </Wrapper>
   )

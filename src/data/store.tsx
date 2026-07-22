@@ -405,6 +405,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ),
           }
         }
+        // Carry a squad/campaign's auto-select keywords across a rename.
+        const kwKey = key === 'squads' ? 'squadKeywords' : key === 'campaigns' ? 'campaignKeywords' : null
+        if (kwKey && prev[kwKey][oldValue] !== undefined) {
+          const kw = { ...prev[kwKey] }
+          if (!dupe) kw[trimmed] = kw[oldValue]
+          delete kw[oldValue]
+          nextSettings = { ...nextSettings, [kwKey]: kw }
+        }
         void repo.saveSettings(nextSettings)
         return nextSettings
       })
@@ -442,6 +450,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               f[fnKey].includes(value) ? { ...f, [fnKey]: f[fnKey].filter((t) => t !== value) } : f,
             ),
           }
+        }
+        // Drop a squad/campaign's auto-select keywords when it's removed.
+        const kwKey = key === 'squads' ? 'squadKeywords' : key === 'campaigns' ? 'campaignKeywords' : null
+        if (kwKey && prev[kwKey][value] !== undefined) {
+          const kw = { ...prev[kwKey] }
+          delete kw[value]
+          nextSettings = { ...nextSettings, [kwKey]: kw }
         }
         void repo.saveSettings(nextSettings)
         return nextSettings

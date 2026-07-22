@@ -8,6 +8,7 @@ import {
   normalizeBreakdown,
   normalizeFunctionData,
   normalizeFunctions,
+  normalizeKeywordMap,
   normalizeMondayBoards,
   normalizeSizeDurations,
 } from '../constants'
@@ -215,6 +216,8 @@ export class LocalRepository implements Repository {
         stored.assetTypes ?? DEFAULT_SETTINGS.assetTypes,
       ),
       mondayBoardIds: normalizeMondayBoards(stored.mondayBoardIds),
+      squadKeywords: normalizeKeywordMap(stored.squadKeywords),
+      campaignKeywords: normalizeKeywordMap(stored.campaignKeywords),
     }
   }
 
