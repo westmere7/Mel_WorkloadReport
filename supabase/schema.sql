@@ -105,15 +105,17 @@ alter table public.settings
   add column if not exists monday_boards jsonb not null default '["1967557512","5026397227"]'::jsonb;
 
 -- GCMC functions that record workload (task-form tabs). Array of
--- { name, color, hiddenWorkTypes, hiddenAssetTypes }; order = tab order. The
--- hidden lists are EXCLUSIONS (empty = the tab offers every master type), so
--- the seed needs no copy of the type lists and never drifts from them.
+-- { name, color, workTypes, assetTypes }; order = tab order. The type lists are
+-- INCLUSIONS (only listed types appear on that tab); the seed offers the full
+-- default master lists. Newly added master types are NOT auto-added — the app
+-- opts each function in. Legacy rows storing hiddenWorkTypes/hiddenAssetTypes
+-- (exclusion model) are migrated to inclusion on read by normalizeFunctions().
 alter table public.settings
   add column if not exists functions jsonb not null default '[
-    {"name":"Vietnam Design","color":"red","hiddenWorkTypes":[],"hiddenAssetTypes":[]},
-    {"name":"Melbourne Design","color":"teal","hiddenWorkTypes":[],"hiddenAssetTypes":[]},
-    {"name":"Production","color":"gold","hiddenWorkTypes":[],"hiddenAssetTypes":[]},
-    {"name":"Contents","color":"green","hiddenWorkTypes":[],"hiddenAssetTypes":[]}
+    {"name":"Vietnam Design","color":"red","workTypes":["Concept development","Video editing","Graphic design (static)","Digital display","Publication","Motion graphic","Tiktok"],"assetTypes":["Image","Video","Publication","HTML5 ad","GIF / Motion"]},
+    {"name":"Melbourne Design","color":"teal","workTypes":["Concept development","Video editing","Graphic design (static)","Digital display","Publication","Motion graphic","Tiktok"],"assetTypes":["Image","Video","Publication","HTML5 ad","GIF / Motion"]},
+    {"name":"Production","color":"gold","workTypes":["Concept development","Video editing","Graphic design (static)","Digital display","Publication","Motion graphic","Tiktok"],"assetTypes":["Image","Video","Publication","HTML5 ad","GIF / Motion"]},
+    {"name":"Contents","color":"green","workTypes":["Concept development","Video editing","Graphic design (static)","Digital display","Publication","Motion graphic","Tiktok"],"assetTypes":["Image","Video","Publication","HTML5 ad","GIF / Motion"]}
   ]'::jsonb;
 
 insert into public.settings (id, campaigns, types, people)

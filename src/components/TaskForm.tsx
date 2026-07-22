@@ -14,7 +14,6 @@ import {
 } from 'lucide-react'
 import type { AssetBreakdown, FunctionConfig, FunctionData, Half, Size, Squad, Task, TaskImage, TaskInput } from '../types'
 import {
-  SQUAD_DESCRIPTIONS,
   SIZES,
   SIZE_DESCRIPTIONS,
   SIZE_COLORS,
@@ -703,7 +702,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
     const orphans = Object.keys(initial?.functionData ?? {}).filter((n) => !known.has(n))
     return [
       ...settings.functions,
-      ...orphans.map((n) => ({ name: n, color: 'plum', hiddenWorkTypes: [], hiddenAssetTypes: [] })),
+      ...orphans.map((n) => ({ name: n, color: 'plum', workTypes: [], assetTypes: [] })),
     ]
   }, [settings.functions, initial])
 
@@ -1313,9 +1312,6 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               </option>
             ))}
           </select>
-          {SQUAD_DESCRIPTIONS[squad] && (
-            <p className="mt-1.5 text-[11px] text-faint">{SQUAD_DESCRIPTIONS[squad]}</p>
-          )}
         </div>
         <div>
           <label className={cx('label', campaign && 'is-filled')}>Campaign</label>
@@ -1490,15 +1486,16 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
 
           const f = activeCfg as FunctionConfig
           const d = activeDraft as FnDraft
-          // Tab options = master lists minus this function's exclusions, plus
-          // anything the task already has (config changes never hide entered values).
+          // Tab options = this function's opted-in types (intersected with the
+          // live master list), plus anything the task already has (config changes
+          // never hide entered values).
           const tabTypes = withFallback(
-            Array.from(new Set([...settings.types.filter((t) => !f.hiddenWorkTypes.includes(t)), ...d.types])),
+            Array.from(new Set([...f.workTypes.filter((t) => settings.types.includes(t)), ...d.types])),
           )
           const tabAssets = withFallback(
             Array.from(
               new Set([
-                ...settings.assetTypes.filter((t) => !f.hiddenAssetTypes.includes(t)),
+                ...f.assetTypes.filter((t) => settings.assetTypes.includes(t)),
                 ...Object.keys(d.breakdown).filter((k) => (d.breakdown[k] ?? 0) > 0),
               ]),
             ),

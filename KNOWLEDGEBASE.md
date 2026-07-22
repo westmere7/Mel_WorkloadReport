@@ -217,7 +217,9 @@ happens** (see §6).
   **"Allow removing groups already associated with tasks"** (`settings.allowRemoveUsed`, default
   **off**): when off, `ListEditor.requestRemove` **blocks** removing an item with `usage>0` (shows
   a "can't remove — turn on the setting" modal); when on, removing a used item pops the
-  reassign-to-"Others" confirm. 0-task items always delete straight away. Items shown
+  reassign-to-"Others" confirm. **Removal ALWAYS confirms now — even a 0-task item** (the
+  confirm modal's copy + button switch to a simple "no tasks use it" variant); nothing in the
+  Settings lists is deleted without a warning. `MondayBoardsCard` removal likewise confirms. Items shown
   **alphabetically** (`sortAlpha`); `withFallback()` sorts (Others last) so the task form/charts
   list A→Z too. The whole page requires sign-in. NOTE: the old **Data backend** card and
   **Developer/danger zone** were removed from the UI (`store.populateSampleData`/`deleteAllTasks`
@@ -757,11 +759,17 @@ LATER phase; the data is already captured for it.
   (`src/types.ts`). **`null`/absent = LEGACY task** recorded before functions existed —
   treated as belonging entirely to the legacy owner (see below) and **upgraded lazily**:
   it only gains `functionData` when someone edits AND saves it. No backfill ever runs.
-- `AppSettings.functions: FunctionConfig[]` — `{ name, color, hiddenWorkTypes[],
-  hiddenAssetTypes[] }`. ⚠️ The type lists are **EXCLUSIONS** ("hidden on this tab"),
-  so empty = offer every master type and newly added master types appear on all tabs
-  automatically (an include-list would drift from the live master lists — that bug was
-  hit and fixed during the build).
+- `AppSettings.functions: FunctionConfig[]` — `{ name, color, workTypes[],
+  assetTypes[] }`. ⚠️ The type lists are **INCLUSIONS** ("offered on this tab") — only
+  listed types appear (intersected with the live master list). **Newly added master types
+  do NOT auto-appear** on any tab; the user opts each function in from Settings. (This
+  replaced an earlier EXCLUSION model — users wanted to assign new types themselves.) To
+  keep inclusion lists from drifting: `normalizeFunctions(raw, masterWorkTypes,
+  masterAssetTypes)` intersects stored lists with the master on every read AND migrates
+  legacy `hiddenWorkTypes`/`hiddenAssetTypes` (empty hidden → all master); the store's
+  `renameListItem`/`removeListItem` rewrite/drop the renamed-or-removed type inside every
+  function's inclusion list; `renameFunction`'s merge-on-collision UNIONS the two lists.
+  A new function (Settings) seeds `workTypes`/`assetTypes` from the CURRENT master lists.
 - `LEGACY_FUNCTION = 'Vietnam Design'` + `legacyOwnerName(functions)` (constants):
   legacy tasks belong to the function named Vietnam Design, falling back to the first
   configured function if it was renamed. `functionColor()` / `FUNCTION_COLORS` map the
@@ -826,8 +834,9 @@ LATER phase; the data is already captured for it.
   Per-tab state lives in `fnDrafts: Record<string, FnDraft>`; disabled drafts KEEP their
   values in form state (re-enable restores) but are stripped at submit. **Toggling OFF a
   tab with values opens a confirm modal.** Per tab: work-type badges + asset counters
-  (master lists minus that function's exclusions, plus any values the task already has),
-  a per-tab total chip, and a timeline switch (off = follows the master timeline).
+  (the function's INCLUSION lists intersected with the live master lists, plus any values
+  the task already has), a per-tab total chip, and a timeline switch (off = follows the
+  master timeline).
 - **Master-timeline envelope**: the Start/End inputs display
   `effectiveStart/effectiveEnd` = the entered dates extended by any enabled function
   timeline that reaches outside them; extended inputs get an amber ring + "Extended to
@@ -872,12 +881,14 @@ LATER phase; the data is already captured for it.
 ### Settings (`Settings.tsx`)
 
 - **Functions card**: add (picks the first unused colour) / rename (via
-  `store.renameFunction`) / remove (blocked-with-modal while in use); expanding a row
-  reveals the colour picker + `TypePicker` chip grids (checked = NOT hidden). Legacy
-  count shows on Vietnam Design (e.g. "185 tasks" = the whole pre-function history).
-- Work types and Asset types are their own separate `ListEditor` cards (like squads/campaigns).
-  (They were briefly merged into one "Types" card; now split again. `ListEditor` still has a
-  dormant `bare` prop — renders without the Card wrapper — left in for reuse.)
+  `store.renameFunction`) / remove (blocked-with-modal while in use, else a confirm modal);
+  expanding a row reveals the colour picker + `TypePicker` chip grids (**checked = INCLUDED/
+  offered on the tab**; `TypePicker` takes `included` + `on = included.includes(t)`). Legacy
+  count shows on the legacy owner (e.g. "185 tasks" = the whole pre-function history).
+- Work types and Asset types share ONE 2-tabbed **"Types"** card (`TypesCard`, tabs "Work types"
+  / "Asset types"), each tab rendering a `ListEditor` with the `bare` + `hideHeading` props
+  (renders without its own Card wrapper). All Settings list panels are height-capped +
+  scrollable (`max-h-*` + `overflow-y-auto`).
 
 ### Testing gotchas (browser evals)
 

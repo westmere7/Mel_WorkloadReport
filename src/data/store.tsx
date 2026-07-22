@@ -393,6 +393,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           delete ids[oldValue]
           nextSettings = { ...nextSettings, peopleMondayIds: ids }
         }
+        // Keep each function's inclusion list aligned when a work/asset type is renamed.
+        const fnKey = key === 'types' ? 'workTypes' : key === 'assetTypes' ? 'assetTypes' : null
+        if (fnKey) {
+          nextSettings = {
+            ...nextSettings,
+            functions: prev.functions.map((f) =>
+              f[fnKey].includes(oldValue)
+                ? { ...f, [fnKey]: Array.from(new Set(f[fnKey].map((t) => (t === oldValue ? trimmed : t)))) }
+                : f,
+            ),
+          }
+        }
         void repo.saveSettings(nextSettings)
         return nextSettings
       })
@@ -420,6 +432,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const ids = { ...prev.peopleMondayIds }
           delete ids[value]
           nextSettings = { ...nextSettings, peopleMondayIds: ids }
+        }
+        // Drop the removed work/asset type from every function's inclusion list.
+        const fnKey = key === 'types' ? 'workTypes' : key === 'assetTypes' ? 'assetTypes' : null
+        if (fnKey) {
+          nextSettings = {
+            ...nextSettings,
+            functions: prev.functions.map((f) =>
+              f[fnKey].includes(value) ? { ...f, [fnKey]: f[fnKey].filter((t) => t !== value) } : f,
+            ),
+          }
         }
         void repo.saveSettings(nextSettings)
         return nextSettings
@@ -462,10 +484,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               .map((f) =>
                 f.name === dupe.name && old
                   ? {
-                      // Union of what both tabs OFFERED = intersection of exclusions.
+                      // Union of what both tabs offered (inclusion lists).
                       ...f,
-                      hiddenWorkTypes: f.hiddenWorkTypes.filter((t) => old.hiddenWorkTypes.includes(t)),
-                      hiddenAssetTypes: f.hiddenAssetTypes.filter((t) => old.hiddenAssetTypes.includes(t)),
+                      workTypes: Array.from(new Set([...f.workTypes, ...old.workTypes])),
+                      assetTypes: Array.from(new Set([...f.assetTypes, ...old.assetTypes])),
                     }
                   : f,
               )

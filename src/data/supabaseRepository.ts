@@ -475,7 +475,11 @@ export class SupabaseRepository implements Repository {
       sizeDurations: normalizeSizeDurations(data.size_durations),
       allowRemoveUsed: data.allow_remove_used ?? DEFAULT_SETTINGS.allowRemoveUsed,
       peopleMondayIds: data.people_monday ?? DEFAULT_SETTINGS.peopleMondayIds,
-      functions: normalizeFunctions(data.functions),
+      functions: normalizeFunctions(
+        data.functions,
+        data.types ?? DEFAULT_SETTINGS.types,
+        data.asset_types ?? DEFAULT_SETTINGS.assetTypes,
+      ),
       mondayBoardIds: normalizeMondayBoards(data.monday_boards),
     }
   }
@@ -537,7 +541,9 @@ export class SupabaseRepository implements Repository {
       sizeDurations: normalizeSizeDurations(data.size_durations ?? settings.sizeDurations),
       allowRemoveUsed: data.allow_remove_used ?? settings.allowRemoveUsed,
       peopleMondayIds: data.people_monday ?? settings.peopleMondayIds,
-      functions: data.functions ? normalizeFunctions(data.functions) : settings.functions,
+      functions: data.functions
+        ? normalizeFunctions(data.functions, data.types ?? settings.types, data.asset_types ?? settings.assetTypes)
+        : settings.functions,
       mondayBoardIds: data.monday_boards ? normalizeMondayBoards(data.monday_boards) : settings.mondayBoardIds,
     }
   }

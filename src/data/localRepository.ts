@@ -209,7 +209,11 @@ export class LocalRepository implements Repository {
       ...DEFAULT_SETTINGS,
       ...stored,
       sizeDurations: normalizeSizeDurations(stored.sizeDurations),
-      functions: normalizeFunctions(stored.functions),
+      functions: normalizeFunctions(
+        stored.functions,
+        stored.types ?? DEFAULT_SETTINGS.types,
+        stored.assetTypes ?? DEFAULT_SETTINGS.assetTypes,
+      ),
       mondayBoardIds: normalizeMondayBoards(stored.mondayBoardIds),
     }
   }

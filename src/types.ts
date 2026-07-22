@@ -104,13 +104,14 @@ export interface FunctionConfig {
   /** Preset color key (see FUNCTION_COLORS in constants) — drives the tab tint. */
   color: string
   /**
-   * Work types HIDDEN from this function's tab. Exclusion list, so an empty
-   * array = offer everything and newly added master types appear on every tab
-   * automatically (no per-function re-seeding when the master lists change).
+   * Work types this function offers on its tab. INCLUSION list: only these
+   * appear (intersected with the master list). Newly added master types do NOT
+   * auto-appear — users opt each function in from Settings. Renaming a master
+   * type rewrites this list; removing one drops it here.
    */
-  hiddenWorkTypes: string[]
-  /** Asset types hidden from this function's tab (same exclusion semantics). */
-  hiddenAssetTypes: string[]
+  workTypes: string[]
+  /** Asset types this function offers on its tab (same inclusion semantics). */
+  assetTypes: string[]
 }
 
 /** User-editable lists + app preferences. */

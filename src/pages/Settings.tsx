@@ -145,6 +145,7 @@ export function SettingsPage() {
 function MondayBoardsCard() {
   const { settings, saveSettings } = useStore()
   const [draft, setDraft] = useState('')
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null)
   if (!isMondayLookupEnabled()) return null
 
   const boards = settings.mondayBoardIds
@@ -199,7 +200,7 @@ function MondayBoardsCard() {
             </a>
             <button
               className="rounded-md p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
-              onClick={() => save(boards.filter((b) => b !== id))}
+              onClick={() => setPendingRemove(id)}
               title="Remove board"
               aria-label={`Remove board ${id}`}
             >
@@ -213,6 +214,38 @@ function MondayBoardsCard() {
           </li>
         )}
       </ul>
+
+      <Modal
+        open={pendingRemove !== null}
+        onClose={() => setPendingRemove(null)}
+        title="Remove board"
+        footer={
+          <>
+            <button className="btn-outline" onClick={() => setPendingRemove(null)}>
+              Cancel
+            </button>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                if (pendingRemove) save(boards.filter((b) => b !== pendingRemove))
+                setPendingRemove(null)
+              }}
+            >
+              Remove
+            </button>
+          </>
+        }
+      >
+        {pendingRemove && (
+          <div className="flex gap-3 rounded-xl bg-brand-50 p-3 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <p>
+              Stop the auto-fill from searching board <strong className="font-mono">{pendingRemove}</strong>? You can
+              add it back anytime.
+            </p>
+          </div>
+        )}
+      </Modal>
     </Card>
   )
 }
@@ -1060,9 +1093,13 @@ function FunctionsCard() {
     // Pick the first preset colour not in use (cycles once all are taken).
     const used = new Set(functions.map((f) => f.color))
     const color = FUNCTION_COLOR_KEYS.find((k) => !used.has(k)) ?? FUNCTION_COLOR_KEYS[functions.length % FUNCTION_COLOR_KEYS.length]
+    // A new function starts offering ALL current types; trim per function below.
     void saveSettings({
       ...settings,
-      functions: [...functions, { name: v, color, hiddenWorkTypes: [], hiddenAssetTypes: [] }],
+      functions: [
+        ...functions,
+        { name: v, color, workTypes: [...settings.types], assetTypes: [...settings.assetTypes] },
+      ],
     })
     setDraft('')
   }
@@ -1070,11 +1107,11 @@ function FunctionsCard() {
   const patch = (name: string, p: Partial<FunctionConfig>) =>
     void saveSettings({ ...settings, functions: functions.map((f) => (f.name === name ? { ...f, ...p } : f)) })
 
-  // Checked = offered on the tab; the stored list holds the EXCLUSIONS, so new
-  // master types automatically show up on every function's tab.
-  const toggleType = (fn: FunctionConfig, kind: 'hiddenWorkTypes' | 'hiddenAssetTypes', t: string) => {
-    const hidden = fn[kind].includes(t) ? fn[kind].filter((x) => x !== t) : [...fn[kind], t]
-    patch(fn.name, { [kind]: hidden })
+  // Checked = offered on the tab. Inclusion list, so a newly added master type
+  // is NOT offered until the user opts this function in here.
+  const toggleType = (fn: FunctionConfig, kind: 'workTypes' | 'assetTypes', t: string) => {
+    const next = fn[kind].includes(t) ? fn[kind].filter((x) => x !== t) : [...fn[kind], t]
+    patch(fn.name, { [kind]: next })
   }
 
   const saveEdit = (name: string) => {
@@ -1209,17 +1246,18 @@ function FunctionsCard() {
                   <TypePicker
                     label="Work types on this tab"
                     all={sortAlpha(settings.types)}
-                    hidden={f.hiddenWorkTypes}
-                    onToggle={(t) => toggleType(f, 'hiddenWorkTypes', t)}
+                    included={f.workTypes}
+                    onToggle={(t) => toggleType(f, 'workTypes', t)}
                   />
                   <TypePicker
                     label="Asset types on this tab"
                     all={sortAlpha(settings.assetTypes)}
-                    hidden={f.hiddenAssetTypes}
-                    onToggle={(t) => toggleType(f, 'hiddenAssetTypes', t)}
+                    included={f.assetTypes}
+                    onToggle={(t) => toggleType(f, 'assetTypes', t)}
                   />
                   <p className="text-[11px] text-faint">
-                    Unchecked types are only hidden from new entry — values a task already has always stay visible.
+                    Only checked types appear on this tab. Newly added types aren’t offered until you check them
+                    here — values a task already has always stay visible.
                   </p>
                 </div>
               )}
@@ -1291,12 +1329,12 @@ function FunctionsCard() {
 function TypePicker({
   label,
   all,
-  hidden,
+  included,
   onToggle,
 }: {
   label: string
   all: string[]
-  hidden: string[]
+  included: string[]
   onToggle: (t: string) => void
 }) {
   return (
@@ -1304,7 +1342,7 @@ function TypePicker({
       <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-faint">{label}</div>
       <div className="flex flex-wrap gap-1">
         {all.map((t) => {
-          const on = !hidden.includes(t)
+          const on = included.includes(t)
           return (
             <button
               key={t}
@@ -1384,9 +1422,10 @@ function ListEditor({
 
   const requestRemove = (item: string) => {
     const count = usage(item)
+    // Always confirm before removing — even an unused item (nothing in the
+    // settings panels is removed without a warning).
     if (count > 0 && !allowRemoveUsed) setBlockedRemove(item)
-    else if (count > 0) setPendingRemove(item)
-    else onRemove(item)
+    else setPendingRemove(item)
   }
 
   const add = () => {
@@ -1597,7 +1636,7 @@ function ListEditor({
                 setPendingRemove(null)
               }}
             >
-              Remove &amp; reassign
+              {pendingRemove && usage(pendingRemove) > 0 ? 'Remove & reassign' : 'Remove'}
             </button>
           </>
         }
@@ -1605,14 +1644,20 @@ function ListEditor({
         {pendingRemove && (
           <div className="flex gap-3 rounded-xl bg-brand-50 p-3 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-            <p>
-              <strong>{pendingRemove}</strong> is linked to{' '}
-              <strong>
-                {usage(pendingRemove)} task{usage(pendingRemove) === 1 ? '' : 's'}
-              </strong>
-              . Removing it will reassign {usage(pendingRemove) === 1 ? 'that task' : 'those tasks'} to{' '}
-              <strong>“{fallback ?? FALLBACK_ITEM}”</strong>. This can’t be undone.
-            </p>
+            {usage(pendingRemove) > 0 ? (
+              <p>
+                <strong>{pendingRemove}</strong> is linked to{' '}
+                <strong>
+                  {usage(pendingRemove)} task{usage(pendingRemove) === 1 ? '' : 's'}
+                </strong>
+                . Removing it will reassign {usage(pendingRemove) === 1 ? 'that task' : 'those tasks'} to{' '}
+                <strong>“{fallback ?? FALLBACK_ITEM}”</strong>. This can’t be undone.
+              </p>
+            ) : (
+              <p>
+                Remove <strong>{pendingRemove}</strong> from this list? No tasks use it. This can’t be undone.
+              </p>
+            )}
           </div>
         )}
       </Modal>

@@ -109,14 +109,16 @@ export function functionColor(key: string | undefined): FunctionColorSet {
 }
 
 /**
- * Default functions. Hidden-type lists start EMPTY = every tab offers the full
- * master lists; Settings trims per function by adding exclusions.
+ * Default functions. Type lists start seeded with the FULL master lists =
+ * every tab offers everything out of the box; Settings trims per function by
+ * un-checking. Newly added master types are NOT auto-added — users opt each
+ * function in (inclusion model).
  */
 export const DEFAULT_FUNCTIONS: FunctionConfig[] = [
-  { name: 'Vietnam Design', color: 'red', hiddenWorkTypes: [], hiddenAssetTypes: [] },
-  { name: 'Melbourne Design', color: 'teal', hiddenWorkTypes: [], hiddenAssetTypes: [] },
-  { name: 'Production', color: 'gold', hiddenWorkTypes: [], hiddenAssetTypes: [] },
-  { name: 'Contents', color: 'green', hiddenWorkTypes: [], hiddenAssetTypes: [] },
+  { name: 'Vietnam Design', color: 'red', workTypes: [...DEFAULT_TYPES], assetTypes: [...DEFAULT_ASSET_TYPES] },
+  { name: 'Melbourne Design', color: 'teal', workTypes: [...DEFAULT_TYPES], assetTypes: [...DEFAULT_ASSET_TYPES] },
+  { name: 'Production', color: 'gold', workTypes: [...DEFAULT_TYPES], assetTypes: [...DEFAULT_ASSET_TYPES] },
+  { name: 'Contents', color: 'green', workTypes: [...DEFAULT_TYPES], assetTypes: [...DEFAULT_ASSET_TYPES] },
 ]
 
 /**
@@ -128,23 +130,48 @@ export function legacyOwnerName(functions: FunctionConfig[]): string {
   return functions.find((f) => f.name === LEGACY_FUNCTION)?.name ?? functions[0]?.name ?? LEGACY_FUNCTION
 }
 
-/** Coerce a stored `functions` value into a valid FunctionConfig[] (defaults on junk). */
-export function normalizeFunctions(raw: unknown): FunctionConfig[] {
+/**
+ * Coerce a stored `functions` value into a valid FunctionConfig[] (defaults on junk).
+ *
+ * Type lists use the INCLUSION model. The master `types`/`assetTypes` lists are
+ * passed in so we can (a) intersect stored include-lists with the current master
+ * (dropping stale names) and (b) migrate legacy EXCLUSION data (`hiddenWorkTypes`
+ * / `hiddenAssetTypes`) to inclusion — an empty hidden list becomes "all master".
+ * A record with neither field seeds to the full master lists.
+ */
+export function normalizeFunctions(
+  raw: unknown,
+  masterWorkTypes: string[] = DEFAULT_TYPES,
+  masterAssetTypes: string[] = DEFAULT_ASSET_TYPES,
+): FunctionConfig[] {
   const cloneDefaults = () =>
-    DEFAULT_FUNCTIONS.map((f) => ({ ...f, hiddenWorkTypes: [...f.hiddenWorkTypes], hiddenAssetTypes: [...f.hiddenAssetTypes] }))
+    DEFAULT_FUNCTIONS.map((f) => ({ ...f, workTypes: [...f.workTypes], assetTypes: [...f.assetTypes] }))
   if (!Array.isArray(raw)) return cloneDefaults()
+  const strings = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : []
+  /** Resolve one type list to an inclusion list against the master. */
+  const resolve = (rec: Record<string, unknown>, incKey: string, hidKey: string, master: string[]): string[] => {
+    if (Array.isArray(rec[incKey])) {
+      const inc = new Set(strings(rec[incKey]))
+      return master.filter((t) => inc.has(t)) // intersect with current master, master order
+    }
+    if (Array.isArray(rec[hidKey])) {
+      const hid = new Set(strings(rec[hidKey])) // legacy exclusion → inclusion
+      return master.filter((t) => !hid.has(t))
+    }
+    return [...master] // no info stored → offer everything
+  }
   const out: FunctionConfig[] = []
   for (const f of raw) {
     if (!f || typeof f !== 'object') continue
-    const name = typeof (f as FunctionConfig).name === 'string' ? (f as FunctionConfig).name.trim() : ''
+    const rec = f as Record<string, unknown>
+    const name = typeof rec.name === 'string' ? rec.name.trim() : ''
     if (!name || out.some((o) => o.name === name)) continue
-    const strings = (v: unknown): string[] =>
-      Array.isArray(v) ? v.filter((t): t is string => typeof t === 'string') : []
     out.push({
       name,
-      color: typeof (f as FunctionConfig).color === 'string' ? (f as FunctionConfig).color : 'plum',
-      hiddenWorkTypes: strings((f as FunctionConfig).hiddenWorkTypes),
-      hiddenAssetTypes: strings((f as FunctionConfig).hiddenAssetTypes),
+      color: typeof rec.color === 'string' ? rec.color : 'plum',
+      workTypes: resolve(rec, 'workTypes', 'hiddenWorkTypes', masterWorkTypes),
+      assetTypes: resolve(rec, 'assetTypes', 'hiddenAssetTypes', masterAssetTypes),
     })
   }
   return out.length ? out : cloneDefaults()
@@ -231,8 +258,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   assetTypes: DEFAULT_ASSET_TYPES,
   functions: DEFAULT_FUNCTIONS.map((f) => ({
     ...f,
-    hiddenWorkTypes: [...f.hiddenWorkTypes],
-    hiddenAssetTypes: [...f.hiddenAssetTypes],
+    workTypes: [...f.workTypes],
+    assetTypes: [...f.assetTypes],
   })),
   sizeDurations: { ...DEFAULT_SIZE_DURATIONS },
   allowRemoveUsed: false,

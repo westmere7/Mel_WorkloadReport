@@ -40,7 +40,11 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'new',
-        text: 'Settings → Functions: add, rename, colour and remove functions, and choose which work / asset types each function’s tab offers. Work types and asset types now share one “Types” card.',
+        text: 'Settings → Functions: add, rename, colour and remove functions, and tick exactly which work / asset types each function’s tab offers. Newly added types stay off every tab until you opt a function in — renaming or removing a type updates those tabs automatically. Work types and asset types now share one “Types” card.',
+      },
+      {
+        kind: 'improved',
+        text: 'Removing anything from a Settings list now always asks first — even items no task uses.',
       },
       {
         kind: 'new',
