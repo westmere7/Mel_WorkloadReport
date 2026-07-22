@@ -708,9 +708,18 @@ derives half). Manual, per-task — **no background sync**; every field stays ed
   2. `supabase functions deploy monday-search` (default JWT verify is fine — `functions.invoke` sends
      the anon key, a valid JWT).
   3. Set `VITE_MONDAY_LOOKUP=1` in the app build and restart.
-- The function pages the board (up to ~500 items), filters by name/code substring, returns ≤15 hits;
-  Timeline `value` JSON gives `from`/`to`. ⚠️ **Column ids are board-specific** — they must be set as
-  secrets; the board id + ids are still TBD from the team (the button is dark until then).
+- The function pages EACH board (up to ~500 items total across boards), filters by name/code
+  substring, returns ≤15 hits ranked across all boards; Timeline `value` JSON gives `from`/`to`.
+- **Multiple boards (added later):** the boards to search are configured in the app —
+  `AppSettings.mondayBoardIds` (`monday_boards` jsonb column; seeded `['1967557512','5026397227']`;
+  `normalizeMondayBoards` + guarded write; edited in Settings → **monday.com boards** card, shown
+  only when `isMondayLookupEnabled()`). `searchMonday(query, boardIds)` sends them in the request
+  body; the Edge Function loops each board (own cursor) and merges results. `MONDAY_BOARD_ID` is now
+  just a comma-separated FALLBACK when the request omits `boardIds`. ⚠️ **Column ids must be the SAME
+  across the searched boards** (they're one shared secret set). Two operator actions to enable
+  2-board search: (1) redeploy `monday-search` (else it ignores `boardIds` and uses the secret's
+  board); (2) re-run `schema.sql` for `monday_boards` so board-list EDITS persist (until then the
+  client still sends the DEFAULT two boards, so search works — only editing the list doesn't stick).
 
 ---
 
