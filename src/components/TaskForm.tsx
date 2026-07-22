@@ -550,6 +550,23 @@ function CodeNameField({
               }
             }}
           />
+          {(name || code) && (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => {
+                setName('')
+                setCode('')
+                setEditing(false)
+                inputRef.current?.focus()
+              }}
+              title="Clear name and code"
+              aria-label="Clear task name"
+              className="shrink-0 rounded p-1 text-faint transition hover:text-rmit-red"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
           {mondayEnabled && (
             <button
               type="button"

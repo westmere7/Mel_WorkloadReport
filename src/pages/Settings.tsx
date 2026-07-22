@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, Check, ChevronDown, Download, Eraser, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Archive, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -1257,9 +1257,9 @@ function FunctionsCard() {
                 )}
               </div>
               {isOpen && !isEditing && (
-                <div className="space-y-3 border-t border-line px-3 py-2.5">
+                <div className="space-y-5 border-t border-line px-3.5 py-4">
                   <div>
-                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-faint">Tab colour</div>
+                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-faint">Tab colour</div>
                     <div className="flex items-center gap-1.5">
                       {FUNCTION_COLOR_KEYS.map((k) => (
                         <button
@@ -1290,7 +1290,7 @@ function FunctionsCard() {
                     onToggle={(t) => toggleType(f, 'assetTypes', t)}
                     onClear={() => patch(f.name, { assetTypes: [] })}
                   />
-                  <p className="text-[11px] text-faint">
+                  <p className="border-t border-line pt-3 text-[11px] leading-relaxed text-faint">
                     Only checked types appear on this tab. Newly added types aren’t offered until you check them
                     here — values a task already has always stay visible.
                   </p>
@@ -1377,21 +1377,20 @@ function TypePicker({
 }) {
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between gap-2">
+      <div className="mb-2 flex items-baseline gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-faint">{label}</span>
         {included.length > 0 && (
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-faint transition-colors hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
+            className="text-[10px] font-medium text-faint underline underline-offset-2 transition-colors hover:text-rmit-red"
             title="Untick every type on this tab. Tasks that already recorded these keep them."
           >
-            <Eraser className="h-3 w-3" />
             Clear
           </button>
         )}
       </div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-x-2 gap-y-1.5">
         {all.map((t) => {
           const on = included.includes(t)
           return (
@@ -1399,7 +1398,7 @@ function TypePicker({
               key={t}
               type="button"
               className={cx(
-                'rounded-full border px-2 py-0.5 text-[11px] transition-colors',
+                'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
                 on
                   ? 'border-rmit-navy bg-rmit-navy text-white dark:border-white/60 dark:bg-white/15'
                   : 'border-line text-muted hover:border-ink/40',

@@ -44,6 +44,35 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const railOnly = (expandedMd: string) => (collapsed ? '' : expandedMd)
   const hideLabel = collapsed ? 'hidden' : 'hidden md:inline'
 
+  // The Showreel/Showcase link sits on its own at the BOTTOM of the rail; the
+  // rest stay grouped up top.
+  const topNav = nav.filter((item) => item.to !== '/showcase')
+  const bottomNav = nav.filter((item) => item.to === '/showcase')
+
+  const renderLink = ({ to, label, icon: Icon }: NavItem) => (
+    <NavLink
+      key={to}
+      to={to}
+      end={to === '/'}
+      title={label}
+      onClick={(e) => e.stopPropagation()}
+      className={({ isActive }) =>
+        cx(
+          'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
+          collapsed ? 'justify-center' : 'justify-center md:justify-start',
+          isActive ? 'bg-white/10 text-white shadow-inner' : 'text-navy-100 hover:bg-white/5 hover:text-white',
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <Icon className={cx('h-5 w-5 shrink-0', isActive ? 'text-rmit-red' : '')} strokeWidth={2.2} />
+          <span className={hideLabel}>{label}</span>
+        </>
+      )}
+    </NavLink>
+  )
+
   return (
     <div className="relative hidden shrink-0 md:block">
       <aside
@@ -71,34 +100,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           </div>
 
           <nav className={cx('flex flex-col gap-1.5', railOnly('md:items-stretch'))}>
-            {nav.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === '/'}
-                title={label}
-                onClick={(e) => e.stopPropagation()}
-                className={({ isActive }) =>
-                  cx(
-                    'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
-                    collapsed ? 'justify-center' : 'justify-center md:justify-start',
-                    isActive
-                      ? 'bg-white/10 text-white shadow-inner'
-                      : 'text-navy-100 hover:bg-white/5 hover:text-white',
-                  )
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <Icon
-                      className={cx('h-5 w-5 shrink-0', isActive ? 'text-rmit-red' : '')}
-                      strokeWidth={2.2}
-                    />
-                    <span className={hideLabel}>{label}</span>
-                  </>
-                )}
-              </NavLink>
-            ))}
+            {topNav.map(renderLink)}
           </nav>
 
           {canEdit && (
@@ -125,6 +127,13 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           )}
 
           <div className="flex-1" />
+
+          {/* Showreel — parked low in the rail, just above the footer. */}
+          {bottomNav.length > 0 && (
+            <nav className={cx('mb-2 flex flex-col gap-1.5', railOnly('md:items-stretch'))}>
+              {bottomNav.map(renderLink)}
+            </nav>
+          )}
 
           <div className={cx('px-2 pb-1', collapsed ? 'hidden' : 'hidden md:block')}>
             <p className="text-[11px] leading-relaxed text-navy-200">RMIT GCMC Team</p>
