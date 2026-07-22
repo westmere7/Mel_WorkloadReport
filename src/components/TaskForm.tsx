@@ -1127,39 +1127,28 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   // Tab whose disable needs confirming because the save would drop its values.
   const [pendingDisable, setPendingDisable] = useState<string | null>(null)
 
-  // Auto-enable function tab(s) when assigned PICs match a function's configured people list
+  // Auto-enable a function tab when a PIC is ADDED that matches its configured
+  // people list. Keyed off newly-added people only (diffed against the previous
+  // set) — so it never re-enables on open or fights a tab the user turned off.
+  // The ref seeds from the task's saved people, so simply opening a task with
+  // matching PICs is a no-op; only a fresh selection triggers it.
+  const prevPeopleRef = useRef<string[]>(initial?.people ?? [])
   useEffect(() => {
-    if (!people || people.length === 0) return
-    let firstMatchedFn: string | null = null
-
-    for (const fnConfig of settings.functions) {
-      if (!fnConfig.people || fnConfig.people.length === 0) continue
-      if (fnConfig.people.some((p) => people.includes(p))) {
-        if (!firstMatchedFn) firstMatchedFn = fnConfig.name
-      }
-    }
-
-    setFnDrafts((prev) => {
-      let changed = false
-      const next = { ...prev }
-      for (const fnConfig of settings.functions) {
-        if (!fnConfig.people || fnConfig.people.length === 0) continue
-        const hasMatch = fnConfig.people.some((p) => people.includes(p))
-        if (hasMatch) {
-          const current = next[fnConfig.name] ?? emptyDraft()
-          if (!current.enabled) {
-            next[fnConfig.name] = { ...current, enabled: true }
-            changed = true
-          }
-        }
-      }
-      return changed ? next : prev
+    const prev = prevPeopleRef.current
+    const added = people.filter((p) => !prev.includes(p))
+    prevPeopleRef.current = people
+    if (added.length === 0) return
+    const toEnable = settings.functions.filter(
+      (f) => f.people?.some((p) => added.includes(p)) && !fnDrafts[f.name]?.enabled,
+    )
+    if (toEnable.length === 0) return
+    setFnDrafts((cur) => {
+      const next = { ...cur }
+      for (const f of toEnable) next[f.name] = { ...(next[f.name] ?? emptyDraft()), enabled: true }
+      return next
     })
-
-    if (firstMatchedFn) {
-      setActiveFn(firstMatchedFn)
-    }
-  }, [people, settings.functions])
+    setActiveFn(toEnable[0].name)
+  }, [people, settings.functions, fnDrafts])
 
   // Guarantee that activeFn always points to an enabled function whenever at least one function is on
   useEffect(() => {
