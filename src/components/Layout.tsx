@@ -125,10 +125,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
               )}
             </div>
 
-            {/* Page-injected slot (e.g. dashboard span filter) — full-width second row on
-                mobile, inline on the right at sm+ */}
-            {slots.right && (
-              <div className="order-3 w-full sm:order-2 sm:ml-auto sm:w-auto">{slots.right}</div>
+            {/* Page-injected slots (function filter + span filter) — on mobile, shown in
+                full-width second row so function selection is accessible */}
+            {(slots.left || slots.right) && (
+              <div className="order-3 flex w-full flex-wrap items-center justify-between gap-2 sm:order-2 sm:ml-auto sm:w-auto">
+                {slots.left && <div className="flex items-center sm:hidden">{slots.left}</div>}
+                {slots.right && <div className="flex items-center">{slots.right}</div>}
+              </div>
             )}
           </header>
 
