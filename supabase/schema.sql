@@ -66,6 +66,10 @@ alter table public.tasks
 alter table public.tasks
   add column if not exists starred boolean not null default false;
 
+-- Monday link URL (idempotent). Direct link to the item on monday.com
+alter table public.tasks
+  add column if not exists monday_url text;
+
 create index if not exists tasks_created_at_idx on public.tasks (created_at desc);
 create index if not exists tasks_squad_idx      on public.tasks (squad);
 create index if not exists tasks_campaign_idx   on public.tasks (campaign);

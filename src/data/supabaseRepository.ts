@@ -241,6 +241,18 @@ function stripStarred<T extends { starred?: unknown }>(row: T): Omit<T, 'starred
   return rest
 }
 
+/** True if a Supabase error is complaining about a missing tasks `monday_url` column (pre-migration). */
+function isMissingMondayUrlColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('monday_url') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** Drop the `monday_url` key from a row (used to retry when the column isn't there yet). */
+function stripMondayUrl<T extends { monday_url?: unknown }>(row: T): Omit<T, 'monday_url'> {
+  const { monday_url: _drop, ...rest } = row
+  return rest
+}
+
 /**
  * Supabase-backed repository. Active automatically when VITE_SUPABASE_URL
  * and VITE_SUPABASE_ANON_KEY are set. Expects the schema in supabase/schema.sql.
@@ -304,6 +316,10 @@ export class SupabaseRepository implements Repository {
       row = stripStarred(row)
       ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
     }
+    if (error && isMissingMondayUrlColumn(error)) {
+      row = stripMondayUrl(row)
+      ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
+    }
     if (error) throw error
     return rowToTask(data)
   }
@@ -337,6 +353,10 @@ export class SupabaseRepository implements Repository {
       rows = rows.map(stripStarred)
       ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
     }
+    if (error && isMissingMondayUrlColumn(error)) {
+      rows = rows.map(stripMondayUrl)
+      ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
+    }
     if (error) throw error
     return (data ?? []).map(rowToTask)
   }
@@ -362,6 +382,10 @@ export class SupabaseRepository implements Repository {
     }
     if (error && isMissingStarredColumn(error)) {
       row = stripStarred(row)
+      ;({ data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single())
+    }
+    if (error && isMissingMondayUrlColumn(error)) {
+      row = stripMondayUrl(row)
       ;({ data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single())
     }
     if (error) throw error
