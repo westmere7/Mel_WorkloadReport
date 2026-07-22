@@ -19,6 +19,7 @@ import { Badge, toneForLabel } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { MultiSelect } from '../components/ui/MultiSelect'
 import { SpanFilter } from '../components/SpanFilter'
+import { FunctionFilter } from '../components/FunctionFilter'
 import { ImportBackupModal } from '../components/ImportBackupModal'
 import { TaskForm } from '../components/TaskForm'
 import { TaskDetails } from '../components/TaskDetails'
@@ -26,6 +27,7 @@ import { useStore } from '../data/store'
 import { useAuth } from '../lib/auth'
 import { SIZES, SIZE_ORDER, SIZE_TONE, withFallback } from '../constants'
 import { cx, formatDate } from '../lib/format'
+import { sliceTasksByFunctions } from '../lib/functionData'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { addedOrderMap } from '../lib/analytics'
 import type { Half, Task, TaskInput } from '../types'
@@ -52,6 +54,7 @@ export function TaskList() {
   const [sizes, setSizes] = useState<string[]>(() => searchParams.getAll('size'))
   const [types, setTypes] = useState<string[]>(() => searchParams.getAll('type'))
   const [assetTypes, setAssetTypes] = useState<string[]>(() => searchParams.getAll('asset'))
+  const [fnFilter, setFnFilter] = useState<string[]>(() => searchParams.getAll('function'))
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'no', dir: 'desc' })
 
   const [editing, setEditing] = useState<Task | null>(null)
@@ -66,12 +69,19 @@ export function TaskList() {
   const addedOrder = useMemo(() => addedOrderMap(tasks), [tasks])
   const taskNo = (t: Task) => addedOrder.get(t.id) ?? 0
 
+  // Project to the selected functions' slices first (same as the dashboard filter):
+  // narrows to tasks touching those functions and counts only their share.
+  const fnTasks = useMemo(
+    () => sliceTasksByFunctions(tasks, fnFilter, settings.functions),
+    [tasks, fnFilter, settings.functions],
+  )
+
   const filtered = useMemo(() => {
     // Ignore square brackets so a code pasted as "[26.0202.A] …" still matches —
     // we strip brackets from new tasks, but users paste them from other trackers.
     const strip = (s: string) => s.replace(/[[\]]/g, '')
     const q = strip(query.trim().toLowerCase())
-    const rows = filterBySpan(tasks, spanMode, activeYear, spanHalf).filter((t) => {
+    const rows = filterBySpan(fnTasks, spanMode, activeYear, spanHalf).filter((t) => {
       if (q && !strip(`${t.code} ${t.name}`.toLowerCase()).includes(q)) return false
       if (squads.length && !squads.includes(t.squad)) return false
       if (campaigns.length && !campaigns.includes(t.campaign)) return false
@@ -90,7 +100,7 @@ export function TaskList() {
       const bv = b[sort.key]
       return String(av ?? '').localeCompare(String(bv ?? '')) * dir
     })
-  }, [tasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, sort, addedOrder])
+  }, [fnTasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, sort, addedOrder])
 
   // Pagination — filter/sort first, then slice into pages of PAGE_SIZE.
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -103,7 +113,7 @@ export function TaskList() {
   // underlying tasks update — that would yank you off your current page).
   useEffect(() => {
     setPage(1)
-  }, [query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, sort])
+  }, [query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, fnFilter, sort])
 
   const toggleSort = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
@@ -132,6 +142,7 @@ export function TaskList() {
     setSizes([])
     setTypes([])
     setAssetTypes([])
+    setFnFilter([])
   }
 
   const hasFilters =
@@ -142,7 +153,8 @@ export function TaskList() {
     people.length ||
     sizes.length ||
     types.length ||
-    assetTypes.length
+    assetTypes.length ||
+    fnFilter.length
 
   return (
     <div className="space-y-4">
@@ -178,6 +190,8 @@ export function TaskList() {
             onYear={setSpanYear}
             onHalf={setSpanHalf}
           />
+
+          <FunctionFilter functions={settings.functions} selected={fnFilter} onChange={setFnFilter} />
 
           {canEdit && (
             <button className="btn-outline ml-auto" onClick={() => setIoOpen(true)}>

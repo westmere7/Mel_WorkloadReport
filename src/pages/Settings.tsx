@@ -226,7 +226,7 @@ function MondayBoardsCard() {
           <Plus className="h-4 w-4" />
         </button>
       </div>
-      <ul ref={listRef} className="max-h-[21rem] space-y-1.5 overflow-y-auto">
+      <ul ref={listRef} className="max-h-[27rem] space-y-1.5 overflow-y-auto">
         {boards.map((id) => (
           <li
             key={id}
@@ -1193,7 +1193,7 @@ function FunctionsCard() {
           <Plus className="h-4 w-4" />
         </button>
       </div>
-      <ul ref={listRef} className="max-h-[26rem] space-y-1.5 overflow-y-auto">
+      <ul ref={listRef} className="max-h-[34rem] space-y-1.5 overflow-y-auto">
         {functions.map((f) => {
           const count = functionUsage(f.name)
           const isOpen = expanded === f.name
@@ -1571,7 +1571,7 @@ function ListEditor({
           </span>
         </div>
       )}
-      <ul ref={listRef} className="max-h-[21rem] space-y-1.5 overflow-y-auto">
+      <ul ref={listRef} className="max-h-[27rem] space-y-1.5 overflow-y-auto">
         {sortedItems.map((item) => {
           const count = usage(item)
           const isLocked = !!locked?.includes(item)

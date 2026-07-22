@@ -1,10 +1,11 @@
 import { useState } from 'react'
+import { CalendarClock } from 'lucide-react'
 import { Badge, toneForLabel } from './ui/Badge'
 import { ImageLightbox } from './ui/ImageLightbox'
 import { useStore } from '../data/store'
-import { SIZE_TONE, SIZE_DESCRIPTIONS, withFallback } from '../constants'
+import { SIZE_TONE, SIZE_DESCRIPTIONS, functionColor, legacyOwnerName, withFallback } from '../constants'
 import { cx, formatDate } from '../lib/format'
-import type { Task } from '../types'
+import type { FunctionEntry, Task } from '../types'
 
 /** Human-readable span between two ISO dates (inclusive), or null if unavailable. */
 function formatDuration(startISO: string | null, endISO: string | null): string | null {
@@ -33,12 +34,48 @@ export function TaskDetails({
   const { settings } = useStore()
   const [lightbox, setLightbox] = useState<string | null>(null)
 
-  // Asset types with a count > 0, in the app's asset-type order.
-  const assetRows = withFallback(settings.assetTypes)
-    .map((name) => ({ name, count: task.assetBreakdown[name] ?? 0 }))
-    .filter((r) => r.count > 0)
-
   const duration = formatDuration(task.startDate, task.endDate)
+
+  // Per-function workload slices. A task with `functionData` shows one card per
+  // recording function (in tab order, orphans last); a LEGACY task (no slices)
+  // shows a single card for the legacy owner built from its combined fields.
+  const fd = task.functionData
+  const slices: { name: string; color: string; entry: FunctionEntry }[] = fd
+    ? (() => {
+        const known = new Set(settings.functions.map((f) => f.name))
+        return [
+          ...settings.functions
+            .filter((f) => fd[f.name])
+            .map((f) => ({ name: f.name, color: f.color, entry: fd[f.name]! })),
+          ...Object.keys(fd)
+            .filter((n) => !known.has(n))
+            .map((n) => ({ name: n, color: 'plum', entry: fd[n]! })),
+        ]
+      })()
+    : [
+        {
+          name: legacyOwnerName(settings.functions),
+          color: settings.functions.find((f) => f.name === legacyOwnerName(settings.functions))?.color ?? 'plum',
+          entry: {
+            types: task.types,
+            assetBreakdown: task.assetBreakdown,
+            assetTotal: task.assetTotal,
+            timelineOn: false,
+            startDate: task.startDate,
+            endDate: task.endDate,
+          },
+        },
+      ]
+
+  // Ordered, count>0 asset rows for one breakdown (app order first, extras after).
+  const assetRowsFor = (breakdown: Record<string, number>) => {
+    const order = withFallback(settings.assetTypes)
+    const known = order.map((name) => ({ name, count: breakdown[name] ?? 0 })).filter((r) => r.count > 0)
+    const extras = Object.keys(breakdown)
+      .filter((k) => !order.includes(k) && (breakdown[k] ?? 0) > 0)
+      .map((k) => ({ name: k, count: breakdown[k] }))
+    return [...known, ...extras]
+  }
 
   return (
     <div className="space-y-5">
@@ -82,32 +119,65 @@ export function TaskDetails({
         {duration && <Meta label="Duration">{duration}</Meta>}
       </div>
 
-      {/* Work types */}
-      <Section label="Work type(s)">
-        <ChipList items={task.types} tone="gray" />
-      </Section>
-
-      {/* Assets */}
+      {/* Workload by function — one card per recording function */}
       <Section
-        label="Asset breakdown"
+        label="Workload by function"
         trailing={
           <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
             {task.assetTotal} total
           </span>
         }
       >
-        {assetRows.length ? (
-          <div className="flex flex-wrap gap-1.5">
-            {assetRows.map((r) => (
-              <span key={r.name} className="chip border border-line bg-card text-ink">
-                {r.name}
-                <span className="font-bold text-rmit-navy dark:text-navy-100">{r.count}</span>
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted">No assets recorded.</p>
-        )}
+        <div className="space-y-2.5">
+          {slices.map((s) => {
+            const col = functionColor(s.color)
+            const rows = assetRowsFor(s.entry.assetBreakdown)
+            return (
+              <div key={s.name} className="rounded-xl border-2 bg-card p-3.5" style={{ borderColor: col.hex }}>
+                <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: col.hex }} />
+                  <h4 className="text-sm font-bold text-ink">{s.name}</h4>
+                  <span className="rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-ink">
+                    {s.entry.assetTotal} {s.entry.assetTotal === 1 ? 'asset' : 'assets'}
+                  </span>
+                  {s.entry.timelineOn && (s.entry.startDate || s.entry.endDate) && (
+                    <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted">
+                      <CalendarClock className="h-3 w-3" />
+                      {formatDate(s.entry.startDate) || '—'} – {formatDate(s.entry.endDate) || '—'}
+                    </span>
+                  )}
+                </div>
+
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-faint">Work type(s)</p>
+                {s.entry.types.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {s.entry.types.map((t) => (
+                      <Badge key={t} tone="gray">
+                        {t}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted">—</p>
+                )}
+
+                <p className="mb-1 mt-3 text-[10px] font-semibold uppercase tracking-wide text-faint">Assets</p>
+                {rows.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {rows.map((r) => (
+                      <span key={r.name} className="chip border border-line bg-subtle text-ink">
+                        {r.name}
+                        <span className="font-bold text-rmit-navy dark:text-navy-100">{r.count}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted">No assets recorded.</p>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </Section>
 
       {/* People */}

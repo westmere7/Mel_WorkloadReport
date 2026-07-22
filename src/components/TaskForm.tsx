@@ -785,6 +785,7 @@ function Section({
   action,
   collapsible = false,
   defaultOpen = true,
+  dotFilled,
   children,
 }: {
   title?: string
@@ -793,8 +794,14 @@ function Section({
   action?: ReactNode
   collapsible?: boolean
   defaultOpen?: boolean
+  /** When set, show a live status dot before the title (green = filled, red = empty). */
+  dotFilled?: boolean
   children: ReactNode
 }) {
+  const dot =
+    dotFilled !== undefined ? (
+      <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', dotFilled ? 'bg-accent-green' : 'bg-rmit-red')} />
+    ) : null
   const [open, setOpen] = useState(defaultOpen)
   return (
     <section className={cx('space-y-4', !first && (divider ? 'border-t border-line pt-5' : 'pt-5'))}>
@@ -812,7 +819,12 @@ function Section({
               />
             </button>
           ) : (
-            title && <h3 className="text-sm font-bold text-ink">{title}</h3>
+            title && (
+              <h3 className="flex items-center gap-1.5 text-sm font-bold text-ink">
+                {dot}
+                {title}
+              </h3>
+            )
           )}
           {action}
         </div>
@@ -1533,6 +1545,18 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       {/* ── Function-specific workload: one tab per GCMC function ────────── */}
       <Section
         title="Workload by function"
+        dotFilled={(() => {
+          // Green only when every enabled tab has BOTH its dots green — i.e. ≥1 work
+          // type AND ≥1 asset counted (matches the per-tab WORK TYPE(S)/ASSETS dots).
+          const enabled = functionConfigs.filter((f) => fnDrafts[f.name]?.enabled)
+          return (
+            enabled.length > 0 &&
+            enabled.every((f) => {
+              const d = fnDrafts[f.name]!
+              return d.types.length > 0 && sumBreakdown(d.breakdown) > 0
+            })
+          )
+        })()}
         action={
           <span className="rounded-full border border-line px-2.5 py-0.5 text-xs font-semibold text-ink">
             {breakdownSum} total
@@ -1762,8 +1786,9 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                       onClick={() => patchDraft(f.name, { timelineOn: !d.timelineOn })}
                       className={cx(
                         'relative h-4 w-7 shrink-0 rounded-full transition-colors',
-                        d.timelineOn ? 'bg-accent-green' : 'bg-line',
+                        !d.timelineOn && 'bg-line',
                       )}
+                      style={d.timelineOn ? { backgroundColor: col.hex } : undefined}
                     >
                       <span
                         className={cx(
@@ -1918,12 +1943,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             type="button"
             onClick={() => setImagesOpen(true)}
             title="Attach demo images to this task"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 hover:text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300 dark:hover:bg-amber-500/25"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-subtle px-2.5 py-1 text-xs font-semibold text-muted transition hover:bg-card hover:text-ink"
           >
             <ImagePlus className="h-3.5 w-3.5" />
             Demo Images
             {images.length > 0 && (
-              <span className="rounded-full bg-amber-600 px-1.5 text-[10px] font-bold leading-4 text-white">
+              <span className="rounded-full bg-faint px-1.5 text-[10px] font-bold leading-4 text-white">
                 {images.length}
               </span>
             )}
