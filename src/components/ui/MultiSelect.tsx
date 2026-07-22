@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { Check, ChevronDown, Search, X } from 'lucide-react'
 import { cx } from '../../lib/format'
 
 interface MultiSelectProps {
@@ -9,13 +9,16 @@ interface MultiSelectProps {
   placeholder?: string
   /** Keep chips on one line, collapsing the overflow to a "+N" chip only when they don't fit. */
   overflowCollapse?: boolean
+  /** Show a search box atop the dropdown to filter options (for long lists). */
+  searchable?: boolean
 }
 
 const CHIP_CLS = 'chip shrink-0 bg-navy-50 text-navy-600 dark:bg-white/10 dark:text-navy-100'
 const GAP = 6
 
-export function MultiSelect({ options, value, onChange, placeholder = 'Select…', overflowCollapse }: MultiSelectProps) {
+export function MultiSelect({ options, value, onChange, placeholder = 'Select…', overflowCollapse, searchable }: MultiSelectProps) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   const rowRef = useRef<HTMLDivElement>(null)
   const measRef = useRef<HTMLDivElement>(null)
@@ -28,6 +31,11 @@ export function MultiSelect({ options, value, onChange, placeholder = 'Select…
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
+
+  // Clear the search each time the dropdown closes.
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
 
   // Measure how many chips fit on one line; collapse the rest into a "+N" chip.
   useLayoutEffect(() => {
@@ -84,7 +92,9 @@ export function MultiSelect({ options, value, onChange, placeholder = 'Select…
         onClick={() => setOpen((o) => !o)}
         className={cx(
           'input flex min-h-[44px] items-center gap-1.5 text-left',
-          open && 'border-rmit-red ring-2 ring-brand-100',
+          // Show the standard field highlight while open (focus moves to the search
+          // box, so the button's own :focus ring wouldn't otherwise show).
+          open && 'border-rmit-red ring-2 ring-brand-100 dark:ring-brand-500/25',
         )}
       >
         <div
@@ -126,11 +136,26 @@ export function MultiSelect({ options, value, onChange, placeholder = 'Select…
       )}
 
       {open && (
-        <div className="absolute z-30 mt-1.5 max-h-64 w-full overflow-auto rounded-xl border border-line bg-card py-1.5 shadow-card">
+        <div className="absolute z-30 mt-1.5 flex max-h-64 w-full flex-col overflow-hidden rounded-xl border border-line bg-card shadow-card">
+          {searchable && (
+            <div className="relative shrink-0 border-b border-line p-1.5">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search…"
+                className="h-8 w-full rounded-lg border border-line bg-subtle pl-8 pr-2 text-sm text-ink outline-none placeholder:text-faint"
+              />
+            </div>
+          )}
+          <div className="overflow-auto py-1.5">
           {options.length === 0 && (
             <p className="px-3 py-2 text-xs text-muted">No options — add them in Settings.</p>
           )}
-          {options.map((opt) => {
+          {options
+            .filter((opt) => !query || opt.toLowerCase().includes(query.trim().toLowerCase()))
+            .map((opt) => {
             const selected = value.includes(opt)
             return (
               <button
@@ -151,6 +176,12 @@ export function MultiSelect({ options, value, onChange, placeholder = 'Select…
               </button>
             )
           })}
+          {options.length > 0 &&
+            query &&
+            !options.some((opt) => opt.toLowerCase().includes(query.trim().toLowerCase())) && (
+              <p className="px-3 py-2 text-xs text-muted">No matches for “{query.trim()}”.</p>
+            )}
+          </div>
         </div>
       )}
     </div>

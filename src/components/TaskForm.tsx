@@ -1870,6 +1870,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             onChange={setPeople}
             placeholder="Assign team members…"
             overflowCollapse
+            searchable
           />
         </div>
         <div>
