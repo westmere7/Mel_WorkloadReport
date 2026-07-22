@@ -29,7 +29,7 @@ export function Modal({ open, onClose, title, children, footer, wide, closeOnBac
       onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
-        className={`card my-auto w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} p-0`}
+        className={`card my-auto w-full ${wide ? 'max-w-3xl lg:max-w-7xl' : 'max-w-lg'} p-0`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
@@ -38,7 +38,7 @@ export function Modal({ open, onClose, title, children, footer, wide, closeOnBac
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="px-5 py-5">{children}</div>
+        <div className="px-5 py-5 lg:px-7 lg:py-6">{children}</div>
         {footer && (
           <div className="flex justify-end gap-2 border-t border-line px-5 py-4">{footer}</div>
         )}

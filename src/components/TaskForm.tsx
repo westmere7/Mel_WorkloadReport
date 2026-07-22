@@ -11,6 +11,7 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
+  ToggleRight,
   Trash2,
   X,
 } from 'lucide-react'
@@ -764,7 +765,7 @@ function CodeNameField({
       <label className={cx('label', filledIdentity && 'is-filled')}>Task code &amp; name</label>
       <div ref={wrapRef} className="relative">
         <div
-          className="flex h-12 items-center gap-2 rounded-xl border border-line bg-card px-2.5 transition focus-within:border-rmit-red focus-within:ring-2 focus-within:ring-brand-100 dark:focus-within:ring-brand-500/25"
+          className="flex h-14 items-center gap-2 rounded-xl border border-line bg-card px-3 transition focus-within:border-rmit-red focus-within:ring-2 focus-within:ring-brand-100 dark:focus-within:ring-brand-500/25"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) inputRef.current?.focus()
           }}
@@ -772,7 +773,7 @@ function CodeNameField({
           {hasCode && !editing && (
             <span
               className={cx(
-                'inline-flex shrink-0 items-center gap-1 rounded-lg border py-1 pl-2 pr-1 font-mono text-sm font-semibold',
+                'inline-flex shrink-0 items-center gap-1 rounded-lg border py-1 pl-2 pr-1 font-mono text-base font-semibold',
                 chipCls,
               )}
               title={chipTitle}
@@ -793,7 +794,7 @@ function CodeNameField({
           )}
           <input
             ref={inputRef}
-            className="h-full min-w-0 flex-1 bg-transparent text-base font-semibold text-ink outline-none placeholder:font-normal placeholder:text-faint"
+            className="h-full min-w-0 flex-1 bg-transparent text-lg font-semibold text-ink outline-none placeholder:font-normal placeholder:text-faint"
             placeholder={hasCode ? 'Task name' : 'Task name — or paste “[26.0716.A] Name”'}
             value={name}
             onChange={(e) => (editing ? setName(e.target.value) : applyIdentity(e.target.value))}
@@ -995,6 +996,7 @@ function Section({
   collapsible = false,
   defaultOpen = true,
   dotFilled,
+  className,
   children,
 }: {
   title?: string
@@ -1005,6 +1007,8 @@ function Section({
   defaultOpen?: boolean
   /** When set, show a live status dot before the title (green = filled, red = empty). */
   dotFilled?: boolean
+  /** Extra classes on the <section> (e.g. grid placement in the two-column layout). */
+  className?: string
   children: ReactNode
 }) {
   const dot =
@@ -1013,7 +1017,7 @@ function Section({
     ) : null
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <section className={cx('space-y-4', !first && (divider ? 'border-t border-line pt-5' : 'pt-5'))}>
+    <section className={cx('space-y-4', !first && (divider ? 'border-t border-line pt-5' : 'pt-5'), className)}>
       {(title || action) && (
         <div className="flex items-center gap-2.5">
           {collapsible && title ? (
@@ -1121,7 +1125,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   // disabled tabs can't be selected, and the body only renders for this one.
   const [activeFn, setActiveFn] = useState<string>(() => {
     const seed = initial ? (initial.functionData ?? legacyFunctionData(initial, settings.functions)) : null
-    if (!seed) return '' // new task: nothing enabled yet
+    if (!seed) return settings.functions[0]?.name ?? '' // new task: view the first tab (shows its "turn on" prompt)
     return settings.functions.find((f) => seed[f.name])?.name ?? Object.keys(seed)[0] ?? ''
   })
   // Tab whose disable needs confirming because the save would drop its values.
@@ -1150,16 +1154,14 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
     setActiveFn(toEnable[0].name)
   }, [people, settings.functions, fnDrafts])
 
-  // Guarantee that activeFn always points to an enabled function whenever at least one function is on
+  // Keep activeFn pointing at a function that still EXISTS (a rename/removal in
+  // Settings can orphan it). A disabled-but-existing tab stays selected on purpose
+  // — viewing an off tab shows its "turn the switch on" prompt so the panel is
+  // never empty. Prefer an enabled tab as the fallback, else just the first.
   useEffect(() => {
-    const activeCfg = functionConfigs.find((f) => f.name === activeFn)
-    const activeDraft = activeCfg ? fnDrafts[activeCfg.name] : null
-    if (!activeDraft?.enabled) {
-      const firstEnabled = functionConfigs.find((f) => fnDrafts[f.name]?.enabled)?.name
-      if (firstEnabled) {
-        setActiveFn(firstEnabled)
-      }
-    }
+    if (functionConfigs.some((f) => f.name === activeFn)) return
+    const firstEnabled = functionConfigs.find((f) => fnDrafts[f.name]?.enabled)?.name
+    setActiveFn(firstEnabled ?? functionConfigs[0]?.name ?? '')
   }, [fnDrafts, activeFn, functionConfigs])
 
   // Tabs share the row (flex), so each name slot's width is dynamic. Measure how
@@ -1193,13 +1195,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const patchDraft = (fnName: string, p: Partial<FnDraft>) =>
     setFnDrafts((prev) => ({ ...prev, [fnName]: { ...(prev[fnName] ?? emptyDraft()), ...p } }))
 
-  // Turn a function off and, if it was the selected tab, move the selection to
-  // another enabled function (or clear it → the body disappears, tabs remain).
+  // Turn a function off. The selection stays put — if this was the active tab it
+  // keeps riding the panel and shows the "turn the switch on" prompt rather than
+  // vanishing, so the right side never goes empty.
   const disableFn = (fnName: string) => {
     patchDraft(fnName, { enabled: false })
-    setActiveFn((cur) =>
-      cur === fnName ? (functionConfigs.find((f) => f.name !== fnName && fnDrafts[f.name]?.enabled)?.name ?? '') : cur,
-    )
   }
 
   const requestToggleFn = (fnName: string) => {
@@ -1286,7 +1286,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       }
       return drafts
     })
-    setActiveFn('')
+    setActiveFn(functionConfigs[0]?.name ?? '')
     setPendingDisable(null)
     setErrors([])
     setAttempted(false)
@@ -1742,7 +1742,9 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
         </div>
       )}
 
-      <Section first>
+      {/* Task code & name spans the full width up top — it's the primary field, so
+          it's big and prominent. Everything else sits in the two-column grid below. */}
+      <div className="mb-5 space-y-3 rounded-xl bg-subtle/40 p-4">
       {/* Code + Name — the task's identity, in one combined field. (The star
           lives in the modal header, toggled live — see TaskStar.) */}
       <CodeNameField
@@ -1772,11 +1774,19 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           Edit the existing task instead — “{dupTask.name || dupTask.code}”
         </button>
       )}
+      </div>
 
+      {/* Two columns on desktop: the remaining detail groups on the left, the tall
+          workload panel on the right (sitting below the task name). Stacks below lg. */}
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start lg:gap-x-12">
+      {/* Left column — task details, kept dense so the stack stays compact */}
+      <div className="space-y-3">
+      {/* Group — classification (squad · campaign · size) */}
+      <div className="rounded-xl bg-subtle/40 p-3.5">
       {/* Squad, Campaign & Task size on one line */}
       <div className="grid gap-4 sm:grid-cols-[1fr_1fr_1.4fr]">
         <div>
-          <label className={cx('label', squad && 'is-filled')}>Squad (stakeholder)</label>
+          <label className={cx('label', squad && 'is-filled')}>Squad</label>
           <select
             className={cx('input h-11', !squad && 'text-muted')}
             value={squad}
@@ -1843,11 +1853,105 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           </p>
         </div>
       </div>
+      </div>
 
-      </Section>
+      {/* Group 3 — assignment (people). Note field is hidden for now (kept in state
+          so existing notes are preserved) — PIC spans the full width instead. */}
+      <div className="rounded-xl bg-subtle/40 p-3.5">
+        <label className={cx('label', people.length > 0 && 'is-filled')}>Person(s) in charge</label>
+        <MultiSelect
+          options={peopleOptions}
+          value={people}
+          onChange={setPeople}
+          placeholder="Assign team members…"
+          overflowCollapse
+          searchable
+        />
+      </div>
 
+      {/* Group 4 — timeline (start · end · half) */}
+      <div className="rounded-xl bg-subtle/40 p-3.5">
+      {/* Start / End / Half. The inputs show the ENVELOPE: when an enabled
+          function timeline reaches outside the entered master dates, the master
+          extends to cover it — highlighted amber so the extension is obvious. */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div>
+          <label className={cx('label', effectiveStart && 'is-filled')}>Start date</label>
+          <input
+            type="date"
+            className={cx(
+              'input h-11',
+              startExtended && 'border-amber-400 ring-2 ring-amber-400/40 dark:border-amber-500/60',
+            )}
+            value={effectiveStart}
+            onChange={(e) => onStartDateChange(e.target.value)}
+          />
+          {startExtended && (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <CalendarClock className="h-3.5 w-3.5" /> Extended to cover {fnRange.minFn} Team’s timeline
+            </p>
+          )}
+          {!startExtended && !startDateTouched && parsed.valid && parsed.iso && parsed.iso === startDate && (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent-green">
+              <Sparkles className="h-3.5 w-3.5" /> Auto-set from code
+            </p>
+          )}
+        </div>
+        <div>
+          <label className={cx('label', effectiveEnd && 'is-filled')}>End date</label>
+          <input
+            type="date"
+            className={cx(
+              'input h-11',
+              endExtended && 'border-amber-400 ring-2 ring-amber-400/40 dark:border-amber-500/60',
+            )}
+            value={effectiveEnd}
+            min={effectiveStart || undefined}
+            onChange={(e) => onEndDateChange(e.target.value)}
+          />
+          {endExtended && (
+            <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <CalendarClock className="h-3.5 w-3.5" /> Extended to cover {fnRange.maxFn} Team’s timeline
+            </p>
+          )}
+          {!endExtended && endIsAuto && (
+            <p className="mt-1.5 text-xs text-accent-green">
+              Auto-set from {size} size ({durationLabel})
+            </p>
+          )}
+        </div>
+        <div>
+          <label className="label is-filled">Half of year</label>
+          <div className="flex gap-2">
+            {(['H1', 'H2'] as Half[]).map((h) => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => {
+                  setHalf(h)
+                  setHalfTouched(true)
+                }}
+                className={cx(
+                  'flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition',
+                  half === h
+                    ? 'border-rmit-navy bg-rmit-navy text-white dark:border-navy-300 dark:bg-navy-300'
+                    : 'border-line bg-card text-muted hover:border-navy-300',
+                )}
+              >
+                {h}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      </div>
+      </div>
+
+      {/* Right column — the tall workload panel */}
+      <div>
       {/* ── Function-specific workload: one tab per GCMC function ────────── */}
       <Section
+        first
         title="Workload by function"
         dotFilled={(() => {
           // Green only when every enabled tab has BOTH its dots green — i.e. ≥1 work
@@ -1882,7 +1986,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           const tabs = functionConfigs.map((f) => {
             const d = fnDrafts[f.name] ?? emptyDraft()
             const fcol = functionColor(f.color)
-            const isActive = d.enabled && activeFn === f.name
+            const isSelected = activeFn === f.name
+            const isActive = d.enabled && isSelected // enabled + selected → solid-fill chrome tab
             const tabTotal = sumBreakdown(d.breakdown)
             // The active tab is a SOLID chip in the function's colour, riding the
             // top edge of the (untouched, cleanly-rounded) panel — so there's no
@@ -1892,7 +1997,13 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             return (
               <div
                 key={f.name}
-                style={isActive ? { backgroundColor: fcol.hex, borderColor: fcol.hex, color: onFill! } : undefined}
+                style={
+                  isActive
+                    ? { backgroundColor: fcol.hex, borderColor: fcol.hex, color: onFill! }
+                    : isSelected
+                      ? { borderColor: fcol.hex } // off + selected → outlined chrome tab rides the prompt panel
+                      : undefined
+                }
                 className={cx(
                   // fn-tab drives the name marquee (hover); fn-tab-active keeps it
                   // scrolling while selected. Tabs are their natural (fixed-slot)
@@ -1902,24 +2013,24 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   'fn-tab relative flex min-w-0 items-center gap-1.5 border-2 py-1 pl-2 pr-1.5 text-xs font-semibold',
                   isActive
                     ? 'fn-tab-active z-10 -mb-0.5 rounded-t-lg' // solid colour fill (inline) rides the panel edge
-                    : 'rounded-lg border-line bg-subtle', // separate pill above the panel
-                  !d.enabled && 'opacity-60',
+                    : isSelected
+                      ? 'z-10 -mb-0.5 rounded-t-lg bg-card' // off + selected: outlined tab rides the (prompt) panel
+                      : 'rounded-lg border-line bg-subtle', // separate pill above the panel
+                  !d.enabled && !isSelected && 'opacity-60',
                 )}
               >
                 <button
                   type="button"
-                  disabled={!d.enabled}
-                  onClick={() => d.enabled && setActiveFn(f.name)}
+                  onClick={() => setActiveFn(f.name)}
                   className={cx(
-                    'flex min-w-0 items-center gap-1.5 py-1',
-                    d.enabled ? 'cursor-pointer' : 'cursor-default',
-                    isActive ? '' : d.enabled ? 'text-ink' : 'text-muted',
+                    'flex min-w-0 cursor-pointer items-center gap-1.5 py-1',
+                    isActive ? '' : isSelected || d.enabled ? 'text-ink' : 'text-muted',
                   )}
                   style={isActive ? { color: onFill! } : undefined}
                   title={
                     d.enabled
                       ? `Edit ${f.name} Team’s workload`
-                      : `${f.name} Team is off — use the switch to include it`
+                      : `View ${f.name} Team — use the switch to include it on this task`
                   }
                 >
                   <span className="tab-marquee max-w-36">
@@ -1977,8 +2088,47 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             </div>
           )
 
-          // Nothing recording yet → show only the tabs (no panel).
-          if (!showBody) return tabStrip
+          // No functions configured at all → nothing to show.
+          if (functionConfigs.length === 0) return null
+
+          // Selected tab is OFF (or nothing enabled yet) → show a prompt in the
+          // panel instead of settings, so the right column is never empty. The tab
+          // still rides the panel; its switch turns it on to reveal the controls.
+          if (!showBody) {
+            const pf = activeCfg ?? functionConfigs[0]
+            const pcol = functionColor(pf.color)
+            const pHasOffering =
+              pf.workTypes.some((t) => settings.types.includes(t)) ||
+              pf.assetTypes.some((t) => settings.assetTypes.includes(t))
+            return (
+              <div>
+                {tabStrip}
+                <div
+                  className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 bg-card px-6 py-12 text-center"
+                  style={{ borderColor: pcol.hex }}
+                >
+                  <span
+                    className="flex h-12 w-12 items-center justify-center rounded-full"
+                    style={{ backgroundColor: `${pcol.hex}1a`, color: pcol.hex }}
+                  >
+                    <ToggleRight className="h-6 w-6" />
+                  </span>
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-semibold text-ink">{pf.name} isn’t recording workload yet</p>
+                    <p className="mx-auto max-w-xs text-xs leading-relaxed text-muted">
+                      Turn the <strong className="text-ink">{pf.name}</strong> switch on above to record its work types
+                      and assets on this task.
+                    </p>
+                    {!pHasOffering && (
+                      <p className="mx-auto max-w-xs text-xs leading-relaxed text-muted">
+                        It has none set up yet — add them in <strong className="text-ink">Settings → Functions</strong>.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          }
 
           const f = activeCfg as FunctionConfig
           const d = activeDraft as FnDraft
@@ -1997,6 +2147,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             ),
           )
           const tabTotal = sumBreakdown(d.breakdown)
+          // "Empty" tab = this function offers no real work OR asset types (only the
+          // "Others" fallback) — nothing's been enabled for it in Settings yet.
+          const emptyOffering =
+            tabTypes.every((t) => t === FALLBACK_ITEM) && tabAssets.every((t) => t === FALLBACK_ITEM)
 
           // "+ Add" pickers: master types this tab doesn't offer yet (the fallback
           // is always present, so it's never a candidate).
@@ -2025,6 +2179,13 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             <div>
               {tabStrip}
               <div className="space-y-4 rounded-xl border-2 bg-card p-4" style={{ borderColor: col.hex }}>
+                {emptyOffering && (
+                  <div className="rounded-lg border border-dashed border-line bg-subtle/50 px-3 py-2.5 text-xs leading-relaxed text-muted">
+                    No work or asset types are enabled for <strong className="text-ink">{f.name}</strong> yet. Add
+                    them here with <strong className="text-ink">+ Add</strong>, or enable them in{' '}
+                    <strong className="text-ink">Settings → Functions</strong>.
+                  </div>
+                )}
                 <div>
                   <label className={cx('label', d.types.length > 0 && 'is-filled')}>Work type(s)</label>
                   <div className="flex flex-wrap gap-2">
@@ -2141,109 +2302,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           )
         })()}
       </Section>
-
-      <Section title="Assignment" divider={false}>
-      {/* People + Note on one line */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className={cx('label', people.length > 0 && 'is-filled')}>Person(s) in charge</label>
-          <MultiSelect
-            options={peopleOptions}
-            value={people}
-            onChange={setPeople}
-            placeholder="Assign team members…"
-            overflowCollapse
-            searchable
-          />
-        </div>
-        <div>
-          <label className="label is-optional">Note</label>
-          <input
-            type="text"
-            className="input h-11"
-            placeholder="Optional — shows on hover in the task list."
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </div>
       </div>
-      </Section>
-
-      <Section title="Timeline" divider={false}>
-      {/* Start / End / Half. The inputs show the ENVELOPE: when an enabled
-          function timeline reaches outside the entered master dates, the master
-          extends to cover it — highlighted amber so the extension is obvious. */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div>
-          <label className={cx('label', effectiveStart && 'is-filled')}>Start date</label>
-          <input
-            type="date"
-            className={cx(
-              'input h-11',
-              startExtended && 'border-amber-400 ring-2 ring-amber-400/40 dark:border-amber-500/60',
-            )}
-            value={effectiveStart}
-            onChange={(e) => onStartDateChange(e.target.value)}
-          />
-          {startExtended && (
-            <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
-              <CalendarClock className="h-3.5 w-3.5" /> Extended to cover {fnRange.minFn} Team’s timeline
-            </p>
-          )}
-          {!startExtended && !startDateTouched && parsed.valid && parsed.iso && parsed.iso === startDate && (
-            <p className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent-green">
-              <Sparkles className="h-3.5 w-3.5" /> Auto-set from code
-            </p>
-          )}
-        </div>
-        <div>
-          <label className={cx('label', effectiveEnd && 'is-filled')}>End date</label>
-          <input
-            type="date"
-            className={cx(
-              'input h-11',
-              endExtended && 'border-amber-400 ring-2 ring-amber-400/40 dark:border-amber-500/60',
-            )}
-            value={effectiveEnd}
-            min={effectiveStart || undefined}
-            onChange={(e) => onEndDateChange(e.target.value)}
-          />
-          {endExtended && (
-            <p className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
-              <CalendarClock className="h-3.5 w-3.5" /> Extended to cover {fnRange.maxFn} Team’s timeline
-            </p>
-          )}
-          {!endExtended && endIsAuto && (
-            <p className="mt-1.5 text-xs text-accent-green">
-              Auto-set from {size} size ({durationLabel})
-            </p>
-          )}
-        </div>
-        <div>
-          <label className="label is-filled">Half of year</label>
-          <div className="flex gap-2">
-            {(['H1', 'H2'] as Half[]).map((h) => (
-              <button
-                key={h}
-                type="button"
-                onClick={() => {
-                  setHalf(h)
-                  setHalfTouched(true)
-                }}
-                className={cx(
-                  'flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition',
-                  half === h
-                    ? 'border-rmit-navy bg-rmit-navy text-white dark:border-navy-300 dark:bg-navy-300'
-                    : 'border-line bg-card text-muted hover:border-navy-300',
-                )}
-              >
-                {h}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
-      </Section>
 
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 pt-2">
         <div className="flex items-center gap-2">
