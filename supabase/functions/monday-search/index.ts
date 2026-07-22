@@ -104,9 +104,11 @@ Deno.serve(async (req: Request) => {
 
   // Only ask monday for the columns we map (keeps the payload small).
   const colIds = [colTimeline, colSize, colCode, colPeople].filter(Boolean) as string[]
+  // `state: all` so ARCHIVED (read-only) boards are included — `boards()` defaults
+  // to state:active, which silently drops an archived board and all its items.
   const gql = `
     query ($board: [ID!], $cols: [String!], $limit: Int!, $cursor: String) {
-      boards(ids: $board) {
+      boards(ids: $board, state: all) {
         items_page(limit: $limit, cursor: $cursor) {
           cursor
           items {

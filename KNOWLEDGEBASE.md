@@ -710,6 +710,9 @@ derives half). Manual, per-task — **no background sync**; every field stays ed
   3. Set `VITE_MONDAY_LOOKUP=1` in the app build and restart.
 - The function pages EACH board (up to ~500 items total across boards), filters by name/code
   substring, returns ≤15 hits ranked across all boards; Timeline `value` JSON gives `from`/`to`.
+  ⚠️ The query uses `boards(ids: …, state: all)` so **archived (read-only) boards are included** —
+  `boards()` defaults to `state: active` and silently drops an archived board + all its items (this
+  bit the 2025 archived board: results showed but its tasks were missing). Requires a redeploy.
 - **Multiple boards (added later):** the boards to search are configured in the app —
   `AppSettings.mondayBoardIds` (`monday_boards` jsonb column; seeded `['1967557512','5026397227']`;
   `normalizeMondayBoards` + guarded write; edited in Settings → **monday.com boards** card, shown
