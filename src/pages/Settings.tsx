@@ -168,11 +168,15 @@ export function SettingsPage() {
         </div>
       </CollapsibleSection>
 
-      {/* monday.com boards the New Task auto-fill searches (lookup builds only) */}
-      <MondayBoardsCard />
-
-      {/* Year snapshots — freeze/restore the full workload state */}
-      <SnapshotsCard />
+      {/* monday.com boards (lookup builds only) + year snapshots — side by side */}
+      {isMondayLookupEnabled() ? (
+        <div className="grid items-start gap-5 lg:grid-cols-2">
+          <MondayBoardsCard />
+          <SnapshotsCard />
+        </div>
+      ) : (
+        <SnapshotsCard />
+      )}
 
       {/* Version & changelog */}
       <VersionCard />
@@ -194,6 +198,7 @@ function MondayBoardsCard() {
   if (!isMondayLookupEnabled()) return null
 
   const boards = settings.mondayBoardIds
+  const names = settings.mondayBoardNames
   const save = (next: string[]) => void saveSettings({ ...settings, mondayBoardIds: next })
 
   const add = () => {
@@ -206,6 +211,22 @@ function MondayBoardsCard() {
     }
     save([...boards, parsed])
     setDraft('')
+  }
+
+  // Set/clear a board's friendly name (label only — never touches the id list).
+  const setName = (id: string, name: string) => {
+    const next = { ...names }
+    const v = name.trim()
+    if (v) next[id] = v
+    else delete next[id]
+    void saveSettings({ ...settings, mondayBoardNames: next })
+  }
+
+  // Remove a board id and drop any name it carried.
+  const removeBoard = (id: string) => {
+    const nextNames = { ...names }
+    delete nextNames[id]
+    void saveSettings({ ...settings, mondayBoardIds: boards.filter((b) => b !== id), mondayBoardNames: nextNames })
   }
 
   return (
@@ -230,21 +251,22 @@ function MondayBoardsCard() {
         {boards.map((id) => (
           <li
             key={id}
-            className="flex items-center justify-between gap-2 rounded-lg border border-line bg-card/40 px-3 py-2 transition-all duration-200 hover:bg-card/80"
+            className="flex items-center gap-2 rounded-lg border border-line bg-card/40 px-3 py-2 transition-all duration-200 hover:bg-card/80"
           >
+            <img src="/monday.svg" alt="" className="h-4 w-4 shrink-0" />
+            <BoardNameInput value={names[id] ?? ''} onCommit={(v) => setName(id, v)} />
             <a
               href={`https://rmit.monday.com/boards/${encodeURIComponent(id)}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 font-mono text-sm text-ink hover:text-rmit-red"
+              className="inline-flex shrink-0 items-center gap-1 font-mono text-xs text-muted hover:text-rmit-red"
               title="Open this board on monday.com"
             >
-              <img src="/monday.svg" alt="" className="h-4 w-4" />
               {id}
-              <ExternalLink className="h-3 w-3 text-faint" />
+              <ExternalLink className="h-3 w-3" />
             </a>
             <button
-              className="rounded-md p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
+              className="shrink-0 rounded-md p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
               onClick={() => setPendingRemove(id)}
               title="Remove board"
               aria-label={`Remove board ${id}`}
@@ -272,7 +294,7 @@ function MondayBoardsCard() {
             <button
               className="btn-primary"
               onClick={() => {
-                if (pendingRemove) save(boards.filter((b) => b !== pendingRemove))
+                if (pendingRemove) removeBoard(pendingRemove)
                 setPendingRemove(null)
               }}
             >
@@ -285,7 +307,8 @@ function MondayBoardsCard() {
           <div className="flex gap-3 rounded-xl bg-brand-50 p-3 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
             <p>
-              Stop the auto-fill from searching board <strong className="font-mono">{pendingRemove}</strong>? You can
+              Stop the auto-fill from searching board{' '}
+              <strong>{names[pendingRemove] || <span className="font-mono">{pendingRemove}</span>}</strong>? You can
               add it back anytime.
             </p>
           </div>
@@ -1044,6 +1067,33 @@ function MondayIdInput({ value, onCommit }: { value: string; onCommit: (v: strin
   )
 }
 
+/** Inline, commit-on-blur name field for a monday board row (label only). */
+function BoardNameInput({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(value)
+  useEffect(() => setV(value), [value]) // resync if the stored name changes elsewhere
+  const commit = () => {
+    if (v.trim() !== value.trim()) onCommit(v.trim())
+  }
+  return (
+    <input
+      className="input h-7 min-w-0 flex-1 px-2 py-0 text-sm"
+      placeholder="Name this board (optional)"
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commit()
+          ;(e.target as HTMLInputElement).blur()
+        } else if (e.key === 'Escape') {
+          setV(value)
+        }
+      }}
+    />
+  )
+}
+
 /**
  * Work types + Asset types in one card, switched by a 2-tab strip — they share
  * the same editor UI and are both drawn on by the Functions panel, so they live
@@ -1273,10 +1323,15 @@ function FunctionsCard() {
                 <div className="space-y-5 border-t border-line px-3.5 py-4">
                   <div>
                     <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-faint">Tab colour</div>
-                    <div className="flex items-center gap-1.5">
-                      {FUNCTION_COLOR_KEYS.map((k) => (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {FUNCTION_COLOR_KEYS.filter(
+                        // Hide colours already taken by another function, keeping only
+                        // free ones + this function's own — so every function stays distinct.
+                        (k) => k === f.color || !functions.some((o) => o.name !== f.name && o.color === k),
+                      ).map((k) => (
                         <button
                           key={k}
+                          type="button"
                           style={{ backgroundColor: functionColor(k).hex }}
                           className={cx(
                             'h-5 w-5 rounded-full transition-transform',

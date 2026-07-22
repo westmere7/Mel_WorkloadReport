@@ -104,6 +104,11 @@ alter table public.settings
 alter table public.settings
   add column if not exists monday_boards jsonb not null default '["1967557512","5026397227"]'::jsonb;
 
+-- Optional friendly names per board id: { "<board id>": "<name>" }. Label only —
+-- the auto-fill still searches by board id.
+alter table public.settings
+  add column if not exists monday_board_names jsonb not null default '{}'::jsonb;
+
 -- Squad/Campaign auto-select keywords: { "<name>": ["keyword", …] }. When a task
 -- name contains any of a squad/campaign's keywords, the task form auto-selects it.
 alter table public.settings

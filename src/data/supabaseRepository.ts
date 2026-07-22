@@ -150,6 +150,12 @@ function isMissingMondayBoardsColumn(err: unknown): boolean {
   return msg.includes('monday_boards') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
+/** True if a Supabase error is complaining about a missing `monday_board_names` column (pre-migration). */
+function isMissingBoardNamesColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('monday_board_names') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
 /** True if a Supabase error is complaining about a missing keyword column (pre-migration). */
 function isMissingKeywordsColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
@@ -491,6 +497,7 @@ export class SupabaseRepository implements Repository {
         data.asset_types ?? DEFAULT_SETTINGS.assetTypes,
       ),
       mondayBoardIds: normalizeMondayBoards(data.monday_boards),
+      mondayBoardNames: data.monday_board_names ?? DEFAULT_SETTINGS.mondayBoardNames,
       squadKeywords: normalizeKeywordMap(data.squad_keywords),
       campaignKeywords: normalizeKeywordMap(data.campaign_keywords),
     }
@@ -516,11 +523,16 @@ export class SupabaseRepository implements Repository {
       people_monday: settings.peopleMondayIds,
       functions: settings.functions,
       monday_boards: settings.mondayBoardIds,
+      monday_board_names: settings.mondayBoardNames,
       squad_keywords: settings.squadKeywords,
       campaign_keywords: settings.campaignKeywords,
     }
     let { data, error } = await upsert(payload)
     // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
+    if (error && isMissingBoardNamesColumn(error)) {
+      delete payload.monday_board_names
+      ;({ data, error } = await upsert(payload))
+    }
     if (error && isMissingKeywordsColumn(error)) {
       delete payload.squad_keywords
       delete payload.campaign_keywords
@@ -564,6 +576,7 @@ export class SupabaseRepository implements Repository {
         ? normalizeFunctions(data.functions, data.types ?? settings.types, data.asset_types ?? settings.assetTypes)
         : settings.functions,
       mondayBoardIds: data.monday_boards ? normalizeMondayBoards(data.monday_boards) : settings.mondayBoardIds,
+      mondayBoardNames: data.monday_board_names ?? settings.mondayBoardNames,
       squadKeywords: data.squad_keywords ? normalizeKeywordMap(data.squad_keywords) : settings.squadKeywords,
       campaignKeywords: data.campaign_keywords
         ? normalizeKeywordMap(data.campaign_keywords)

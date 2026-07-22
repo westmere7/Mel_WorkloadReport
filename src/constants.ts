@@ -95,10 +95,15 @@ export interface FunctionColorSet {
 
 export const FUNCTION_COLORS: Record<string, FunctionColorSet> = {
   red: { hex: '#C41E2A' },
-  teal: { hex: '#0E7C99' },
+  orange: { hex: '#C2410C' },
   gold: { hex: '#B7791F' },
   green: { hex: '#3F8E3A' },
+  teal: { hex: '#0E7C99' },
+  blue: { hex: '#1E5FB4' },
+  indigo: { hex: '#4B3F9E' },
   plum: { hex: '#7A4E91' },
+  pink: { hex: '#BE185D' },
+  slate: { hex: '#566072' },
 }
 
 export const FUNCTION_COLOR_KEYS = Object.keys(FUNCTION_COLORS)
@@ -312,6 +317,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   allowRemoveUsed: false,
   peopleMondayIds: {},
   mondayBoardIds: [...DEFAULT_MONDAY_BOARDS],
+  mondayBoardNames: {},
   squadKeywords: {},
   campaignKeywords: {},
 }
