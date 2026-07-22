@@ -205,6 +205,24 @@ export const DEFAULT_SIZE_DURATIONS: Record<Size, number> = {
   XL: 182,
 }
 
+/**
+ * monday.com boards the New Task auto-fill searches. Editable in Settings; seeded
+ * with the RMIT Playground + the 2nd board. The mapped columns (timeline/size/…)
+ * are the SAME ids across these boards, so only the board id differs.
+ */
+export const DEFAULT_MONDAY_BOARDS: string[] = ['1967557512', '5026397227']
+
+/** Coerce a stored `monday_boards` value into a clean, deduped list of id strings. */
+export function normalizeMondayBoards(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_MONDAY_BOARDS]
+  const out: string[] = []
+  for (const v of raw) {
+    const id = String(v ?? '').trim()
+    if (id && !out.includes(id)) out.push(id)
+  }
+  return out
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   squads: DEFAULT_SQUADS,
   campaigns: DEFAULT_CAMPAIGNS,
@@ -219,6 +237,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sizeDurations: { ...DEFAULT_SIZE_DURATIONS },
   allowRemoveUsed: false,
   peopleMondayIds: {},
+  mondayBoardIds: [...DEFAULT_MONDAY_BOARDS],
 }
 
 /** Legacy fixed breakdown keys → their default display names, for migrating old data. */

@@ -93,17 +93,19 @@ export class MondayNotConfiguredError extends Error {
 }
 
 /**
- * Search the configured monday board for items matching `query` (name or code
- * substring). Returns up to ~15 normalized hits. Throws a readable Error on
- * transport/config failure so the popover can surface it.
+ * Search the configured monday board(s) for items matching `query` (name or code
+ * substring). `boardIds` (from Settings) tells the function which boards to scan
+ * at once; omit to let the function fall back to its `MONDAY_BOARD_ID` secret.
+ * Returns up to ~15 normalized hits. Throws a readable Error on transport/config
+ * failure so the popover can surface it.
  */
-export async function searchMonday(query: string): Promise<MondayHit[]> {
+export async function searchMonday(query: string, boardIds?: string[]): Promise<MondayHit[]> {
   const q = query.trim()
   if (!q) return []
   if (!isSupabaseConfigured()) throw new MondayNotConfiguredError()
 
   const { data, error } = await getSupabase().functions.invoke<SearchResponse>('monday-search', {
-    body: { query: q },
+    body: { query: q, boardIds: boardIds?.filter(Boolean) },
   })
   if (error) throw new Error(error.message || 'Couldn’t reach the monday lookup service.')
   if (!data || data.configured === false) throw new MondayNotConfiguredError()

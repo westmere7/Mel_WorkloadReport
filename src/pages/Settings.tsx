@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Archive, Check, ChevronDown, Download, Loader2, Lock, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Archive, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -18,6 +18,7 @@ import {
   DEFAULT_SIZE_DURATIONS,
 } from '../constants'
 import { cx, toMessage } from '../lib/format'
+import { isMondayLookupEnabled } from '../lib/monday'
 import { APP_VERSION, CHANGELOG, type ChangeKind } from '../lib/changelog'
 import {
   COMMON_CAMPAIGNS,
@@ -145,12 +146,96 @@ export function SettingsPage() {
         </div>
       </CollapsibleSection>
 
+      {/* monday.com boards the New Task auto-fill searches (lookup builds only) */}
+      <MondayBoardsCard />
+
       {/* Year snapshots — freeze/restore the full workload state */}
       <SnapshotsCard />
 
       {/* Version & changelog */}
       <VersionCard />
     </div>
+  )
+}
+
+/**
+ * Configure which monday.com boards the New Task "auto-fill" searches — it scans
+ * them all at once. The mapped columns (timeline/size/…) are shared across boards
+ * and set as function secrets, so only board ids are configured here. Hidden when
+ * the lookup isn't enabled for this build.
+ */
+function MondayBoardsCard() {
+  const { settings, saveSettings } = useStore()
+  const [draft, setDraft] = useState('')
+  if (!isMondayLookupEnabled()) return null
+
+  const boards = settings.mondayBoardIds
+  const save = (next: string[]) => void saveSettings({ ...settings, mondayBoardIds: next })
+
+  const add = () => {
+    const id = draft.trim()
+    // Board ids are numeric; accept a full board URL too and pull the id out.
+    const parsed = /(\d{5,})/.exec(id)?.[1] ?? ''
+    if (!parsed || boards.includes(parsed)) {
+      setDraft('')
+      return
+    }
+    save([...boards, parsed])
+    setDraft('')
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="monday.com boards"
+        subtitle="Boards the New Task auto-fill searches — it looks through all of them at once. Paste a board id or its URL."
+      />
+      <div className="mb-3 flex gap-2">
+        <input
+          className="input font-mono"
+          placeholder="Board id, e.g. 1967557512"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+        />
+        <button className="btn-navy shrink-0 px-3" onClick={add} aria-label="Add board">
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+      <ul className="space-y-1.5">
+        {boards.map((id) => (
+          <li
+            key={id}
+            className="flex items-center justify-between gap-2 rounded-lg border border-line bg-card/40 px-3 py-2 transition-all duration-200 hover:bg-card/80"
+          >
+            <a
+              href={`https://rmit.monday.com/boards/${encodeURIComponent(id)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 font-mono text-sm text-ink hover:text-rmit-red"
+              title="Open this board on monday.com"
+            >
+              <img src="/monday.svg" alt="" className="h-4 w-4" />
+              {id}
+              <ExternalLink className="h-3 w-3 text-faint" />
+            </a>
+            <button
+              className="rounded-md p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
+              onClick={() => save(boards.filter((b) => b !== id))}
+              title="Remove board"
+              aria-label={`Remove board ${id}`}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </li>
+        ))}
+        {boards.length === 0 && (
+          <li className="rounded-lg border border-dashed border-line px-3 py-3 text-sm text-muted">
+            No boards yet — the auto-fill has nothing to search. Add at least one.
+          </li>
+        )}
+      </ul>
+    </Card>
   )
 }
 

@@ -129,6 +129,9 @@ export interface AppSettings {
   /** Map each person NAME → their monday.com user id (string). Used to auto-fill
    *  the "Persons in charge" from a monday item's Project-team column. */
   peopleMondayIds: Record<string, string>
+  /** monday.com board ids the New Task auto-fill searches (all at once). Editable
+   *  in Settings; the columns mapped are shared across boards (set via secrets). */
+  mondayBoardIds: string[]
 }
 
 /** Empty breakdown helper. */

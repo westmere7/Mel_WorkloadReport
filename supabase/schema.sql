@@ -99,6 +99,11 @@ alter table public.settings
 alter table public.settings
   add column if not exists people_monday jsonb not null default '{}'::jsonb;
 
+-- monday.com board ids the New Task auto-fill searches (all at once). The mapped
+-- columns are the same across these boards, so only the board id differs.
+alter table public.settings
+  add column if not exists monday_boards jsonb not null default '["1967557512","5026397227"]'::jsonb;
+
 -- GCMC functions that record workload (task-form tabs). Array of
 -- { name, color, hiddenWorkTypes, hiddenAssetTypes }; order = tab order. The
 -- hidden lists are EXCLUSIONS (empty = the tab offers every master type), so

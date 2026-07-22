@@ -402,6 +402,7 @@ function CodeNameField({
   setCode,
   setName,
   mondayEnabled,
+  mondayBoardIds,
   onPick,
 }: {
   code: string
@@ -415,6 +416,8 @@ function CodeNameField({
   setCode: (v: string) => void
   setName: (v: string) => void
   mondayEnabled: boolean
+  /** monday board ids to search (from Settings). */
+  mondayBoardIds: string[]
   onPick: (hit: MondayHit) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -435,7 +438,7 @@ function CodeNameField({
     setHits(null)
     setLoading(true)
     try {
-      setHits(await searchMonday(query))
+      setHits(await searchMonday(query, mondayBoardIds))
     } catch (e) {
       setSearchError(toMessage(e))
     } finally {
@@ -1292,6 +1295,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
         }}
         setName={setName}
         mondayEnabled={mondayEnabled}
+        mondayBoardIds={settings.mondayBoardIds}
         onPick={applyMondayHit}
       />
       {/* Duplicate code → jump straight to the task that owns it. */}

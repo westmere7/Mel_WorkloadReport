@@ -8,6 +8,7 @@ import {
   normalizeBreakdown,
   normalizeFunctionData,
   normalizeFunctions,
+  normalizeMondayBoards,
   normalizeSizeDurations,
 } from '../constants'
 import {
@@ -209,6 +210,7 @@ export class LocalRepository implements Repository {
       ...stored,
       sizeDurations: normalizeSizeDurations(stored.sizeDurations),
       functions: normalizeFunctions(stored.functions),
+      mondayBoardIds: normalizeMondayBoards(stored.mondayBoardIds),
     }
   }
 

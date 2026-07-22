@@ -8,6 +8,7 @@ import {
   canonicalAssetName,
   normalizeFunctionData,
   normalizeFunctions,
+  normalizeMondayBoards,
   normalizeSizeDurations,
 } from '../constants'
 import {
@@ -140,6 +141,12 @@ function isMissingAllowRemoveColumn(err: unknown): boolean {
 function isMissingPeopleMondayColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
   return msg.includes('people_monday') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** True if a Supabase error is complaining about a missing `monday_boards` column (pre-migration). */
+function isMissingMondayBoardsColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('monday_boards') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
 /** True if a Supabase error is complaining about a missing `created_by` column (pre-migration). */
@@ -469,6 +476,7 @@ export class SupabaseRepository implements Repository {
       allowRemoveUsed: data.allow_remove_used ?? DEFAULT_SETTINGS.allowRemoveUsed,
       peopleMondayIds: data.people_monday ?? DEFAULT_SETTINGS.peopleMondayIds,
       functions: normalizeFunctions(data.functions),
+      mondayBoardIds: normalizeMondayBoards(data.monday_boards),
     }
   }
 
@@ -491,9 +499,14 @@ export class SupabaseRepository implements Repository {
       allow_remove_used: settings.allowRemoveUsed,
       people_monday: settings.peopleMondayIds,
       functions: settings.functions,
+      monday_boards: settings.mondayBoardIds,
     }
     let { data, error } = await upsert(payload)
     // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
+    if (error && isMissingMondayBoardsColumn(error)) {
+      delete payload.monday_boards
+      ;({ data, error } = await upsert(payload))
+    }
     if (error && isMissingFunctionsColumn(error)) {
       delete payload.functions
       ;({ data, error } = await upsert(payload))
@@ -525,6 +538,7 @@ export class SupabaseRepository implements Repository {
       allowRemoveUsed: data.allow_remove_used ?? settings.allowRemoveUsed,
       peopleMondayIds: data.people_monday ?? settings.peopleMondayIds,
       functions: data.functions ? normalizeFunctions(data.functions) : settings.functions,
+      mondayBoardIds: data.monday_boards ? normalizeMondayBoards(data.monday_boards) : settings.mondayBoardIds,
     }
   }
 

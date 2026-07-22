@@ -9,17 +9,21 @@
 //
 // Secrets / env (set with `supabase secrets set …`):
 //   MONDAY_TOKEN         monday API v2 personal token (required)
-//   MONDAY_BOARD_ID      numeric board id to search (required)
+//   MONDAY_BOARD_ID      FALLBACK board id(s), comma-separated — used only when the
+//                        request omits `boardIds` (the app sends them from Settings).
 //   MONDAY_COL_TIMELINE  column id of the Timeline column (required for dates)
 //   MONDAY_COL_SIZE      column id of the T-shirt size column (required for size)
 //   MONDAY_COL_CODE      column id of the booking-code text column (optional)
 //   MONDAY_COL_PEOPLE    column id of the Project-team people column (optional)
 //   MONDAY_ALLOW_ORIGIN  CORS allow-origin (optional; default '*')
+//   NOTE: the mapped column ids are shared across the searched boards.
 //
-// Request  (POST JSON):  { "query": "open day" }
+// Request  (POST JSON):  { "query": "open day", "boardIds": ["1967557512","5026397227"] }
+//   `boardIds` are the boards to search at once (from the app's Settings); if
+//   omitted, MONDAY_BOARD_ID is used. All are scanned into one ranked result set.
 // Response (JSON):       { "configured": true, "items": [{ id, name, code,
 //                          startDate, endDate, size, mondayPeopleIds }] }
-//                        or { "configured": false } when secrets are missing.
+//                        or { "configured": false } when the token is missing.
 
 // @ts-nocheck  (Deno runtime globals; not typechecked by the app's tsc.)
 
@@ -71,20 +75,32 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'Use POST.' }, 405)
 
   const token = Deno.env.get('MONDAY_TOKEN')
-  const boardId = Deno.env.get('MONDAY_BOARD_ID')
+  const boardIdSecret = Deno.env.get('MONDAY_BOARD_ID') // fallback list (comma-separated)
   const colTimeline = Deno.env.get('MONDAY_COL_TIMELINE')
   const colSize = Deno.env.get('MONDAY_COL_SIZE')
   const colCode = Deno.env.get('MONDAY_COL_CODE') // optional
   const colPeople = Deno.env.get('MONDAY_COL_PEOPLE') // optional (Project-team column)
-  if (!token || !boardId) return json({ configured: false })
+  if (!token) return json({ configured: false })
 
   let query = ''
+  let bodyBoards: string[] = []
   try {
-    query = String((await req.json())?.query ?? '').trim()
+    const body = await req.json()
+    query = String(body?.query ?? '').trim()
+    // The app (Settings) sends the board ids to search; sanitise to strings.
+    if (Array.isArray(body?.boardIds)) {
+      bodyBoards = body.boardIds.map((b: unknown) => String(b ?? '').trim()).filter(Boolean)
+    }
   } catch {
     return json({ error: 'Bad request body.' }, 400)
   }
   if (!query) return json({ configured: true, items: [] })
+
+  // Boards to search: prefer the app's list; else the MONDAY_BOARD_ID secret
+  // (which may itself be a comma-separated list). Deduped, order preserved.
+  const secretBoards = (boardIdSecret ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  const boards = [...new Set(bodyBoards.length ? bodyBoards : secretBoards)]
+  if (boards.length === 0) return json({ configured: false })
 
   // Only ask monday for the columns we map (keeps the payload small).
   const colIds = [colTimeline, colSize, colCode, colPeople].filter(Boolean) as string[]
@@ -111,59 +127,63 @@ Deno.serve(async (req: Request) => {
   const tokens = query.toLowerCase().split(/\s+/).filter(Boolean)
   const codeTokens = tokens.filter((t) => /^\d{2}\.\d{2}\d{2}\.[a-z]+$/.test(t) || /^vn\d{2}-\d{4}-[a-z]+$/.test(t))
   const scored: Array<{ matched: number; all: boolean; codeHit: boolean; nameLen: number; item: Record<string, unknown> }> = []
-  let cursor: string | null = null
   let scanned = 0
 
   try {
-    // Page through the board, scoring every item, until we've scanned the cap.
-    while (scanned < MAX_SCAN) {
-      const res = await fetch(MONDAY_API, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: token,
-          'API-Version': '2024-01',
-        },
-        body: JSON.stringify({
-          query: gql,
-          variables: { board: [boardId], cols: colIds, limit: 100, cursor },
-        }),
-      })
-      const payload = await res.json()
-      if (payload.errors?.length) {
-        return json({ error: payload.errors[0]?.message ?? 'monday API error.' }, 502)
-      }
-      const page = payload?.data?.boards?.[0]?.items_page
-      const items: any[] = page?.items ?? []
-      for (const it of items) {
-        scanned++
-        const cvById = new Map<string, any>((it.column_values ?? []).map((c: any) => [c.id, c]))
-        const code = colCode ? (cvById.get(colCode)?.text ?? '').trim() : ''
-        const name = String(it.name ?? '')
-        const haystack = `${name} ${code}`.toLowerCase()
-        const matched = tokens.reduce((n, t) => n + (haystack.includes(t) ? 1 : 0), 0)
-        if (matched === 0) continue
-        const codeHit = codeTokens.length > 0 && codeTokens.some((t) => haystack.includes(t))
-        const { startDate, endDate } = parseTimeline(cvById.get(colTimeline ?? '')?.value ?? null)
-        const mondayPeopleIds = parsePeople(cvById.get(colPeople ?? '')?.value ?? null)
-        scored.push({
-          matched,
-          all: matched === tokens.length,
-          codeHit,
-          nameLen: name.length,
-          item: {
-            id: it.id,
-            name,
-            code,
-            startDate,
-            endDate,
-            size: (cvById.get(colSize ?? '')?.text ?? '').trim() || null,
-            mondayPeopleIds,
+    // Each board is paged independently (its items_page has its own cursor); we
+    // score across ALL boards into one pool, capped globally by MAX_SCAN.
+    for (const bid of boards) {
+      let cursor: string | null = null
+      while (scanned < MAX_SCAN) {
+        const res = await fetch(MONDAY_API, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token,
+            'API-Version': '2024-01',
           },
+          body: JSON.stringify({
+            query: gql,
+            variables: { board: [bid], cols: colIds, limit: 100, cursor },
+          }),
         })
+        const payload = await res.json()
+        if (payload.errors?.length) {
+          return json({ error: payload.errors[0]?.message ?? 'monday API error.' }, 502)
+        }
+        const page = payload?.data?.boards?.[0]?.items_page
+        const items: any[] = page?.items ?? []
+        for (const it of items) {
+          scanned++
+          const cvById = new Map<string, any>((it.column_values ?? []).map((c: any) => [c.id, c]))
+          const code = colCode ? (cvById.get(colCode)?.text ?? '').trim() : ''
+          const name = String(it.name ?? '')
+          const haystack = `${name} ${code}`.toLowerCase()
+          const matched = tokens.reduce((n, t) => n + (haystack.includes(t) ? 1 : 0), 0)
+          if (matched === 0) continue
+          const codeHit = codeTokens.length > 0 && codeTokens.some((t) => haystack.includes(t))
+          const { startDate, endDate } = parseTimeline(cvById.get(colTimeline ?? '')?.value ?? null)
+          const mondayPeopleIds = parsePeople(cvById.get(colPeople ?? '')?.value ?? null)
+          scored.push({
+            matched,
+            all: matched === tokens.length,
+            codeHit,
+            nameLen: name.length,
+            item: {
+              id: it.id,
+              name,
+              code,
+              startDate,
+              endDate,
+              size: (cvById.get(colSize ?? '')?.text ?? '').trim() || null,
+              mondayPeopleIds,
+            },
+          })
+        }
+        cursor = page?.cursor ?? null
+        if (!cursor || items.length === 0) break
       }
-      cursor = page?.cursor ?? null
-      if (!cursor || items.length === 0) break
+      if (scanned >= MAX_SCAN) break
     }
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : 'Lookup failed.' }, 502)
