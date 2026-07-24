@@ -2022,10 +2022,13 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   // when there are enough to overflow the row (no grow → they don't
                   // stretch to fill the panel when there's room).
                   'fn-tab relative flex min-w-0 items-center gap-1.5 border-2 py-1 pl-2 pr-1.5 text-xs font-semibold',
+                  // The riding tab drops its BOTTOM border and overlaps the panel's
+                  // top border by 2px (-mb-0.5) so its interior flows straight into
+                  // the panel with no seam at the junction.
                   isActive
-                    ? 'fn-tab-active z-10 -mb-0.5 rounded-t-lg' // solid colour fill (inline) rides the panel edge
+                    ? 'fn-tab-active z-10 -mb-0.5 rounded-t-lg border-b-0' // solid colour fill (inline) rides the panel edge
                     : isSelected
-                      ? 'z-10 -mb-0.5 rounded-t-lg border-navy-300 bg-card' // off + selected: neutral outline (matches the task-name input) rides the panel
+                      ? 'z-10 -mb-0.5 rounded-t-lg border-b-0 border-navy-300 bg-card' // off + selected: neutral outline (matches the task-name input) rides the panel
                       : 'rounded-lg border-line bg-subtle', // separate pill above the panel
                   !d.enabled && !isSelected && 'opacity-60',
                 )}
