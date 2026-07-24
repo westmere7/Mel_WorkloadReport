@@ -26,6 +26,17 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.6.0',
+    date: '2026-07-24',
+    title: 'Update notifications',
+    notes: [
+      {
+        kind: 'new',
+        text: 'The app now tells you when a newer version is live — a small panel appears over whatever you’re doing, with the changelog (collapsed) and a refresh button. Nothing reloads until you choose to.',
+      },
+    ],
+  },
+  {
     version: '0.5.0',
     date: '2026-07-24',
     title: 'Drafts, stars & group merging',
@@ -41,10 +52,6 @@ export const CHANGELOG: Release[] = [
       {
         kind: 'new',
         text: 'Merge groups in Settings — click any squad, campaign, type or person to rename it or migrate all of its tasks into another item. Deleting a used item now asks where its tasks should go (defaults to “Others”).',
-      },
-      {
-        kind: 'new',
-        text: 'Update notifications — the app tells you when a new version is live, with the changelog and a refresh button, without interrupting what you’re doing.',
       },
       {
         kind: 'improved',
