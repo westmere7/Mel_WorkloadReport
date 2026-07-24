@@ -70,6 +70,12 @@ alter table public.tasks
 alter table public.tasks
   add column if not exists monday_url text;
 
+-- Per-task edit log (idempotent). Array of { at, by, action, changes[] } entries,
+-- appended by the app on create and on every field-changing edit. Lives on the
+-- task row, so deleting the task deletes its log.
+alter table public.tasks
+  add column if not exists edit_log jsonb not null default '[]'::jsonb;
+
 create index if not exists tasks_created_at_idx on public.tasks (created_at desc);
 create index if not exists tasks_squad_idx      on public.tasks (squad);
 create index if not exists tasks_campaign_idx   on public.tasks (campaign);

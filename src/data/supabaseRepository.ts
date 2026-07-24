@@ -260,6 +260,18 @@ function stripMondayUrl<T extends { monday_url?: unknown }>(row: T): Omit<T, 'mo
   return rest
 }
 
+/** True if a Supabase error is complaining about a missing `edit_log` column (pre-migration). */
+function isMissingEditLogColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('edit_log') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** Drop the `edit_log` key from a row (used to retry when the column isn't there yet). */
+function stripEditLog<T extends { edit_log?: unknown }>(row: T): Omit<T, 'edit_log'> {
+  const { edit_log: _drop, ...rest } = row
+  return rest
+}
+
 /**
  * Supabase-backed repository. Active automatically when VITE_SUPABASE_URL
  * and VITE_SUPABASE_ANON_KEY are set. Expects the schema in supabase/schema.sql.
@@ -327,6 +339,10 @@ export class SupabaseRepository implements Repository {
       row = stripMondayUrl(row)
       ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
     }
+    if (error && isMissingEditLogColumn(error)) {
+      row = stripEditLog(row)
+      ;({ data, error } = await getSupabase().from('tasks').insert(row).select('*').single())
+    }
     if (error) throw error
     return rowToTask(data)
   }
@@ -364,6 +380,10 @@ export class SupabaseRepository implements Repository {
       rows = rows.map(stripMondayUrl)
       ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
     }
+    if (error && isMissingEditLogColumn(error)) {
+      rows = rows.map(stripEditLog)
+      ;({ data, error } = await getSupabase().from('tasks').insert(rows).select('*'))
+    }
     if (error) throw error
     return (data ?? []).map(rowToTask)
   }
@@ -393,6 +413,10 @@ export class SupabaseRepository implements Repository {
     }
     if (error && isMissingMondayUrlColumn(error)) {
       row = stripMondayUrl(row)
+      ;({ data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single())
+    }
+    if (error && isMissingEditLogColumn(error)) {
+      row = stripEditLog(row)
       ;({ data, error } = await getSupabase().from('tasks').update(row).eq('id', id).select('*').single())
     }
     if (error) throw error

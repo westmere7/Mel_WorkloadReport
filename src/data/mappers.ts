@@ -1,5 +1,6 @@
-import type { AssetBreakdown, FunctionData, Half, Size, Squad, Task, TaskImage, TaskInput } from '../types'
+import type { AssetBreakdown, FunctionData, Half, Size, Squad, Task, TaskImage, TaskInput, TaskLogEntry } from '../types'
 import { normalizeBreakdown, normalizeFunctionData } from '../constants'
+import { normalizeTaskLog } from '../lib/taskLog'
 
 /** Shape of a row in the Supabase `tasks` table (snake_case columns). */
 export interface TaskRow {
@@ -26,6 +27,8 @@ export interface TaskRow {
   starred: boolean | null
   /** Linked monday.com item URL. */
   monday_url?: string | null
+  /** Per-task edit log (jsonb) — deleted with the row. */
+  edit_log?: TaskLogEntry[] | null
   created_at: string
   updated_at: string
   created_by: string | null
@@ -53,6 +56,7 @@ export function rowToTask(row: TaskRow): Task {
     draft: row.draft === true,
     starred: row.starred === true,
     mondayUrl: row.monday_url ?? undefined,
+    log: normalizeTaskLog(row.edit_log),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by ?? null,
@@ -92,5 +96,6 @@ export function taskInputToRow(input: TaskInput): Omit<TaskRow, 'id' | 'created_
     draft: input.draft === true,
     starred: input.starred === true,
     monday_url: input.mondayUrl ?? null,
+    edit_log: input.log ?? [],
   }
 }

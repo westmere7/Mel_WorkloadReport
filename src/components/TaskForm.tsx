@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  History,
   ImagePlus,
   Loader2,
   Plus,
@@ -31,6 +32,7 @@ import {
 import { useStore } from '../data/store'
 import { MultiSelect } from './ui/MultiSelect'
 import { Modal } from './ui/Modal'
+import { TaskLogModal } from './TaskLogModal'
 import { ImageLightbox } from './ui/ImageLightbox'
 import { addDaysISO, cx, todayISO, toMessage } from '../lib/format'
 import { compressToWebP, ACCEPTED_IMAGE_TYPES } from '../lib/image'
@@ -1260,6 +1262,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const [uploading, setUploading] = useState(0)
   const [imgError, setImgError] = useState<string | null>(null)
   const [imagesOpen, setImagesOpen] = useState(false) // show the Demo (images) sub-panel
+  const [logOpen, setLogOpen] = useState(false) // per-task edit-log panel (existing tasks)
   const [lightbox, setLightbox] = useState<string | null>(null) // enlarged image URL
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
@@ -2114,6 +2117,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           // still rides the panel; its switch turns it on to reveal the controls.
           if (!showBody) {
             const pf = activeCfg ?? functionConfigs[0]
+            const pcol = functionColor(pf.color)
             const pHasOffering =
               pf.workTypes.some((t) => settings.types.includes(t)) ||
               pf.assetTypes.some((t) => settings.assetTypes.includes(t))
@@ -2121,14 +2125,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               <div>
                 {tabStrip}
                 <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-navy-300 bg-card px-6 py-12 text-center">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle text-navy-300">
-                    <ToggleRight className="h-6 w-6" />
-                  </span>
                   <div className="space-y-1.5">
-                    <p className="text-sm font-semibold text-ink">{pf.name} Team isn’t recording workload yet</p>
+                    <p className="text-sm font-semibold text-ink">{pf.name} has no workload on this task yet</p>
                     <p className="mx-auto max-w-xs text-xs leading-relaxed text-muted">
-                      Turn the <strong className="text-ink">{pf.name}</strong> switch on above to record its work types
-                      and assets on this task.
+                      Turn it on to record its work types and assets on this task — with the switch above or the button
+                      below.
                     </p>
                     {!pHasOffering && (
                       <p className="mx-auto max-w-xs text-xs leading-relaxed text-muted">
@@ -2136,6 +2137,15 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                       </p>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => requestToggleFn(pf.name)}
+                    style={{ backgroundColor: pcol.hex, color: readableOn(pcol.hex) }}
+                    className="mt-1 inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm transition hover:opacity-90"
+                  >
+                    <ToggleRight className="h-4 w-4" />
+                    Turn on {pf.name}
+                  </button>
                 </div>
               </div>
             )
@@ -2351,6 +2361,17 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               <img src="/monday.svg" alt="Monday.com" className="h-4 w-4 grayscale" />
             </span>
           )}
+          {initial && (
+            <button
+              type="button"
+              onClick={() => setLogOpen(true)}
+              title="Edit log — every recorded change to this task"
+              aria-label="Edit log"
+              className="inline-flex items-center justify-center rounded-lg p-1.5 text-muted transition hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white"
+            >
+              <History className="h-4 w-4" />
+            </button>
+          )}
           {onDelete && (
             <button
               type="button"
@@ -2435,6 +2456,15 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           </div>
         )}
       </Modal>
+
+      {/* Per-task edit log — live task (freshest log), falling back to the prop. */}
+      {initial && (
+        <TaskLogModal
+          task={tasks.find((t) => t.id === initial.id) ?? initial}
+          open={logOpen}
+          onClose={() => setLogOpen(false)}
+        />
+      )}
     </form>
   )
 }

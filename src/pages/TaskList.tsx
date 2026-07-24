@@ -9,6 +9,7 @@ import {
   ChevronUp,
   DatabaseBackup,
   FilePen,
+  History,
   Images,
   Search,
   Star,
@@ -26,6 +27,7 @@ import { ImportBackupModal } from '../components/ImportBackupModal'
 import { TaskForm } from '../components/TaskForm'
 import { TaskDetails } from '../components/TaskDetails'
 import { TaskStar } from '../components/TaskStar'
+import { TaskLogModal } from '../components/TaskLogModal'
 import { useStore } from '../data/store'
 import { useAuth } from '../lib/auth'
 import { SIZES, SIZE_ORDER, SIZE_TONE, withFallback } from '../constants'
@@ -71,6 +73,7 @@ export function TaskList() {
 
   const [editing, setEditing] = useState<Task | null>(null)
   const [deleting, setDeleting] = useState<Task | null>(null)
+  const [logTask, setLogTask] = useState<Task | null>(null)
   const [ioOpen, setIoOpen] = useState(false)
   const [page, setPage] = useState(1)
 
@@ -442,6 +445,16 @@ export function TaskList() {
                   <td className="px-3 py-3">
                     <div className="flex justify-end gap-1 opacity-60 transition group-hover:opacity-100">
                       <button
+                        className="rounded-lg p-1.5 text-muted hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setLogTask(t)
+                        }}
+                        title="Edit log"
+                      >
+                        <History className="h-4 w-4" />
+                      </button>
+                      <button
                         className="rounded-lg p-1.5 text-muted hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
                         onClick={(e) => {
                           e.stopPropagation()
@@ -523,6 +536,9 @@ export function TaskList() {
           {deleting?.code ? ` (${deleting.code})` : ''}? This cannot be undone.
         </p>
       </Modal>
+
+      {/* Per-task edit log */}
+      <TaskLogModal task={logTask} open={Boolean(logTask)} onClose={() => setLogTask(null)} />
 
       {/* Import & backup */}
       <ImportBackupModal open={ioOpen} onClose={() => setIoOpen(false)} />

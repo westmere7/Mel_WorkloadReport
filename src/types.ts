@@ -40,6 +40,18 @@ export interface FunctionEntry {
  */
 export type FunctionData = Record<string, FunctionEntry>
 
+/** One entry in a task's edit log — appended on every create/edit, newest last.
+ *  Lives ON the task row, so the log disappears with the task when it's deleted. */
+export interface TaskLogEntry {
+  /** ISO timestamp of the edit. */
+  at: string
+  /** Username that made the edit; null when unknown. */
+  by?: string | null
+  action: 'created' | 'updated' | 'imported'
+  /** Human-readable field-level change summaries (empty for created/imported). */
+  changes?: string[]
+}
+
 /** An image attached to a task (stored in Supabase Storage; `id` is the object name). */
 export interface TaskImage {
   id: string
@@ -96,6 +108,8 @@ export interface Task {
   starred?: boolean
   /** Linked monday.com item URL (e.g. https://rmit.monday.com/pulses/12345). */
   mondayUrl?: string
+  /** Per-task edit log (newest last). Deleted with the task. */
+  log?: TaskLogEntry[]
   createdAt: string
   updatedAt: string
   /** Username that created the task; null for tasks created before this was tracked. */

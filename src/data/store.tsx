@@ -15,6 +15,7 @@ import { SupabaseRepository } from './supabaseRepository'
 import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { DEFAULT_SETTINGS, FALLBACK_ITEM, legacyOwnerName } from '../constants'
 import { generateSampleTasks } from '../lib/sampleData'
+import { diffTask } from '../lib/taskLog'
 import { toMessage } from '../lib/format'
 import { useAuth } from '../lib/auth'
 import {
@@ -166,9 +167,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [repo])
 
+  // Carry the task's edit log through a save, appending an entry when the edit
+  // actually changed something (diffTask). Callers build inputs WITHOUT a log
+  // (e.g. the task form), so the previous task's log is always re-attached here.
+  const withLog = useCallback(
+    (prev: Task | undefined, input: TaskInput): TaskInput => {
+      if (!prev) return input
+      const changes = diffTask(prev, input)
+      const base = prev.log ?? []
+      if (!changes.length) return { ...input, log: base }
+      return {
+        ...input,
+        log: [...base, { at: new Date().toISOString(), by: user ?? null, action: 'updated', changes }],
+      }
+    },
+    [user],
+  )
+
   const createTask = useCallback(
     async (input: TaskInput) => {
-      const task = await repo.createTask(input, user)
+      const task = await repo.createTask(
+        { ...input, log: [{ at: new Date().toISOString(), by: user ?? null, action: 'created' }] },
+        user,
+      )
       setTasks((prev) => [task, ...prev])
       return task
     },
@@ -177,11 +198,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateTask = useCallback(
     async (id: string, input: TaskInput) => {
-      const task = await repo.updateTask(id, input)
+      const task = await repo.updateTask(id, withLog(tasks.find((t) => t.id === id), input))
       setTasks((prev) => prev.map((t) => (t.id === id ? task : t)))
       return task
     },
-    [repo],
+    [repo, tasks, withLog],
   )
 
   // Toggle starred from the task's CURRENT stored values (not any open edit form),
@@ -191,10 +212,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const t = tasks.find((x) => x.id === id)
       if (!t) return
       const { id: _id, createdAt: _c, updatedAt: _u, createdBy: _b, ...input } = t
-      const saved = await repo.updateTask(id, { ...input, starred: !t.starred })
+      const saved = await repo.updateTask(id, withLog(t, { ...input, starred: !t.starred }))
       setTasks((prev) => prev.map((x) => (x.id === id ? saved : x)))
     },
-    [repo, tasks],
+    [repo, tasks, withLog],
   )
 
   const deleteTask = useCallback(
@@ -217,9 +238,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const importTasks = useCallback(
     async (inputs: TaskInput[], mode: 'replace' | 'merge') => {
+      const importedEntry = { at: new Date().toISOString(), by: user ?? null, action: 'imported' as const }
+      const withImportLog = (list: TaskInput[]) => list.map((i) => ({ ...i, log: [importedEntry] }))
       if (mode === 'replace') {
         await repo.deleteAllTasks()
-        const created = await repo.createManyTasks(inputs, user)
+        const created = await repo.createManyTasks(withImportLog(inputs), user)
         setTasks(created)
         return { created: created.length, updated: 0 }
       }
@@ -248,21 +271,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const keepSlices =
             input.functionData === undefined &&
             aggSig(match.types, match.assetBreakdown) === aggSig(input.types, input.assetBreakdown)
-          await repo.updateTask(match.id, {
-            ...input,
-            images: match.images,
-            functionData: input.functionData ?? (keepSlices ? match.functionData : null),
-          })
+          await repo.updateTask(
+            match.id,
+            withLog(match, {
+              ...input,
+              images: match.images,
+              functionData: input.functionData ?? (keepSlices ? match.functionData : null),
+            }),
+          )
           updated++
         } else {
           toCreate.push(input)
         }
       }
-      if (toCreate.length) await repo.createManyTasks(toCreate, user)
+      if (toCreate.length) await repo.createManyTasks(withImportLog(toCreate), user)
       setTasks(await repo.listTasks())
       return { created: toCreate.length, updated }
     },
-    [repo, user],
+    [repo, user, withLog],
   )
 
   const populateSampleData = useCallback(
