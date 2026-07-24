@@ -9,11 +9,13 @@ interface ModalProps {
   children: ReactNode
   footer?: ReactNode
   wide?: boolean
+  /** Explicit max-width utility classes — overrides the wide/default sizing. */
+  widthClass?: string
   /** Close when clicking the backdrop. Default true; set false to require explicit dismiss. */
   closeOnBackdrop?: boolean
 }
 
-export function Modal({ open, onClose, title, children, footer, wide, closeOnBackdrop = true }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, wide, widthClass, closeOnBackdrop = true }: ModalProps) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -29,7 +31,7 @@ export function Modal({ open, onClose, title, children, footer, wide, closeOnBac
       onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
-        className={`card my-auto w-full ${wide ? 'max-w-3xl lg:max-w-[88rem]' : 'max-w-lg'} p-0`}
+        className={`card my-auto w-full ${widthClass ?? (wide ? 'max-w-3xl lg:max-w-[88rem]' : 'max-w-lg')} p-0`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line px-5 py-4">

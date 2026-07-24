@@ -1,4 +1,4 @@
-import type { Squad, Size, AppSettings, FunctionConfig, FunctionData, FunctionEntry } from './types'
+import type { Squad, Size, AppSettings, FunctionConfig, FunctionData, FunctionEntry, ChartGroup, ChartGroups } from './types'
 
 /**
  * Default squads (stakeholders). Editable in Settings like the other lists — this
@@ -294,6 +294,26 @@ export function matchByKeywords(
   return null
 }
 
+/** Coerce a stored `chart_groups` value into a clean {asset, type} shape, keeping
+ *  only well-formed groups (bad/legacy shapes fall away silently). */
+export function normalizeChartGroups(raw: unknown): ChartGroups {
+  const clean = (v: unknown): ChartGroup[] => {
+    if (!Array.isArray(v)) return []
+    return v.filter(
+      (g): g is ChartGroup =>
+        !!g &&
+        typeof g === 'object' &&
+        typeof (g as ChartGroup).id === 'string' &&
+        typeof (g as ChartGroup).name === 'string' &&
+        typeof (g as ChartGroup).color === 'string' &&
+        Array.isArray((g as ChartGroup).items) &&
+        (g as ChartGroup).items.every((i) => typeof i === 'string'),
+    )
+  }
+  const rec = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  return { asset: clean(rec.asset), type: clean(rec.type) }
+}
+
 /** Coerce a stored `monday_boards` value into a clean, deduped list of id strings. */
 export function normalizeMondayBoards(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [...DEFAULT_MONDAY_BOARDS]
@@ -323,6 +343,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mondayBoardNames: {},
   squadKeywords: {},
   campaignKeywords: {},
+  chartGroups: { asset: [], type: [] },
 }
 
 /** Legacy fixed breakdown keys → their default display names, for migrating old data. */

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftRight } from 'lucide-react'
+import { ArrowLeftRight, Settings2 } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { TaskDetails } from '../components/TaskDetails'
 import { TaskStar } from '../components/TaskStar'
 import { FunctionFilter } from '../components/FunctionFilter'
+import { ChartGroupsModal } from '../components/ChartGroupsModal'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
@@ -32,6 +33,7 @@ import { sliceTasksByFunctions } from '../lib/functionData'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
+import { applyChartGroups, expandChartSelection } from '../lib/chartGroups'
 import { useAuth } from '../lib/auth'
 import type { Half, Squad, Task, TaskInput } from '../types'
 import { TaskForm } from '../components/TaskForm'
@@ -82,6 +84,12 @@ export function Dashboard() {
   }, [today])
   // Chart display preferences — edited in Settings → Dashboard.
   const { demandDim, hideCommonCampaigns, showTasksByPerson } = useDashboardPrefs()
+  // Chart display GROUPS live in synced settings (shared across devices).
+  // Guarded: a settings object from before this feature has no chartGroups.
+  const assetGroups = settings.chartGroups?.asset ?? []
+  const typeGroups = settings.chartGroups?.type ?? []
+  // Groups for whatever dimension the demand chart currently shows.
+  const demandGroups = demandDim === 'asset' ? assetGroups : typeGroups
   const navigate = useNavigate()
 
   // Tasks projected to the selected functions' slices (pass-through for All GCMC).
@@ -139,17 +147,23 @@ export function Dashboard() {
   const assetCampaignShown = useMemo(() => dropCommon(assetCampaign), [assetCampaign, hideCommonCampaigns])
   const demand = useMemo(
     () =>
-      demandDim === 'asset'
-        ? demandByStakeholderAssetType(filtered, withFallback(settings.assetTypes))
-        : demandByStakeholder(filtered, withFallback(settings.types)),
-    [filtered, settings.types, settings.assetTypes, demandDim],
+      applyChartGroups(
+        demandDim === 'asset'
+          ? demandByStakeholderAssetType(filtered, withFallback(settings.assetTypes))
+          : demandByStakeholder(filtered, withFallback(settings.types)),
+        demandGroups,
+      ),
+    [filtered, settings.types, settings.assetTypes, demandDim, demandGroups],
   )
   const byPerson = useMemo(() => countByMulti(filtered, 'people'), [filtered])
   const assetMix = useMemo(
-    () => assetsByType(filtered, withFallback(settings.assetTypes)),
-    [filtered, settings.assetTypes],
+    () => applyChartGroups(assetsByType(filtered, withFallback(settings.assetTypes)), assetGroups),
+    [filtered, settings.assetTypes, assetGroups],
   )
-  const workTypeMix = useMemo(() => countByMulti(filtered, 'types'), [filtered])
+  const workTypeMix = useMemo(
+    () => applyChartGroups(countByMulti(filtered, 'types'), typeGroups),
+    [filtered, typeGroups],
+  )
   // "Across the year" ignores the half sub-filter — it always shows the full 12
   // months of the active year (the latest year by default, or the selected one).
   const byMonth = useMemo(() => {
@@ -177,6 +191,8 @@ export function Dashboard() {
   const [viewTask, setViewTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Task | null>(null)
+  // Chart groups editor pop-up (opened from the panels' gear icons).
+  const [chartGroupsOpen, setChartGroupsOpen] = useState(false)
 
   const handleUpdateTask = async (input: TaskInput) => {
     if (!editTask) return
@@ -205,16 +221,22 @@ export function Dashboard() {
   )
   const srcDemand = useMemo(
     () =>
-      demandDim === 'asset'
-        ? demandByStakeholderAssetType(sourceTasks, withFallback(settings.assetTypes))
-        : demandByStakeholder(sourceTasks, withFallback(settings.types)),
-    [sourceTasks, settings.types, settings.assetTypes, demandDim],
+      applyChartGroups(
+        demandDim === 'asset'
+          ? demandByStakeholderAssetType(sourceTasks, withFallback(settings.assetTypes))
+          : demandByStakeholder(sourceTasks, withFallback(settings.types)),
+        demandGroups,
+      ),
+    [sourceTasks, settings.types, settings.assetTypes, demandDim, demandGroups],
   )
   const srcAssetMix = useMemo(
-    () => assetsByType(sourceTasks, withFallback(settings.assetTypes)),
-    [sourceTasks, settings.assetTypes],
+    () => applyChartGroups(assetsByType(sourceTasks, withFallback(settings.assetTypes)), assetGroups),
+    [sourceTasks, settings.assetTypes, assetGroups],
   )
-  const srcWorkTypeMix = useMemo(() => countByMulti(sourceTasks, 'types'), [sourceTasks])
+  const srcWorkTypeMix = useMemo(
+    () => applyChartGroups(countByMulti(sourceTasks, 'types'), typeGroups),
+    [sourceTasks, typeGroups],
+  )
   const srcByMonth = useMemo(() => {
     let list = fnTasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === srcYear)
     if (ytd) {
@@ -242,29 +264,55 @@ export function Dashboard() {
   const squadsInGroup = (group: string) =>
     withFallback(settings.squads).filter((s) => stakeholderGroup(s as Squad) === group)
 
+  // Small gear on the chart-group-aware panels → opens the Chart groups pop-up.
+  const chartGroupsGear = (
+    <button
+      type="button"
+      onClick={() => setChartGroupsOpen(true)}
+      title="Chart display settings — group items to declutter this chart"
+      aria-label="Chart display settings"
+      className="rounded-md p-1 text-faint transition hover:bg-subtle hover:text-ink"
+    >
+      <Settings2 className="h-4 w-4" />
+    </button>
+  )
+
   // Per-name counts of relevant tasks, for the mix donuts' hover tooltips.
-  // (Work-type counts equal the donut value; asset-type counts don't — a task
-  // with multiple asset types is one task but many assets.)
+  // Group-aware: a grouped row counts tasks matching ANY member (each task once)
+  // — the same set its click-through filter opens — while an ungrouped row's
+  // members are just itself.
   const assetMixCounts = useMemo(() => {
     const rec: Record<string, number> = {}
-    for (const d of assetMix)
-      rec[d.name] = filtered.filter((t) => (Number(t.assetBreakdown[d.name]) || 0) > 0).length
+    for (const d of assetMix) {
+      const members = expandChartSelection(assetGroups, d.name)
+      rec[d.name] = filtered.filter((t) => members.some((m) => (Number(t.assetBreakdown[m]) || 0) > 0)).length
+    }
     return rec
-  }, [assetMix, filtered])
+  }, [assetMix, assetGroups, filtered])
   const srcAssetMixCounts = useMemo(() => {
     const rec: Record<string, number> = {}
-    for (const d of srcAssetMix)
-      rec[d.name] = sourceTasks.filter((t) => (Number(t.assetBreakdown[d.name]) || 0) > 0).length
+    for (const d of srcAssetMix) {
+      const members = expandChartSelection(assetGroups, d.name)
+      rec[d.name] = sourceTasks.filter((t) => members.some((m) => (Number(t.assetBreakdown[m]) || 0) > 0)).length
+    }
     return rec
-  }, [srcAssetMix, sourceTasks])
-  const workTypeCounts = useMemo(
-    () => Object.fromEntries(workTypeMix.map((d) => [d.name, d.value])),
-    [workTypeMix],
-  )
-  const srcWorkTypeCounts = useMemo(
-    () => Object.fromEntries(srcWorkTypeMix.map((d) => [d.name, d.value])),
-    [srcWorkTypeMix],
-  )
+  }, [srcAssetMix, assetGroups, sourceTasks])
+  const workTypeCounts = useMemo(() => {
+    const rec: Record<string, number> = {}
+    for (const d of workTypeMix) {
+      const members = expandChartSelection(typeGroups, d.name)
+      rec[d.name] = filtered.filter((t) => t.types.some((ty) => members.includes(ty))).length
+    }
+    return rec
+  }, [workTypeMix, typeGroups, filtered])
+  const srcWorkTypeCounts = useMemo(() => {
+    const rec: Record<string, number> = {}
+    for (const d of srcWorkTypeMix) {
+      const members = expandChartSelection(typeGroups, d.name)
+      rec[d.name] = sourceTasks.filter((t) => t.types.some((ty) => members.includes(ty))).length
+    }
+    return rec
+  }, [srcWorkTypeMix, typeGroups, sourceTasks])
 
   // Render the function filter (left) and span selector (right) into the top header bar.
   const setHeaderSlots = useHeaderSlots()
@@ -586,13 +634,16 @@ export function Dashboard() {
               <CardHeader
                 title="Asset mix"
                 subtitle={compare ? `Deliverables by type — ${activeYear} over ${srcYear}` : 'Deliverables by type'}
+                action={chartGroupsGear}
               />
               <DonutChart
                 data={assetMix}
                 height={200}
                 emptyMessage={fnEmpty ?? 'Add tasks with asset counts to see the mix.'}
                 compare={compare ? srcAssetMix : undefined}
-                onSelect={(name) => goTasks([['asset', name]])}
+                onSelect={(name) =>
+                  goTasks(expandChartSelection(assetGroups, name).map((v) => ['asset', v] as [string, string]))
+                }
                 taskCounts={assetMixCounts}
                 prevTaskCounts={compare ? srcAssetMixCounts : undefined}
                 sourceLabel={String(srcYear)}
@@ -602,13 +653,16 @@ export function Dashboard() {
               <CardHeader
                 title="Work type mix"
                 subtitle={compare ? `Tasks by work type — ${activeYear} over ${srcYear}` : 'Tasks by work type'}
+                action={chartGroupsGear}
               />
               <DonutChart
                 data={workTypeMix}
                 height={200}
                 emptyMessage={fnEmpty ?? 'Tag tasks with work types to see the mix.'}
                 compare={compare ? srcWorkTypeMix : undefined}
-                onSelect={(name) => goTasks([['type', name]])}
+                onSelect={(name) =>
+                  goTasks(expandChartSelection(typeGroups, name).map((v) => ['type', v] as [string, string]))
+                }
                 taskCounts={workTypeCounts}
                 prevTaskCounts={compare ? srcWorkTypeCounts : undefined}
                 sourceLabel={String(srcYear)}
@@ -633,7 +687,12 @@ export function Dashboard() {
             <CardHeader
               title="Squads demand distribution"
               subtitle={`Share of each ${demandDim === 'asset' ? 'asset type' : 'work type'} across stakeholder groups${compareSubtitleSuffix}`}
-              action={<StackedLegend keys={[...STAKEHOLDER_GROUPS]} paletteIndices={[0, 1, 2]} />}
+              action={
+                <div className="flex items-center gap-2">
+                  <StackedLegend keys={[...STAKEHOLDER_GROUPS]} paletteIndices={[0, 1, 2]} />
+                  {chartGroupsGear}
+                </div>
+              }
             />
             <div className="relative min-h-[320px] flex-1">
               <div className="absolute inset-0">
@@ -656,7 +715,9 @@ export function Dashboard() {
                   }
                   onSelect={(category, group) =>
                     goTasks([
-                      [demandDim === 'asset' ? 'asset' : 'type', category],
+                      ...expandChartSelection(demandGroups, category).map(
+                        (v) => [demandDim === 'asset' ? 'asset' : 'type', v] as [string, string],
+                      ),
                       ...squadsInGroup(group).map((s) => ['squad', s] as [string, string]),
                     ])
                   }
@@ -685,6 +746,9 @@ export function Dashboard() {
           />
         )}
       </Modal>
+
+      {/* Chart groups editor — opened by the panels' gear icons. */}
+      <ChartGroupsModal open={chartGroupsOpen} onClose={() => setChartGroupsOpen(false)} />
 
       {/* Edit form — reached from the details view; never leaves the dashboard. */}
       <Modal

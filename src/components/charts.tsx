@@ -174,10 +174,10 @@ export function DonutChart({
               onMouseEnter={(_, i) => setActive(i)}
               onMouseLeave={() => setActive(null)}
             >
-              {data.map((_, i) => (
+              {data.map((d, i) => (
                 <Cell
                   key={i}
-                  fill={colors[i % colors.length]}
+                  fill={d.color ?? colors[i % colors.length]}
                   fillOpacity={active == null || active === i ? 1 : 0.35}
                 />
               ))}
@@ -233,7 +233,7 @@ export function DonutChart({
                 <span className="flex min-w-0 items-center gap-2">
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ background: colors[i % colors.length] }}
+                    style={{ background: d.color ?? colors[i % colors.length] }}
                   />
                   <span className="truncate text-muted">{d.name}</span>
                 </span>

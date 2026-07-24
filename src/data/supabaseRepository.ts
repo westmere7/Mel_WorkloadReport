@@ -10,6 +10,7 @@ import {
   normalizeFunctions,
   normalizeKeywordMap,
   normalizeMondayBoards,
+  normalizeChartGroups,
   normalizeSizeDurations,
 } from '../constants'
 import {
@@ -173,6 +174,12 @@ function isMissingKeywordsColumn(err: unknown): boolean {
     (msg.includes('squad_keywords') || msg.includes('campaign_keywords')) &&
     (msg.includes('column') || msg.includes('schema cache'))
   )
+}
+
+/** True if a Supabase error is complaining about a missing `chart_groups` column (pre-migration). */
+function isMissingChartGroupsColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('chart_groups') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
 /** True if a Supabase error is complaining about a missing `created_by` column (pre-migration). */
@@ -590,6 +597,7 @@ export class SupabaseRepository implements Repository {
       mondayBoardNames: data.monday_board_names ?? DEFAULT_SETTINGS.mondayBoardNames,
       squadKeywords: normalizeKeywordMap(data.squad_keywords),
       campaignKeywords: normalizeKeywordMap(data.campaign_keywords),
+      chartGroups: normalizeChartGroups(data.chart_groups),
     }
   }
 
@@ -616,6 +624,7 @@ export class SupabaseRepository implements Repository {
       monday_board_names: settings.mondayBoardNames,
       squad_keywords: settings.squadKeywords,
       campaign_keywords: settings.campaignKeywords,
+      chart_groups: settings.chartGroups,
     }
     let { data, error } = await upsert(payload)
     // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
@@ -626,6 +635,10 @@ export class SupabaseRepository implements Repository {
     if (error && isMissingKeywordsColumn(error)) {
       delete payload.squad_keywords
       delete payload.campaign_keywords
+      ;({ data, error } = await upsert(payload))
+    }
+    if (error && isMissingChartGroupsColumn(error)) {
+      delete payload.chart_groups
       ;({ data, error } = await upsert(payload))
     }
     if (error && isMissingMondayBoardsColumn(error)) {
@@ -671,6 +684,7 @@ export class SupabaseRepository implements Repository {
       campaignKeywords: data.campaign_keywords
         ? normalizeKeywordMap(data.campaign_keywords)
         : settings.campaignKeywords,
+      chartGroups: data.chart_groups ? normalizeChartGroups(data.chart_groups) : settings.chartGroups,
     }
   }
 

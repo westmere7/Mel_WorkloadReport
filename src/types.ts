@@ -126,6 +126,29 @@ export interface FunctionConfig {
   people?: string[]
 }
 
+/**
+ * A display-only bundle of chart items (asset types OR work types): its members
+ * collapse into ONE named, coloured slice/column on the dashboard charts. Purely
+ * presentational — tasks and the reference lists are untouched; clicking a
+ * grouped slice still filters the task list by the member items.
+ */
+export interface ChartGroup {
+  id: string
+  name: string
+  /** Hex fill for the group's slice + legend dot. */
+  color: string
+  /** Member item NAMES (asset-type or work-type names). */
+  items: string[]
+}
+
+/** Dashboard chart display groups, split by the dimension they apply to. */
+export interface ChartGroups {
+  /** Groups for ASSET-TYPE charts (Asset mix, demand-by-asset). */
+  asset: ChartGroup[]
+  /** Groups for WORK-TYPE charts (Work type mix, demand-by-type). */
+  type: ChartGroup[]
+}
+
 /** User-editable lists + app preferences. */
 export interface AppSettings {
   squads: string[]
@@ -152,6 +175,8 @@ export interface AppSettings {
   squadKeywords: Record<string, string[]>
   /** Campaign NAME → keyword list (same auto-select-on-name-match behaviour). */
   campaignKeywords: Record<string, string[]>
+  /** Dashboard chart display groups (bundle asset / work types into one slice). */
+  chartGroups: ChartGroups
 }
 
 /** Empty breakdown helper. */

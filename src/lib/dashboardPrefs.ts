@@ -7,6 +7,10 @@ import { useSyncExternalStore } from 'react'
 
 export type DemandDim = 'type' | 'asset'
 
+// NB: chart display GROUPS used to live here but moved into AppSettings.chartGroups
+// so they sync across devices via Supabase (see types.ts / chartGroups.ts). What
+// remains are lightweight, per-browser viewing toggles.
+
 export interface DashboardPrefs {
   /** Dimension of the "Demand by stakeholders" chart. */
   demandDim: DemandDim

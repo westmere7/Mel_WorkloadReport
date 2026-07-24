@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, ArrowRightLeft, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Tag, Trash2, Users, X } from 'lucide-react'
+import { AlertTriangle, Archive, ArrowRightLeft, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Settings2, Tag, Trash2, Users, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -28,6 +28,7 @@ import {
   useDashboardPrefs,
   type DemandDim,
 } from '../lib/dashboardPrefs'
+import { ChartGroupsModal } from '../components/ChartGroupsModal'
 import type { AppSettings, FunctionConfig, Size } from '../types'
 
 type ListKey = keyof Pick<AppSettings, 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes'>
@@ -97,7 +98,8 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Dashboard display preferences */}
+      {/* Dashboard display preferences (collapsible) — includes chart groups,
+          deep-linked from the dashboard panels' gear icons (#chart-groups). */}
       <DashboardPrefsCard />
 
       {/* Groups — collapsible section holding every editable reference list */}
@@ -851,13 +853,20 @@ function SizeDurationsCard() {
   )
 }
 
-/** Grouped chart-display toggles for the Dashboard (saved in this browser). */
+/** Collapsible Dashboard settings: display toggles (per-browser) + synced chart
+ *  groups. Deep-linked to #chart-groups by the gear on the dashboard panels. */
 function DashboardPrefsCard() {
   const prefs = useDashboardPrefs()
+  const { settings } = useStore()
+  const [groupsOpen, setGroupsOpen] = useState(false)
+  const groupCount = (settings.chartGroups?.asset.length ?? 0) + (settings.chartGroups?.type.length ?? 0)
 
   return (
-    <Card>
-      <CardHeader title="Dashboard" subtitle="How the dashboard charts are displayed" />
+    <CollapsibleSection
+      title="Dashboard"
+      subtitle="How the dashboard charts are displayed"
+      storageKey="mwr.settings.dashboardOpen"
+    >
       <div className="space-y-2">
         <PrefRow
           title="Demand by stakeholders — dimension"
@@ -905,8 +914,19 @@ function DashboardPrefsCard() {
             label="Show Tasks by person"
           />
         </PrefRow>
+        <PrefRow
+          title="Chart groups"
+          description="Bundle asset / work types into named, coloured groups so the mix & demand charts stay readable. Also reachable from the gear on those panels."
+        >
+          <button type="button" className="btn-outline whitespace-nowrap" onClick={() => setGroupsOpen(true)}>
+            <Settings2 className="h-4 w-4" />
+            Manage{groupCount > 0 ? ` (${groupCount})` : ''}
+          </button>
+        </PrefRow>
       </div>
-    </Card>
+
+      <ChartGroupsModal open={groupsOpen} onClose={() => setGroupsOpen(false)} />
+    </CollapsibleSection>
   )
 }
 
@@ -939,14 +959,18 @@ function CollapsibleSection({
   subtitle,
   storageKey,
   children,
+  initialOpenHash,
 }: {
   title: string
   subtitle?: string
   storageKey: string
   children: React.ReactNode
+  /** When the page loads with this URL hash, force the section open (deep-link). */
+  initialOpenHash?: string
 }) {
   const [open, setOpen] = useState<boolean>(() => {
     try {
+      if (initialOpenHash && window.location.hash === initialOpenHash) return true
       return localStorage.getItem(storageKey) !== '0'
     } catch {
       return true

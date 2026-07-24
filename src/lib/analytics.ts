@@ -4,6 +4,8 @@ import { SIZES } from '../constants'
 export interface NamedCount {
   name: string
   value: number
+  /** Optional explicit fill (e.g. a chart-group's colour) — overrides the palette. */
+  color?: string
 }
 
 function sortDesc(rec: Record<string, number>): NamedCount[] {

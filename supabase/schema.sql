@@ -131,6 +131,12 @@ alter table public.settings
 alter table public.settings
   add column if not exists campaign_keywords jsonb not null default '{}'::jsonb;
 
+-- Dashboard chart display groups: { "asset": [group…], "type": [group…] } where a
+-- group is { id, name, color, items[] }. Purely presentational — bundles asset /
+-- work types into one slice on the dashboard mix + demand charts.
+alter table public.settings
+  add column if not exists chart_groups jsonb not null default '{"asset":[],"type":[]}'::jsonb;
+
 -- GCMC functions that record workload (task-form tabs). Array of
 -- { name, color, workTypes, assetTypes }; order = tab order. The type lists are
 -- INCLUSIONS (only listed types appear on that tab); the seed offers the full

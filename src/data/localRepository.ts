@@ -10,6 +10,7 @@ import {
   normalizeFunctions,
   normalizeKeywordMap,
   normalizeMondayBoards,
+  normalizeChartGroups,
   normalizeSizeDurations,
 } from '../constants'
 import {
@@ -218,6 +219,7 @@ export class LocalRepository implements Repository {
       mondayBoardIds: normalizeMondayBoards(stored.mondayBoardIds),
       squadKeywords: normalizeKeywordMap(stored.squadKeywords),
       campaignKeywords: normalizeKeywordMap(stored.campaignKeywords),
+      chartGroups: normalizeChartGroups(stored.chartGroups),
     }
   }
 
