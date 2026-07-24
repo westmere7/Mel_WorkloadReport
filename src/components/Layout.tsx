@@ -4,6 +4,7 @@ import { LogIn, Moon, Sun, UserCog } from 'lucide-react'
 import { Sidebar, MobileNav } from './Sidebar'
 import { LoginModal } from './LoginModal'
 import { AccountModal } from './AccountModal'
+import { UpdateNotice } from './UpdateNotice'
 import { useTheme } from '../lib/theme'
 import { useAuth } from '../lib/auth'
 import { cx } from '../lib/format'
@@ -143,6 +144,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
       <AccountModal open={accountOpen} onClose={() => setAccountOpen(false)} />
+      {/* Floating "new version is live" toast — polls version.json, never force-reloads. */}
+      <UpdateNotice />
     </HeaderSlotContext.Provider>
   )
 }
