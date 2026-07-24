@@ -17,7 +17,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { LineChart as LineChartIcon } from 'lucide-react'
+import { LineChart as LineChartIcon, Layers } from 'lucide-react'
 import type { NamedCount } from '../lib/analytics'
 import { STAKEHOLDER_GROUPS, stakeholderGroup } from '../lib/analytics'
 import type { Squad, Task } from '../types'
@@ -25,7 +25,7 @@ import { CHART_COLORS_DARK, CHART_COLORS_LIGHT } from '../constants'
 import { useTheme } from '../lib/theme'
 import { TrendDelta } from './ui/TrendDelta'
 import { cx } from '../lib/format'
-import { useEffect, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
 /** True on narrow (mobile) viewports — Tailwind's `sm` breakpoint is 640px. */
 function useIsMobile(): boolean {
@@ -112,18 +112,7 @@ export function NotEnough({ message, height = 200 }: { message?: string; height?
   )
 }
 
-/** Donut chart with a centered total and an external legend. */
-export function DonutChart({
-  data,
-  height = 240,
-  minPoints = 1,
-  emptyMessage,
-  compare,
-  onSelect,
-  taskCounts,
-  prevTaskCounts,
-  sourceLabel,
-}: {
+interface MixProps {
   data: NamedCount[]
   height?: number
   minPoints?: number
@@ -138,12 +127,148 @@ export function DonutChart({
   prevTaskCounts?: Record<string, number>
   /** Label for the source year, used in the compare tooltip. */
   sourceLabel?: string
+}
+
+/** Measure an element's live width for container-responsive layout — a
+ *  ResizeObserver plus a window-resize fallback (the observer alone can miss
+ *  viewport reflows in some engines). */
+function useContainerWidth<T extends HTMLElement>(): [React.RefObject<T>, number] {
+  const ref = useRef<T>(null)
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => setWidth(el.getBoundingClientRect().width)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
+  return [ref, width]
+}
+
+/** Shared category legend (name · value) used by both mix variants. `showShare`
+ *  appends each row's % of the total. `active`/`setActive` sync hover with the
+ *  chart (slice or bar segment). */
+function MixLegend({
+  data,
+  colors,
+  total,
+  active,
+  setActive,
+  onSelect,
+  taskCounts,
+  prevTaskCounts,
+  compare,
+  sourceLabel,
+  showShare,
+}: {
+  data: NamedCount[]
+  colors: string[]
+  total: number
+  active: number | null
+  setActive: (i: number | null) => void
+  onSelect?: (name: string) => void
+  taskCounts?: Record<string, number>
+  prevTaskCounts?: Record<string, number>
+  compare?: NamedCount[]
+  sourceLabel?: string
+  showShare?: boolean
 }) {
+  const prevByName = compare ? new Map(compare.map((d) => [d.name, d.value])) : null
+  const clickable = Boolean(onSelect)
+  return (
+    <ul className="w-full space-y-1.5 sm:flex-1">
+      {data.map((d, i) => {
+        const n = taskCounts?.[d.name]
+        const p = prevTaskCounts?.[d.name]
+        const tip =
+          n == null
+            ? undefined
+            : `${n} task${n === 1 ? '' : 's'}${compare && p != null ? ` · ${p} in ${sourceLabel ?? 'source'}` : ''}`
+        const share = total > 0 ? Math.round((d.value / total) * 100) : 0
+        return (
+          <li key={d.name}>
+            <div
+              className={cx(
+                'flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 text-sm transition-colors',
+                clickable && 'cursor-pointer',
+                active === i && 'bg-subtle',
+              )}
+              title={tip}
+              onMouseEnter={() => setActive(i)}
+              onMouseLeave={() => setActive(null)}
+              {...(clickable
+                ? {
+                    role: 'button',
+                    tabIndex: 0,
+                    onClick: () => onSelect!(d.name),
+                    onKeyDown: (e: KeyboardEvent) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onSelect!(d.name)
+                      }
+                    },
+                  }
+                : {})}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ background: d.color ?? colors[i % colors.length] }}
+                />
+                <span className="truncate text-muted">{d.name}</span>
+                {d.isGroup && (
+                  <span
+                    className="shrink-0 text-faint"
+                    title={`Group of ${d.groupItems?.length ?? 0}: ${(d.groupItems ?? []).join(', ')}`}
+                  >
+                    <Layers className="h-3 w-3" />
+                  </span>
+                )}
+              </span>
+              {/* Subtle leader line connecting the name to its value. */}
+              <span aria-hidden="true" className="min-w-[0.75rem] flex-1 self-center border-b border-dotted border-line" />
+              <span className="flex shrink-0 items-center gap-2">
+                {prevByName && (
+                  <TrendDelta
+                    size="sm"
+                    current={d.value}
+                    previous={prevByName.get(d.name) ?? 0}
+                    title={`${prevByName.get(d.name) ?? 0} → ${d.value}`}
+                  />
+                )}
+                {showShare && <span className="text-xs text-faint">{share}%</span>}
+                <span className="font-semibold text-ink">{d.value}</span>
+              </span>
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** Donut chart with a centered total and an external legend. */
+export function DonutChart({
+  data,
+  height = 240,
+  minPoints = 1,
+  emptyMessage,
+  compare,
+  onSelect,
+  taskCounts,
+  prevTaskCounts,
+  sourceLabel,
+}: MixProps) {
   const colors = useChartColors()
   // Index of the section currently hovered (via a slice or its legend row).
   const [active, setActive] = useState<number | null>(null)
   const total = data.reduce((a, b) => a + b.value, 0)
-  const prevByName = compare ? new Map(compare.map((d) => [d.name, d.value])) : null
   if (total === 0 || data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
 
   return (
@@ -194,69 +319,95 @@ export function DonutChart({
           <span className="text-[11px] uppercase tracking-wide text-muted">total</span>
         </div>
       </div>
-      <ul className="w-full space-y-1.5 sm:flex-1">
-        {data.map((d, i) => {
-          const clickable = Boolean(onSelect)
-          const n = taskCounts?.[d.name]
-          const p = prevTaskCounts?.[d.name]
-          const tip =
-            n == null
-              ? undefined
-              : `${n} task${n === 1 ? '' : 's'}${
-                  compare && p != null ? ` · ${p} in ${sourceLabel ?? 'source'}` : ''
-                }`
-          return (
-            <li key={d.name}>
-              <div
-                className={cx(
-                  'flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 text-sm transition-colors',
-                  clickable && 'cursor-pointer',
-                  active === i && 'bg-subtle',
-                )}
-                title={tip}
-                onMouseEnter={() => setActive(i)}
-                onMouseLeave={() => setActive(null)}
-                {...(clickable
-                  ? {
-                      role: 'button',
-                      tabIndex: 0,
-                      onClick: () => onSelect!(d.name),
-                      onKeyDown: (e: KeyboardEvent) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          onSelect!(d.name)
-                        }
-                      },
-                    }
-                  : {})}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ background: d.color ?? colors[i % colors.length] }}
-                  />
-                  <span className="truncate text-muted">{d.name}</span>
-                </span>
-                {/* Subtle leader line connecting the name to its value. */}
-                <span aria-hidden="true" className="min-w-[0.75rem] flex-1 self-center border-b border-dotted border-line" />
-                <span className="flex shrink-0 items-center gap-2">
-                  {prevByName && (
-                    <TrendDelta
-                      size="sm"
-                      current={d.value}
-                      previous={prevByName.get(d.name) ?? 0}
-                      title={`${prevByName.get(d.name) ?? 0} → ${d.value}`}
-                    />
-                  )}
-                  <span className="font-semibold text-ink">{d.value}</span>
-                </span>
-              </div>
-            </li>
-          )
-        })}
-      </ul>
+      <MixLegend
+        data={data}
+        colors={colors}
+        total={total}
+        active={active}
+        setActive={setActive}
+        onSelect={onSelect}
+        taskCounts={taskCounts}
+        prevTaskCounts={prevTaskCounts}
+        compare={compare}
+        sourceLabel={sourceLabel}
+      />
     </div>
   )
+}
+
+/**
+ * A single 100%-stacked horizontal bar + a ranked legend below it — the compact,
+ * width-friendly counterpart to the donut for the same part-to-whole data. The
+ * bar (full width) never truncates, and the legend stacks vertically so long
+ * category names get the whole row.
+ */
+export function StackedShareBar({
+  data,
+  minPoints = 1,
+  emptyMessage,
+  compare,
+  onSelect,
+  taskCounts,
+  prevTaskCounts,
+  sourceLabel,
+}: MixProps) {
+  const colors = useChartColors()
+  const [active, setActive] = useState<number | null>(null)
+  const total = data.reduce((a, b) => a + b.value, 0)
+  if (total === 0 || data.length < minPoints) return <NotEnough message={emptyMessage} height={160} />
+  const clickable = Boolean(onSelect)
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-2xl font-bold text-ink">{total}</span>
+        <span className="text-[11px] uppercase tracking-wide text-muted">total</span>
+      </div>
+      {/* The 100% stacked bar — segments in ranked order, coloured per category. */}
+      <div className="flex h-4 w-full overflow-hidden rounded-full ring-1 ring-line">
+        {data.map((d, i) => (
+          <div
+            key={d.name}
+            className={cx('h-full transition-opacity', clickable && 'cursor-pointer')}
+            style={{
+              width: `${(d.value / total) * 100}%`,
+              background: d.color ?? colors[i % colors.length],
+              opacity: active == null || active === i ? 1 : 0.35,
+            }}
+            title={`${d.name}: ${d.value} (${Math.round((d.value / total) * 100)}%)`}
+            onMouseEnter={() => setActive(i)}
+            onMouseLeave={() => setActive(null)}
+            {...(clickable ? { role: 'button', onClick: () => onSelect!(d.name) } : {})}
+          />
+        ))}
+      </div>
+      <MixLegend
+        data={data}
+        colors={colors}
+        total={total}
+        active={active}
+        setActive={setActive}
+        onSelect={onSelect}
+        taskCounts={taskCounts}
+        prevTaskCounts={prevTaskCounts}
+        compare={compare}
+        sourceLabel={sourceLabel}
+        showShare
+      />
+    </div>
+  )
+}
+
+/**
+ * Responsive mix chart: the donut when the panel is wide enough for the ring +
+ * side-by-side legend, otherwise a 100%-stacked bar (which reads fine in a
+ * narrow column instead of truncating the legend).
+ */
+export function MixChart(props: MixProps) {
+  const [ref, width] = useContainerWidth<HTMLDivElement>()
+  // Donut needs ~180 (ring) + gap + a readable legend; below that the bar wins.
+  const narrow = width > 0 && width < 380
+  return <div ref={ref}>{narrow ? <StackedShareBar {...props} /> : <DonutChart {...props} />}</div>
 }
 
 /** Horizontal bar chart — good for ranked categories (people, squads). */
@@ -569,7 +720,9 @@ export function StackedBarChart({
   onSelect,
   hideLegend,
 }: {
-  data: Array<Record<string, string | number>>
+  // Rows may carry extra chart-group metadata (color/isGroup/groupItems) beyond
+  // the numeric stack keys — tolerate those value types.
+  data: Array<Record<string, string | number | boolean | string[] | undefined>>
   keys: string[]
   paletteIndices?: number[]
   height?: number | string
@@ -582,7 +735,11 @@ export function StackedBarChart({
   /** Comparison baseline rows (same key shape) — splits each column into two
       half-columns, source year (faded) beside target year; categories missing
       from either year are hidden. */
-  compare?: { data: Array<Record<string, string | number>>; label: string; currentLabel: string }
+  compare?: {
+    data: Array<Record<string, string | number | boolean | string[] | undefined>>
+    label: string
+    currentLabel: string
+  }
 }) {
   const themed = useChartColors()
   const colorAt = (i: number) => themed[(paletteIndices?.[i] ?? i) % themed.length]
@@ -595,7 +752,7 @@ export function StackedBarChart({
       .filter((r) => src.has(String(r.name)))
       .map((r) => {
         const s = src.get(String(r.name))!
-        const merged: Record<string, string | number> = { name: r.name }
+        const merged: Record<string, string | number> = { name: String(r.name) }
         for (const k of keys) {
           merged[k] = Number(r[k]) || 0
           merged[`prev_${k}`] = Number(s[k]) || 0

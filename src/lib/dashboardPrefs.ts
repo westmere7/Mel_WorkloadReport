@@ -18,6 +18,11 @@ export interface DashboardPrefs {
   hideCommonCampaigns: boolean
   /** Show the "Tasks by person" chart (hidden by default). */
   showTasksByPerson: boolean
+  /** Apply chart display groups PER PANEL (local-only view toggles). Off = that
+   *  panel shows every item individually, without deleting the configured groups. */
+  groupAssetMix: boolean
+  groupWorkTypeMix: boolean
+  groupDemand: boolean
 }
 
 /** Ongoing / catch-all campaigns that can be hidden from the campaign charts. */
@@ -27,6 +32,9 @@ export const DEFAULT_DASHBOARD_PREFS: DashboardPrefs = {
   demandDim: 'asset',
   hideCommonCampaigns: true,
   showTasksByPerson: false,
+  groupAssetMix: true,
+  groupWorkTypeMix: true,
+  groupDemand: true,
 }
 
 const STORAGE_KEY = 'mwr.dashboardPrefs'

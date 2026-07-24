@@ -9,17 +9,19 @@ import type { ChartGroup } from '../types'
  * `{name, DOMESTIC, INTON, …}` alike). The group's `color` rides along for
  * charts that colour per-row. Ungrouped rows pass through untouched.
  */
+type Grouped<T> = T & { color?: string; isGroup?: boolean; groupItems?: string[] }
+
 export function applyChartGroups<T extends { name: string }>(
   rows: T[],
   groups: ChartGroup[],
-): (T & { color?: string })[] {
+): Grouped<T>[] {
   if (!groups.length) return rows
   const owner = new Map<string, ChartGroup>()
   for (const g of groups) for (const item of g.items) if (!owner.has(item)) owner.set(item, g)
   if (!owner.size) return rows
 
-  const out: (T & { color?: string })[] = []
-  const mergedByGroup = new Map<string, T & { color?: string }>()
+  const out: Grouped<T>[] = []
+  const mergedByGroup = new Map<string, Grouped<T>>()
   for (const row of rows) {
     const g = owner.get(row.name)
     if (!g) {
@@ -28,7 +30,7 @@ export function applyChartGroups<T extends { name: string }>(
     }
     const existing = mergedByGroup.get(g.id)
     if (!existing) {
-      const merged = { ...row, name: g.name, color: g.color }
+      const merged = { ...row, name: g.name, color: g.color, isGroup: true, groupItems: g.items }
       mergedByGroup.set(g.id, merged)
       out.push(merged) // holds the first member's position
     } else {

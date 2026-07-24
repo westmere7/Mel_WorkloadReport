@@ -12,7 +12,7 @@ import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
 import { TrendDelta } from '../components/ui/TrendDelta'
 import { AnimatedNumber } from '../components/ui/AnimatedNumber'
-import { AreaTrendChart, DonutChart, HBarChart, RankedBars, StackedBarChart, StackedLegend, useSquadColor, VBarChart } from '../components/charts'
+import { AreaTrendChart, HBarChart, MixChart, RankedBars, StackedBarChart, StackedLegend, useSquadColor, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
 import {
   assetsByCampaign,
@@ -32,7 +32,7 @@ import { cx, todayISO, formatDate, formatDayMonth } from '../lib/format'
 import { sliceTasksByFunctions } from '../lib/functionData'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
-import { COMMON_CAMPAIGNS, useDashboardPrefs } from '../lib/dashboardPrefs'
+import { COMMON_CAMPAIGNS, setDashboardPrefs, useDashboardPrefs } from '../lib/dashboardPrefs'
 import { applyChartGroups, expandChartSelection } from '../lib/chartGroups'
 import { useAuth } from '../lib/auth'
 import type { Half, Squad, Task, TaskInput } from '../types'
@@ -83,13 +83,17 @@ export function Dashboard() {
     return `${parts[0]} ${parts[1]}` // e.g. "2 Jul"
   }, [today])
   // Chart display preferences — edited in Settings → Dashboard.
-  const { demandDim, hideCommonCampaigns, showTasksByPerson } = useDashboardPrefs()
-  // Chart display GROUPS live in synced settings (shared across devices).
-  // Guarded: a settings object from before this feature has no chartGroups.
-  const assetGroups = settings.chartGroups?.asset ?? []
-  const typeGroups = settings.chartGroups?.type ?? []
-  // Groups for whatever dimension the demand chart currently shows.
-  const demandGroups = demandDim === 'asset' ? assetGroups : typeGroups
+  const { demandDim, hideCommonCampaigns, showTasksByPerson, groupAssetMix, groupWorkTypeMix, groupDemand } =
+    useDashboardPrefs()
+  // Chart display GROUPS live in synced settings (shared across devices). Each
+  // panel has its OWN local-only toggle to view grouped or fully individual,
+  // without deleting the configured groups.
+  const rawAssetGroups = settings.chartGroups?.asset ?? []
+  const rawTypeGroups = settings.chartGroups?.type ?? []
+  const assetGroups = groupAssetMix ? rawAssetGroups : [] // Asset mix panel
+  const typeGroups = groupWorkTypeMix ? rawTypeGroups : [] // Work type mix panel
+  // Demand panel: its own toggle, over whichever dimension it currently shows.
+  const demandGroups = groupDemand ? (demandDim === 'asset' ? rawAssetGroups : rawTypeGroups) : []
   const navigate = useNavigate()
 
   // Tasks projected to the selected functions' slices (pass-through for All GCMC).
@@ -156,12 +160,14 @@ export function Dashboard() {
     [filtered, settings.types, settings.assetTypes, demandDim, demandGroups],
   )
   const byPerson = useMemo(() => countByMulti(filtered, 'people'), [filtered])
+  // Ranked high→low so the biggest slices/segments lead (donut legend + stacked bar).
+  const byValueDesc = (a: { value: number }, b: { value: number }) => b.value - a.value
   const assetMix = useMemo(
-    () => applyChartGroups(assetsByType(filtered, withFallback(settings.assetTypes)), assetGroups),
+    () => applyChartGroups(assetsByType(filtered, withFallback(settings.assetTypes)), assetGroups).sort(byValueDesc),
     [filtered, settings.assetTypes, assetGroups],
   )
   const workTypeMix = useMemo(
-    () => applyChartGroups(countByMulti(filtered, 'types'), typeGroups),
+    () => applyChartGroups(countByMulti(filtered, 'types'), typeGroups).sort(byValueDesc),
     [filtered, typeGroups],
   )
   // "Across the year" ignores the half sub-filter — it always shows the full 12
@@ -191,8 +197,10 @@ export function Dashboard() {
   const [viewTask, setViewTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Task | null>(null)
-  // Chart groups editor pop-up (opened from the panels' gear icons).
+  // Chart groups editor pop-up (opened from the panels' gear icons) — remembers
+  // which dimension tab to land on based on the panel that opened it.
   const [chartGroupsOpen, setChartGroupsOpen] = useState(false)
+  const [chartGroupsTab, setChartGroupsTab] = useState<'asset' | 'type'>('asset')
 
   const handleUpdateTask = async (input: TaskInput) => {
     if (!editTask) return
@@ -230,12 +238,12 @@ export function Dashboard() {
     [sourceTasks, settings.types, settings.assetTypes, demandDim, demandGroups],
   )
   const srcAssetMix = useMemo(
-    () => applyChartGroups(assetsByType(sourceTasks, withFallback(settings.assetTypes)), assetGroups),
-    [sourceTasks, settings.assetTypes, assetGroups],
+    () => applyChartGroups(assetsByType(sourceTasks, withFallback(settings.assetTypes)), assetGroups).sort(byValueDesc),
+    [sourceTasks, settings.assetTypes, assetGroups], // eslint-disable-line react-hooks/exhaustive-deps
   )
   const srcWorkTypeMix = useMemo(
-    () => applyChartGroups(countByMulti(sourceTasks, 'types'), typeGroups),
-    [sourceTasks, typeGroups],
+    () => applyChartGroups(countByMulti(sourceTasks, 'types'), typeGroups).sort(byValueDesc),
+    [sourceTasks, typeGroups], // eslint-disable-line react-hooks/exhaustive-deps
   )
   const srcByMonth = useMemo(() => {
     let list = fnTasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === srcYear)
@@ -264,18 +272,55 @@ export function Dashboard() {
   const squadsInGroup = (group: string) =>
     withFallback(settings.squads).filter((s) => stakeholderGroup(s as Squad) === group)
 
-  // Small gear on the chart-group-aware panels → opens the Chart groups pop-up.
-  const chartGroupsGear = (
-    <button
-      type="button"
-      onClick={() => setChartGroupsOpen(true)}
-      title="Chart display settings — group items to declutter this chart"
-      aria-label="Chart display settings"
-      className="rounded-md p-1 text-faint transition hover:bg-subtle hover:text-ink"
-    >
-      <Settings2 className="h-4 w-4" />
-    </button>
+  // Per-panel controls: an independent grouped/individual toggle (only when that
+  // panel's dimension has groups) + the gear that opens the Chart groups pop-up.
+  const groupControls = (on: boolean, toggle: () => void, hasGroups: boolean, openTab: 'asset' | 'type') => (
+    <div className="flex items-center gap-1.5">
+      {hasGroups && (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          onClick={toggle}
+          title={
+            on
+              ? 'Grouped view — click to show every item individually'
+              : 'Individual view — click to apply your chart groups'
+          }
+          aria-label="Toggle grouped view"
+          className="flex items-center gap-1.5"
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">Group</span>
+          <span
+            className={cx(
+              'relative h-4 w-7 shrink-0 rounded-full transition-colors',
+              on ? 'bg-rmit-navy dark:bg-navy-300' : 'bg-line',
+            )}
+          >
+            <span
+              className={cx(
+                'absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-all dark:bg-navy-950',
+                on ? 'left-3.5' : 'left-0.5',
+              )}
+            />
+          </span>
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => {
+          setChartGroupsTab(openTab)
+          setChartGroupsOpen(true)
+        }}
+        title="Chart display settings — group items to declutter this chart"
+        aria-label="Chart display settings"
+        className="rounded-md p-1 text-faint transition hover:bg-subtle hover:text-ink"
+      >
+        <Settings2 className="h-4 w-4" />
+      </button>
+    </div>
   )
+  const demandHasGroups = (demandDim === 'asset' ? rawAssetGroups : rawTypeGroups).length > 0
 
   // Per-name counts of relevant tasks, for the mix donuts' hover tooltips.
   // Group-aware: a grouped row counts tasks matching ANY member (each task once)
@@ -634,9 +679,14 @@ export function Dashboard() {
               <CardHeader
                 title="Asset mix"
                 subtitle={compare ? `Deliverables by type — ${activeYear} over ${srcYear}` : 'Deliverables by type'}
-                action={chartGroupsGear}
+                action={groupControls(
+                  groupAssetMix,
+                  () => setDashboardPrefs({ groupAssetMix: !groupAssetMix }),
+                  rawAssetGroups.length > 0,
+                  'asset',
+                )}
               />
-              <DonutChart
+              <MixChart
                 data={assetMix}
                 height={200}
                 emptyMessage={fnEmpty ?? 'Add tasks with asset counts to see the mix.'}
@@ -653,9 +703,14 @@ export function Dashboard() {
               <CardHeader
                 title="Work type mix"
                 subtitle={compare ? `Tasks by work type — ${activeYear} over ${srcYear}` : 'Tasks by work type'}
-                action={chartGroupsGear}
+                action={groupControls(
+                  groupWorkTypeMix,
+                  () => setDashboardPrefs({ groupWorkTypeMix: !groupWorkTypeMix }),
+                  rawTypeGroups.length > 0,
+                  'type',
+                )}
               />
-              <DonutChart
+              <MixChart
                 data={workTypeMix}
                 height={200}
                 emptyMessage={fnEmpty ?? 'Tag tasks with work types to see the mix.'}
@@ -690,7 +745,13 @@ export function Dashboard() {
               action={
                 <div className="flex items-center gap-2">
                   <StackedLegend keys={[...STAKEHOLDER_GROUPS]} paletteIndices={[0, 1, 2]} />
-                  {chartGroupsGear}
+                  <span className="h-4 w-px shrink-0 bg-line" aria-hidden="true" />
+                  {groupControls(
+                    groupDemand,
+                    () => setDashboardPrefs({ groupDemand: !groupDemand }),
+                    demandHasGroups,
+                    demandDim,
+                  )}
                 </div>
               }
             />
@@ -748,7 +809,11 @@ export function Dashboard() {
       </Modal>
 
       {/* Chart groups editor — opened by the panels' gear icons. */}
-      <ChartGroupsModal open={chartGroupsOpen} onClose={() => setChartGroupsOpen(false)} />
+      <ChartGroupsModal
+        open={chartGroupsOpen}
+        onClose={() => setChartGroupsOpen(false)}
+        initialTab={chartGroupsTab}
+      />
 
       {/* Edit form — reached from the details view; never leaves the dashboard. */}
       <Modal

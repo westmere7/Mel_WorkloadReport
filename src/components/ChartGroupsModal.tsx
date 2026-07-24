@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { GripVertical, Plus, X } from 'lucide-react'
+import { Check, GripVertical, Plus, X } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import { useStore } from '../data/store'
 import { CHART_GROUP_COLORS, sortAlpha, withFallback } from '../constants'
@@ -28,10 +28,19 @@ function clone(src: ChartGroups): ChartGroups {
  * the reference lists are untouched; clicking a grouped slice still filters the
  * task list by the member items.
  */
-export function ChartGroupsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ChartGroupsModal({
+  open,
+  onClose,
+  initialTab = 'asset',
+}: {
+  open: boolean
+  onClose: () => void
+  /** Which dimension tab to land on when opened (from the panel that launched it). */
+  initialTab?: 'asset' | 'type'
+}) {
   const { settings, saveSettings } = useStore()
   const live = settings.chartGroups ?? EMPTY
-  const [tab, setTab] = useState<'asset' | 'type'>('asset')
+  const [tab, setTab] = useState<'asset' | 'type'>(initialTab)
   const [draft, setDraft] = useState<ChartGroups>(() => clone(live))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,19 +48,34 @@ export function ChartGroupsModal({ open, onClose }: { open: boolean; onClose: ()
   const [overZone, setOverZone] = useState<string | null>(null) // 'ungrouped' | group id
   const [paletteFor, setPaletteFor] = useState<string | null>(null) // group id
   const [addMenuFor, setAddMenuFor] = useState<string | null>(null) // available item name
+  const [justAddedId, setJustAddedId] = useState<string | null>(null) // focus its name field
+  const nameRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const rootRef = useRef<HTMLDivElement>(null)
 
   // Snapshot the live groups into an editable draft each time the panel opens.
   useEffect(() => {
     if (open) {
       setDraft(clone(settings.chartGroups ?? EMPTY))
-      setTab('asset')
+      setTab(initialTab)
       setError(null)
       setPaletteFor(null)
       setAddMenuFor(null)
+      setJustAddedId(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  // Focus + select a freshly-added group's name field so you can type over the
+  // "Group N" placeholder right away.
+  useEffect(() => {
+    if (!justAddedId) return
+    const el = nameRefs.current[justAddedId]
+    if (el) {
+      el.focus()
+      el.select()
+      setJustAddedId(null)
+    }
+  }, [justAddedId, draft])
 
   // Close any open popover when clicking elsewhere in the panel.
   useEffect(() => {
@@ -82,9 +106,12 @@ export function ChartGroupsModal({ open, onClose }: { open: boolean; onClose: ()
   }
 
   const setGroups = (next: ChartGroup[]) => setDraft((d) => ({ ...d, [tab]: next }))
+  // Add the group card straight away with a default name, then focus + select its
+  // name field so you can type over it immediately.
   const addGroup = () => {
     const id = `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
     setGroups([...groups, { id, name: `Group ${groups.length + 1}`, color: randomColor(), items: [] }])
+    setJustAddedId(id)
   }
   const patch = (id: string, p: Partial<ChartGroup>) =>
     setGroups(groups.map((g) => (g.id === id ? { ...g, ...p } : g)))
@@ -320,11 +347,29 @@ export function ChartGroupsModal({ open, onClose }: { open: boolean; onClose: ()
                   )}
                 </span>
                 <input
+                  ref={(el) => {
+                    nameRefs.current[g.id] = el
+                  }}
                   className="input h-9 flex-1 text-sm"
                   value={g.name}
                   placeholder="Group name"
                   onChange={(e) => patch(g.id, { name: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      e.currentTarget.blur()
+                    }
+                  }}
                 />
+                <button
+                  type="button"
+                  className="shrink-0 rounded-md p-1 text-accent-green hover:bg-green-50 dark:hover:bg-green-500/15"
+                  onClick={() => nameRefs.current[g.id]?.blur()}
+                  title="Confirm name"
+                  aria-label="Confirm group name"
+                >
+                  <Check className="h-4 w-4" />
+                </button>
                 <button
                   type="button"
                   className="shrink-0 rounded-md p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
