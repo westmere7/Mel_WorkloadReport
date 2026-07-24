@@ -26,6 +26,17 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.6.1',
+    date: '2026-07-24',
+    title: 'Update prompt polish',
+    notes: [
+      {
+        kind: 'improved',
+        text: 'The “update available” prompt now opens as a centered dialog over a dimmed, blurred backdrop so it clearly takes focus until you refresh or dismiss it.',
+      },
+    ],
+  },
+  {
     version: '0.6.0',
     date: '2026-07-24',
     title: 'Update notifications',

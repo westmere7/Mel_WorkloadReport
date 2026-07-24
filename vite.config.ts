@@ -1,19 +1,34 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
-// Single source of truth for the app version — bump `version` in package.json.
-import pkg from './package.json'
+import { readFileSync } from 'node:fs'
 // Pure data module (no build-time globals) so the config can embed it.
 import { CHANGELOG } from './src/lib/changelogData'
+
+/**
+ * Read the version straight from package.json whenever it's needed rather than
+ * `import`-ing it. A static import would make package.json a config dependency,
+ * so a version bump in dev restarts Vite and reloads every tab — which defeats
+ * the "update available" prompt (a tab could never fall behind). Reading it
+ * fresh keeps package.json the single source of truth AND lets the endpoint
+ * report a new version to still-open tabs. `define` reads it at config load
+ * (baked into the bundle); the endpoint re-reads per request.
+ */
+const readVersion = (): string => {
+  try {
+    return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version as string
+  } catch {
+    return '0.0.0'
+  }
+}
 
 /**
  * Publishes `version.json` — `{ version, releases }` — next to the built assets
  * (and serves it in dev). A running client polls it (see UpdateNotice) and
  * compares against its baked-in __APP_VERSION__: deploying a new build changes
  * the file, so open tabs learn an update is live WITHOUT being force-reloaded.
- * The changelog rides along so the old bundle can show the NEW build's notes.
  */
 function versionEndpoint(): Plugin {
-  const payload = () => JSON.stringify({ version: pkg.version, releases: CHANGELOG })
+  const payload = () => JSON.stringify({ version: readVersion(), releases: CHANGELOG })
   return {
     name: 'version-endpoint',
     configureServer(server) {
@@ -33,7 +48,7 @@ function versionEndpoint(): Plugin {
 export default defineConfig({
   plugins: [react(), versionEndpoint()],
   define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_VERSION__: JSON.stringify(readVersion()),
   },
   server: {
     // Honour a PORT assigned by the environment (e.g. the preview harness),
