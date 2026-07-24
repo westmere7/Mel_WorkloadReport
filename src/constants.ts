@@ -363,6 +363,15 @@ export const SIZE_DESCRIPTIONS: Record<Size, string> = {
   XL: 'Very large / major effort',
 }
 
+/** Compact one-word size labels — for tight spots like the task-form size line. */
+export const SIZE_SHORT: Record<Size, string> = {
+  XS: 'Extra small',
+  S: 'Small',
+  M: 'Medium',
+  L: 'Large',
+  XL: 'Extra large',
+}
+
 /** Format a day count into a friendly turnaround label (e.g. 42 → "6 weeks"). */
 export function formatDurationDays(days: number): string {
   const d = Math.max(0, Math.round(days))

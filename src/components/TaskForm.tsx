@@ -19,6 +19,7 @@ import type { AssetBreakdown, FunctionConfig, FunctionData, Half, Size, Squad, T
 import {
   SIZES,
   SIZE_DESCRIPTIONS,
+  SIZE_SHORT,
   SIZE_COLORS,
   FALLBACK_ITEM,
   formatDurationDays,
@@ -1801,7 +1802,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       {/* Group — classification (squad · campaign · size) */}
       <div className="rounded-xl bg-subtle/40 p-3.5">
       {/* Squad, Campaign & Task size on one line */}
-      <div className="grid gap-4 sm:grid-cols-[1fr_1fr_1.4fr]">
+      <div className="grid gap-4 sm:grid-cols-[1fr_1.3fr_1.1fr]">
         <div>
           <label className={cx('label', squad && 'is-filled')}>Squad</label>
           <select
@@ -1865,8 +1866,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               )
             })}
           </div>
-          <p className="mt-1.5 text-xs text-muted">
-            {SIZE_DESCRIPTIONS[size]} · {durationLabel}
+          <p className="mt-1.5 truncate text-xs text-muted">
+            {SIZE_SHORT[size]} · {durationLabel}
           </p>
         </div>
       </div>
