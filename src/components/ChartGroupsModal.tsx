@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { GripVertical, Plus, X } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import { useStore } from '../data/store'
-import { FUNCTION_COLOR_KEYS, functionColor, sortAlpha, withFallback } from '../constants'
+import { CHART_GROUP_COLORS, sortAlpha, withFallback } from '../constants'
 import { cx, toMessage } from '../lib/format'
 import type { ChartGroup, ChartGroups } from '../types'
 
 const EMPTY: ChartGroups = { asset: [], type: [] }
-const PALETTE = FUNCTION_COLOR_KEYS.map((k) => functionColor(k).hex)
+const PALETTE = CHART_GROUP_COLORS
 
 /** Deep-clone so the draft never mutates the live settings. */
 function clone(src: ChartGroups): ChartGroups {
@@ -127,7 +127,7 @@ export function ChartGroupsModal({ open, onClose }: { open: boolean; onClose: ()
     },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault()
-      const name = dragName ?? e.dataTransfer.getData('text/plain')
+      const name = e.dataTransfer.getData('text/plain') || dragName
       if (name) moveItem(name, targetId)
       setDragName(null)
       setOverZone(null)
@@ -137,9 +137,12 @@ export function ChartGroupsModal({ open, onClose }: { open: boolean; onClose: ()
   const chipDragProps = (name: string) => ({
     draggable: true,
     onDragStart: (e: React.DragEvent) => {
-      setDragName(name)
       e.dataTransfer.setData('text/plain', name)
       e.dataTransfer.effectAllowed = 'move'
+      // Defer the visual state so React doesn't re-render the dragged node mid-
+      // dragstart — that re-render can cancel the very first drag (which felt like
+      // needing to click the item once before it would drag).
+      setTimeout(() => setDragName(name), 0)
     },
     onDragEnd: () => {
       setDragName(null)
@@ -151,7 +154,7 @@ export function ChartGroupsModal({ open, onClose }: { open: boolean; onClose: ()
     <span
       {...chipDragProps(name)}
       className={cx(
-        'inline-flex cursor-grab items-center gap-1 rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink shadow-soft transition active:cursor-grabbing',
+        'inline-flex cursor-grab select-none items-center gap-1 rounded-lg border border-line bg-card px-2 py-1 text-xs text-ink shadow-soft transition active:cursor-grabbing',
         dragName === name && 'opacity-40',
       )}
     >
@@ -296,7 +299,7 @@ export function ChartGroupsModal({ open, onClose }: { open: boolean; onClose: ()
                     aria-label="Change group colour"
                   />
                   {paletteFor === g.id && (
-                    <div className="absolute left-0 top-[calc(100%+6px)] z-20 flex w-40 flex-wrap gap-1.5 rounded-lg border border-line bg-card p-2 shadow-lg">
+                    <div className="absolute left-0 top-[calc(100%+6px)] z-20 flex w-52 flex-wrap gap-1.5 rounded-lg border border-line bg-card p-2 shadow-lg">
                       {PALETTE.filter((h) => h === g.color || !usedColors.has(h)).map((hex) => (
                         <button
                           key={hex}

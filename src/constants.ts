@@ -116,6 +116,34 @@ export function functionColor(key: string | undefined): FunctionColorSet {
 }
 
 /**
+ * A broad, distinct palette for dashboard chart GROUPS — deliberately larger than
+ * the function set so many groups can each keep a unique colour. Vibrant fills
+ * that read on both themes; spans the hue wheel plus a couple of neutrals.
+ */
+export const CHART_GROUP_COLORS: string[] = [
+  '#DC2626', // red
+  '#EA580C', // orange
+  '#D97706', // amber
+  '#EAB308', // gold
+  '#84CC16', // lime
+  '#16A34A', // green
+  '#059669', // emerald
+  '#0D9488', // teal
+  '#0891B2', // cyan
+  '#0284C7', // sky
+  '#2563EB', // blue
+  '#4F46E5', // indigo
+  '#7C3AED', // violet
+  '#9333EA', // purple
+  '#C026D3', // fuchsia
+  '#DB2777', // pink
+  '#E11D48', // rose
+  '#78716C', // stone
+  '#64748B', // slate
+  '#475569', // dark slate
+]
+
+/**
  * Default functions. Type lists start seeded with the FULL master lists =
  * every tab offers everything out of the box; Settings trims per function by
  * un-checking. Newly added master types are NOT auto-added — users opt each
