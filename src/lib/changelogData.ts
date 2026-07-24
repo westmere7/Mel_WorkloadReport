@@ -26,6 +26,29 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.7.0',
+    date: '2026-07-24',
+    title: 'Chart groups & task edit logs',
+    notes: [
+      {
+        kind: 'new',
+        text: 'Chart groups — bundle asset / work types into named, coloured groups so the dashboard mix and demand charts stay readable. Configure them in a drag-and-drop pop-up (gear on each panel; drafts commit on Save), synced across devices. Grouped slices carry a small stack icon, click through to exactly their tasks, and each panel has its own local Group switch to flip back to the full individual view.',
+      },
+      {
+        kind: 'new',
+        text: 'Per-task edit log — every create and edit is recorded with its time, author and what changed. Open it from the small history icon next to a task’s delete button; the log is removed together with the task.',
+      },
+      {
+        kind: 'improved',
+        text: 'The mix panels adapt to their width: a ranked donut when there’s room, a 100% stacked bar in narrow columns — no more truncated legends. Both are ranked largest-first.',
+      },
+      {
+        kind: 'improved',
+        text: 'An off function tab in the task form can be switched on right from its prompt, and the monday-ID fields in Settings → People got tidier (wider, clear button inside the field).',
+      },
+    ],
+  },
+  {
     version: '0.6.1',
     date: '2026-07-24',
     title: 'Update prompt polish',
