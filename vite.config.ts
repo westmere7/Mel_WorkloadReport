@@ -1,5 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+// @ts-ignore — Node built-in; this project has no @types/node (see the process
+// globalThis shim below). Available at runtime where the config executes.
 import { readFileSync } from 'node:fs'
 // Pure data module (no build-time globals) so the config can embed it.
 import { CHANGELOG } from './src/lib/changelogData'
