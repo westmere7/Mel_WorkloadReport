@@ -866,7 +866,7 @@ function CodeNameField({
                           : 'Search monday.com for this task'
               }
               className={cx(
-                'relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all',
+                'relative inline-flex h-11 shrink-0 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition-all',
                 !query
                   ? 'border border-line bg-card text-ink hover:bg-subtle'
                   : bgSearching
@@ -883,18 +883,18 @@ function CodeNameField({
               {/* Light beam sweeping through the button body when searching */}
               {query && bgSearching && (
                 <span className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg">
-                  <span className="animate-light-sweep absolute inset-y-0 -left-1/2 w-16 bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/30" />
+                  <span className="animate-light-sweep absolute inset-y-0 -left-1/2 w-24 bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/45" />
                 </span>
               )}
 
-              {loading ? (
-                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+              {loading || bgSearching ? (
+                <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
               ) : (
                 <img
                   src="/monday.svg"
                   alt=""
                   className={cx(
-                    'h-4 w-4 shrink-0 transition-all duration-200',
+                    'h-5 w-5 shrink-0 transition-all duration-200',
                     !query && !autoFillEnabled ? 'opacity-60' : 'opacity-100',
                   )}
                 />
@@ -910,15 +910,15 @@ function CodeNameField({
                   <span className="text-muted">auto-fill</span>
                   <span
                     className={cx(
-                      'relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors',
+                      'relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors',
                       autoFillEnabled ? 'bg-rmit-navy dark:bg-navy-300' : 'bg-line',
                     )}
                   >
                     <span
                       className={cx(
-                        'inline-block h-2.5 w-2.5 transform rounded-full shadow transition-transform',
+                        'inline-block h-3 w-3 transform rounded-full shadow transition-transform',
                         autoFillEnabled
-                          ? 'translate-x-3 bg-white dark:bg-navy-950'
+                          ? 'translate-x-3.5 bg-white dark:bg-navy-950'
                           : 'translate-x-0.5 bg-card dark:bg-navy-600',
                       )}
                     />
@@ -2022,15 +2022,18 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   // width and left-packed; min-w-0 lets them SHRINK to fit only
                   // when there are enough to overflow the row (no grow → they don't
                   // stretch to fill the panel when there's room).
-                  'fn-tab relative flex min-w-0 items-center gap-1.5 border-2 py-1 pl-2 pr-1.5 text-xs font-semibold',
-                  // The riding tab drops its BOTTOM border and overlaps the panel's
-                  // top border by 2px (-mb-0.5) so its interior flows straight into
-                  // the panel with no seam at the junction.
+                  'fn-tab relative flex min-w-0 items-center gap-1.5 border-2 pt-1 pl-2 pr-1.5 text-xs font-semibold',
+                  // The selected tab is taller and rides the panel — it drops its
+                  // BOTTOM border and overlaps the panel's top edge by 2px (-mb-0.5)
+                  // so it connects seamlessly. Non-selected tabs are shorter, borderless
+                  // pills lifted clear of the panel (mb-1.5); the selected tab's extra
+                  // bottom padding (pb-3.5) bridges that gap. Paddings are balanced so
+                  // every tab's label sits on the same line.
                   isActive
-                    ? 'fn-tab-active z-10 -mb-0.5 rounded-t-lg border-b-0' // solid colour fill (inline) rides the panel edge
+                    ? 'fn-tab-active z-10 -mb-0.5 pb-3.5 rounded-t-lg border-b-0' // solid colour fill (inline) rides the panel edge
                     : isSelected
-                      ? 'z-10 -mb-0.5 rounded-t-lg border-b-0 border-navy-300 bg-card' // off + selected: neutral outline (matches the task-name input) rides the panel
-                      : 'rounded-lg border-line bg-subtle', // separate pill above the panel
+                      ? 'z-10 -mb-0.5 pb-3.5 rounded-t-lg border-b-0 border-navy-300 bg-card' // off + selected: neutral outline rides the panel
+                      : 'mb-1.5 pb-1 rounded-lg border-transparent bg-subtle', // borderless pill, lifted above the panel
                   !d.enabled && !isSelected && 'opacity-60',
                 )}
               >
