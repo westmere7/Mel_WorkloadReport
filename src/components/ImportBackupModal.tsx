@@ -75,7 +75,7 @@ export function ImportBackupModal({ open, onClose }: { open: boolean; onClose: (
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Import & Backup" wide>
+    <Modal open={open} onClose={onClose} title="Import & Backup">
       <div className="space-y-6">
         {/* Import */}
         <section>
