@@ -776,7 +776,7 @@ function CodeNameField({
       <div ref={wrapRef} className="relative">
         <div
           className={cx(
-            'flex h-14 items-center gap-2 rounded-xl bg-card px-3 transition',
+            'flex h-16 items-center gap-2 rounded-xl bg-card px-3.5 transition',
             'focus-within:border-rmit-red focus-within:ring-2 focus-within:ring-brand-100 dark:focus-within:ring-brand-500/25',
             // Empty → a thicker neutral outline draws the eye here first; reverts to
             // the normal thin line the moment a code or name is entered.
@@ -789,7 +789,7 @@ function CodeNameField({
           {hasCode && !editing && (
             <span
               className={cx(
-                'inline-flex shrink-0 items-center gap-1 rounded-lg border py-1 pl-2 pr-1 font-mono text-base font-semibold',
+                'inline-flex shrink-0 items-center gap-1 rounded-lg border py-1 pl-2 pr-1 font-mono text-lg font-semibold',
                 chipCls,
               )}
               title={chipTitle}
@@ -810,7 +810,7 @@ function CodeNameField({
           )}
           <input
             ref={inputRef}
-            className="h-full min-w-0 flex-1 bg-transparent text-lg font-semibold text-ink outline-none placeholder:font-normal placeholder:text-faint"
+            className="h-full min-w-0 flex-1 bg-transparent text-xl font-semibold text-ink outline-none placeholder:font-normal placeholder:text-faint"
             placeholder={hasCode ? 'Task name' : 'Task name — or paste “[26.0716.A] Name”'}
             value={name}
             onChange={(e) => (editing ? setName(e.target.value) : applyIdentity(e.target.value))}
@@ -995,6 +995,7 @@ function CodeNameField({
       ) : (
         <p className="mt-1.5 text-xs text-faint">
           Optional code goes in [brackets] at the front; the rest is the task name.
+          {mondayEnabled && ' Type a name, then use auto-fill to pull details from a matching monday.com task.'}
         </p>
       )}
     </div>
@@ -2013,13 +2014,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             return (
               <div
                 key={f.name}
-                style={
-                  isActive
-                    ? { backgroundColor: fcol.hex, borderColor: fcol.hex, color: onFill! }
-                    : isSelected
-                      ? { borderColor: fcol.hex } // off + selected → outlined chrome tab rides the prompt panel
-                      : undefined
-                }
+                style={isActive ? { backgroundColor: fcol.hex, borderColor: fcol.hex, color: onFill! } : undefined}
                 className={cx(
                   // fn-tab drives the name marquee (hover); fn-tab-active keeps it
                   // scrolling while selected. Tabs are their natural (fixed-slot)
@@ -2030,7 +2025,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   isActive
                     ? 'fn-tab-active z-10 -mb-0.5 rounded-t-lg' // solid colour fill (inline) rides the panel edge
                     : isSelected
-                      ? 'z-10 -mb-0.5 rounded-t-lg bg-card' // off + selected: outlined tab rides the (prompt) panel
+                      ? 'z-10 -mb-0.5 rounded-t-lg border-navy-300 bg-card' // off + selected: neutral outline (matches the task-name input) rides the panel
                       : 'rounded-lg border-line bg-subtle', // separate pill above the panel
                   !d.enabled && !isSelected && 'opacity-60',
                 )}
@@ -2112,25 +2107,18 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           // still rides the panel; its switch turns it on to reveal the controls.
           if (!showBody) {
             const pf = activeCfg ?? functionConfigs[0]
-            const pcol = functionColor(pf.color)
             const pHasOffering =
               pf.workTypes.some((t) => settings.types.includes(t)) ||
               pf.assetTypes.some((t) => settings.assetTypes.includes(t))
             return (
               <div>
                 {tabStrip}
-                <div
-                  className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 bg-card px-6 py-12 text-center"
-                  style={{ borderColor: pcol.hex }}
-                >
-                  <span
-                    className="flex h-12 w-12 items-center justify-center rounded-full"
-                    style={{ backgroundColor: `${pcol.hex}1a`, color: pcol.hex }}
-                  >
+                <div className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-navy-300 bg-card px-6 py-12 text-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle text-navy-300">
                     <ToggleRight className="h-6 w-6" />
                   </span>
                   <div className="space-y-1.5">
-                    <p className="text-sm font-semibold text-ink">{pf.name} isn’t recording workload yet</p>
+                    <p className="text-sm font-semibold text-ink">{pf.name} Team isn’t recording workload yet</p>
                     <p className="mx-auto max-w-xs text-xs leading-relaxed text-muted">
                       Turn the <strong className="text-ink">{pf.name}</strong> switch on above to record its work types
                       and assets on this task.

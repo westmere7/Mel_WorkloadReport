@@ -6,9 +6,10 @@ import type { FunctionConfig } from '../types'
 
 /**
  * Dropdown that filters a view by GCMC function. Empty selection = "All GCMC"
- * (no filter). Multi-select: picking functions narrows to their combined slice;
- * clearing all or picking every function snaps back to All GCMC. Shared by the
- * Dashboard and the Task List (both feed the selection to `sliceTasksByFunctions`).
+ * (no filter). Single-select by default — a plain click picks just that function;
+ * hold ⌘/Ctrl to toggle several. Clearing all or picking every function snaps back
+ * to All GCMC. Shared by the Dashboard and the Task List (both feed the selection
+ * to `sliceTasksByFunctions`).
  */
 export function FunctionFilter({
   functions,
@@ -42,14 +43,22 @@ export function FunctionFilter({
   const isAll = selected.length === 0
   const label = isAll ? 'All GCMC' : selected.length === 1 ? selected[0] : `${selected.length} functions`
 
-  const toggleFn = (name: string) => {
-    if (isAll) {
-      onChange([name])
-      return
+  // ⌘ on macOS, Ctrl elsewhere — the modifier that turns a click into multi-select.
+  const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+  const modKey = isMac ? '⌘' : 'Ctrl'
+
+  const pickFn = (name: string, additive: boolean) => {
+    if (additive) {
+      // ⌘/Ctrl-click: toggle this function in/out of the current set.
+      const current = isAll ? [] : selected
+      const next = current.includes(name) ? current.filter((n) => n !== name) : [...current, name]
+      // Nothing left, or everything picked → that's just "All GCMC" again.
+      onChange(next.length === 0 || next.length >= functions.length ? [] : next)
+    } else {
+      // Plain click: select only this function — or clear back to All if it was
+      // already the sole selection.
+      onChange(selected.length === 1 && selected[0] === name ? [] : [name])
     }
-    const next = selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name]
-    // Nothing left, or everything picked → that's just "All GCMC" again.
-    onChange(next.length === 0 || next.length >= functions.length ? [] : next)
   }
 
   return (
@@ -95,7 +104,7 @@ export function FunctionFilter({
               <button
                 key={f.name}
                 type="button"
-                onClick={() => toggleFn(f.name)}
+                onClick={(e) => pickFn(f.name, e.metaKey || e.ctrlKey)}
                 aria-pressed={on}
                 className={cx(
                   'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-subtle',
@@ -109,7 +118,7 @@ export function FunctionFilter({
             )
           })}
           <p className="mt-1 border-t border-line px-2 pt-1.5 text-[10px] leading-snug text-faint">
-            Shared tasks count only the selected functions&rsquo; share of assets.
+            Click to select one · hold {modKey} to select several.
           </p>
         </div>
       )}

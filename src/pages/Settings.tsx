@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Tag, Trash2, Users, X } from 'lucide-react'
+import { AlertTriangle, Archive, ArrowRightLeft, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Tag, Trash2, Users, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -1031,7 +1031,7 @@ function MondayIdInput({ value, onCommit }: { value: string; onCommit: (v: strin
   const profileUrl = preview ? `https://${MONDAY_ACCOUNT}.monday.com/users/${encodeURIComponent(preview)}` : null
 
   return (
-    <span className="flex w-full items-center gap-1">
+    <span className="flex w-full items-center gap-1.5">
       {profileUrl ? (
         <a
           href={profileUrl}
@@ -1045,51 +1045,60 @@ function MondayIdInput({ value, onCommit }: { value: string; onCommit: (v: strin
       ) : (
         <img src="/monday.svg" alt="" className="h-4 w-4 shrink-0 opacity-30" title="Enter a monday user id" />
       )}
-      <input
-        className="input h-7 min-w-0 flex-1 px-2 py-0 text-xs font-mono"
-        placeholder="monday ID"
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && dirty) {
-            e.preventDefault()
-            onCommit(v.trim())
-          } else if (e.key === 'Escape') {
-            e.preventDefault()
-            setV(value)
-          }
-        }}
-        title="monday.com user id — used to auto-fill this person from a board item"
-      />
-      {dirty ? (
-        <>
-          <button
-            type="button"
-            onClick={() => onCommit(v.trim())}
-            title="Save"
-            className="rounded p-1 text-accent-green hover:bg-green-50 dark:hover:bg-green-500/15"
-          >
-            <Check className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setV(value)}
-            title="Discard"
-            className="rounded p-1 text-faint hover:bg-subtle"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </button>
-        </>
-      ) : value.trim() ? (
-        <button
-          type="button"
-          onClick={() => onCommit('')}
-          title="Clear"
-          className="rounded p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
+      {/* The trailing controls (clear, or save/discard) sit INSIDE the field, so
+          the row stays tidy. Right padding scales to how many icons are showing. */}
+      <span className="relative min-w-0 flex-1">
+        <input
+          className={cx(
+            'input h-7 w-full py-0 pl-2 text-xs font-mono',
+            dirty ? 'pr-12' : value.trim() ? 'pr-7' : 'pr-2',
+          )}
+          placeholder="monday ID"
+          value={v}
+          onChange={(e) => setV(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && dirty) {
+              e.preventDefault()
+              onCommit(v.trim())
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              setV(value)
+            }
+          }}
+          title="monday.com user id — used to auto-fill this person from a board item"
+        />
+        <span className="absolute inset-y-0 right-1 flex items-center gap-0.5">
+          {dirty ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onCommit(v.trim())}
+                title="Save"
+                className="rounded p-0.5 text-accent-green hover:bg-green-50 dark:hover:bg-green-500/15"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setV(value)}
+                title="Discard"
+                className="rounded p-0.5 text-faint hover:bg-subtle"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </button>
+            </>
+          ) : value.trim() ? (
+            <button
+              type="button"
+              onClick={() => onCommit('')}
+              title="Clear"
+              className="rounded p-0.5 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </span>
+      </span>
     </span>
   )
 }
@@ -1674,12 +1683,16 @@ function ListEditor({
   hideHeading?: boolean
 }) {
   const [draft, setDraft] = useState('')
-  const [editing, setEditing] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState('')
   // Item pending a delete confirmation (only shown when it has linked tasks).
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
+  // Where the removed item's tasks go — defaults to the fallback, user-selectable.
+  const [removeTarget, setRemoveTarget] = useState<string>(fallback ?? FALLBACK_ITEM)
   // Item whose removal is blocked because it's in use and the setting is off.
   const [blockedRemove, setBlockedRemove] = useState<string | null>(null)
+  // Item whose manage panel (rename / merge) is open, + its two drafts.
+  const [panelItem, setPanelItem] = useState<string | null>(null)
+  const [panelRename, setPanelRename] = useState('')
+  const [mergeTarget, setMergeTarget] = useState('')
   // Item whose auto-select keywords are being edited (+ its comma-separated draft).
   const [keywordItem, setKeywordItem] = useState<string | null>(null)
   const [keywordDraft, setKeywordDraft] = useState('')
@@ -1703,7 +1716,28 @@ function ListEditor({
     // Always confirm before removing — even an unused item (nothing in the
     // settings panels is removed without a warning).
     if (count > 0 && !allowRemoveUsed) setBlockedRemove(item)
-    else setPendingRemove(item)
+    else {
+      setRemoveTarget(fallback ?? FALLBACK_ITEM)
+      setPendingRemove(item)
+    }
+  }
+
+  const fb = fallback ?? FALLBACK_ITEM
+
+  /** Move every task from `source` onto `target` and drop `source` from the list.
+   *  Reuses the store's rename-merge (dedupes lists, sums breakdowns, carries
+   *  keywords/monday ids); a fallback target routes through the remove path,
+   *  which is the same reassignment. */
+  const mergeInto = (source: string, target: string) => {
+    if (!target || target === source) return
+    if (target === fb && !items.includes(fb)) onRemove(source)
+    else void onRename(source, target)
+  }
+
+  const openPanel = (item: string) => {
+    setPanelRename(item)
+    setMergeTarget('')
+    setPanelItem(item)
   }
 
   const add = () => {
@@ -1719,20 +1753,6 @@ function ListEditor({
     }
     onAdd(v)
     setDraft('')
-  }
-
-  const startEdit = (item: string) => {
-    setEditing(item)
-    setEditValue(item)
-  }
-  const cancelEdit = () => {
-    setEditing(null)
-    setEditValue('')
-  }
-  const saveEdit = (item: string) => {
-    const v = editValue.trim()
-    if (v && v !== item) void onRename(item, v)
-    cancelEdit()
   }
 
   const Wrapper = bare ? 'div' : Card
@@ -1761,7 +1781,7 @@ function ListEditor({
       {onMondayId && sortedItems.length > 0 && (
         <div className="mb-1 flex items-center gap-2 px-3 text-[10px] font-semibold uppercase tracking-wide text-faint">
           <span className="flex-1">Name</span>
-          <span className="w-32 shrink-0">monday ID</span>
+          <span className="w-40 shrink-0">monday ID</span>
           <span className="flex shrink-0 items-center gap-1">
             <span className="w-14 text-right">Tasks</span>
             <span className="w-12" />
@@ -1772,11 +1792,27 @@ function ListEditor({
         {sortedItems.map((item) => {
           const count = usage(item)
           const isLocked = !!locked?.includes(item)
-          const isEditing = editing === item && !isLocked
           return (
             <li
               key={item}
-              className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 bg-card/40 hover:bg-card/80 transition-all duration-200"
+              onClick={isLocked ? undefined : () => openPanel(item)}
+              onKeyDown={
+                isLocked
+                  ? undefined
+                  : (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        openPanel(item)
+                      }
+                    }
+              }
+              role={isLocked ? undefined : 'button'}
+              tabIndex={isLocked ? undefined : 0}
+              title={isLocked ? undefined : `Click to rename “${item}” or merge its tasks into another ${singular}`}
+              className={cx(
+                'flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 bg-card/40 transition-all duration-200',
+                !isLocked && 'cursor-pointer hover:border-navy-300 hover:bg-card dark:hover:border-navy-400',
+              )}
             >
               {isLocked ? (
                 <>
@@ -1814,59 +1850,26 @@ function ListEditor({
                     <span className="text-[11px] uppercase tracking-wide text-faint">locked</span>
                   </span>
                 </>
-              ) : isEditing ? (
-                <>
-                  <input
-                    className="input h-8 flex-1 px-2 py-1 text-sm"
-                    value={editValue}
-                    autoFocus
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        saveEdit(item)
-                      } else if (e.key === 'Escape') {
-                        cancelEdit()
-                      }
-                    }}
-                    onBlur={() => saveEdit(item)}
-                  />
-                  <span className="flex items-center gap-1">
-                    <button
-                      className="rounded-md p-1 text-accent-green hover:bg-green-50 dark:hover:bg-green-500/15"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => saveEdit(item)}
-                      title="Save"
-                    >
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <button
-                      className="rounded-md p-1 text-faint hover:bg-subtle"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={cancelEdit}
-                      title="Cancel"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </span>
-                </>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
-                    onClick={() => startEdit(item)}
-                    title="Click to rename"
-                  >
+                  <span className="flex min-w-0 flex-1 items-center gap-2 text-sm">
                     <span className={cx('h-2 w-2 shrink-0 rounded-full', dotColor)} />
                     <span className="truncate text-ink">{item}</span>
-                  </button>
+                  </span>
                   {onMondayId && (
-                    <div className="w-32 shrink-0">
+                    <div
+                      className="w-40 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       <MondayIdInput value={mondayIds?.[item] ?? ''} onCommit={(v) => onMondayId(item, v)} />
                     </div>
                   )}
-                  <span className="flex shrink-0 items-center gap-1">
+                  <span
+                    className="flex shrink-0 items-center gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
                     {onMondayId ? (
                       <span className="w-14 text-right text-[11px] text-muted">
                         {count > 0 ? `${count} task${count === 1 ? '' : 's'}` : ''}
@@ -1897,13 +1900,6 @@ function ListEditor({
                         )}
                       </button>
                     )}
-                    <button
-                      className="rounded-md p-1 text-faint hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white"
-                      onClick={() => startEdit(item)}
-                      title="Rename"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
                     <button
                       className="rounded-md p-1 text-faint hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15"
                       onClick={() => requestRemove(item)}
@@ -1949,32 +1945,148 @@ function ListEditor({
             <button
               className="btn-primary"
               onClick={() => {
-                if (pendingRemove) onRemove(pendingRemove)
+                if (pendingRemove) {
+                  if (usage(pendingRemove) > 0) mergeInto(pendingRemove, removeTarget)
+                  else onRemove(pendingRemove)
+                }
                 setPendingRemove(null)
               }}
             >
-              {pendingRemove && usage(pendingRemove) > 0 ? 'Remove & reassign' : 'Remove'}
+              {pendingRemove && usage(pendingRemove) > 0 ? 'Remove & move tasks' : 'Remove'}
             </button>
           </>
         }
       >
         {pendingRemove && (
-          <div className="flex gap-3 rounded-xl bg-brand-50 p-3 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-            {usage(pendingRemove) > 0 ? (
-              <p>
-                <strong>{pendingRemove}</strong> is linked to{' '}
-                <strong>
-                  {usage(pendingRemove)} task{usage(pendingRemove) === 1 ? '' : 's'}
-                </strong>
-                . Removing it will reassign {usage(pendingRemove) === 1 ? 'that task' : 'those tasks'} to{' '}
-                <strong>“{fallback ?? FALLBACK_ITEM}”</strong>. This can’t be undone.
-              </p>
-            ) : (
-              <p>
-                Remove <strong>{pendingRemove}</strong> from this list? No tasks use it. This can’t be undone.
-              </p>
+          <div className="space-y-4">
+            <div className="flex gap-3 rounded-xl bg-brand-50 p-3 text-sm text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+              {usage(pendingRemove) > 0 ? (
+                <p>
+                  <strong>{pendingRemove}</strong> is linked to{' '}
+                  <strong>
+                    {usage(pendingRemove)} task{usage(pendingRemove) === 1 ? '' : 's'}
+                  </strong>
+                  . {usage(pendingRemove) === 1 ? 'That task' : 'Those tasks'} will move to the {singular} selected
+                  below. This can’t be undone.
+                </p>
+              ) : (
+                <p>
+                  Remove <strong>{pendingRemove}</strong> from this list? No tasks use it. This can’t be undone.
+                </p>
+              )}
+            </div>
+            {usage(pendingRemove) > 0 && (
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">
+                  Move {usage(pendingRemove) === 1 ? 'its task' : 'its tasks'} to
+                </label>
+                <select className="input" value={removeTarget} onChange={(e) => setRemoveTarget(e.target.value)}>
+                  <option value={fb}>{fb} (default)</option>
+                  {sortedItems
+                    .filter((i) => i !== pendingRemove && i !== fb)
+                    .map((i) => (
+                      <option key={i} value={i}>
+                        {i}
+                      </option>
+                    ))}
+                </select>
+              </div>
             )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Manage panel — opened by clicking an item: rename it, or merge it (and
+          every task using it) into another item of the same group. */}
+      <Modal
+        open={panelItem !== null}
+        onClose={() => setPanelItem(null)}
+        title={`Manage ${singular} — ${panelItem ?? ''}`}
+        footer={
+          <button className="btn-outline" onClick={() => setPanelItem(null)}>
+            Close
+          </button>
+        }
+      >
+        {panelItem && (
+          <div className="space-y-5">
+            <p className="text-xs text-muted">
+              {usage(panelItem) > 0 ? (
+                <>
+                  Linked to{' '}
+                  <strong className="text-ink">
+                    {usage(panelItem)} task{usage(panelItem) === 1 ? '' : 's'}
+                  </strong>
+                  .
+                </>
+              ) : (
+                'No tasks use this yet.'
+              )}
+            </p>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">Rename</label>
+              <div className="flex gap-2">
+                <input
+                  className="input"
+                  value={panelRename}
+                  onChange={(e) => setPanelRename(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && panelRename.trim() && panelRename.trim() !== panelItem) {
+                      e.preventDefault()
+                      void onRename(panelItem, panelRename)
+                      setPanelItem(null)
+                    }
+                  }}
+                />
+                <button
+                  className="btn-navy shrink-0"
+                  disabled={!panelRename.trim() || panelRename.trim() === panelItem}
+                  onClick={() => {
+                    void onRename(panelItem, panelRename)
+                    setPanelItem(null)
+                  }}
+                >
+                  Rename
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-faint">
+                Every task using “{panelItem}” follows the new name. Renaming to an existing {singular} merges them.
+              </p>
+            </div>
+            <div className="border-t border-line pt-4">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">
+                Merge into another {singular}
+              </label>
+              <div className="flex gap-2">
+                <select className="input" value={mergeTarget} onChange={(e) => setMergeTarget(e.target.value)}>
+                  <option value="">(select target)</option>
+                  {!items.includes(fb) && <option value={fb}>{fb} (fallback)</option>}
+                  {sortedItems
+                    .filter((i) => i !== panelItem)
+                    .map((i) => (
+                      <option key={i} value={i}>
+                        {i}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  className="btn-primary shrink-0 inline-flex items-center gap-1.5"
+                  disabled={!mergeTarget}
+                  onClick={() => {
+                    mergeInto(panelItem, mergeTarget)
+                    setPanelItem(null)
+                  }}
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  Merge
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-faint">
+                Moves {usage(panelItem) > 0 ? `all ${usage(panelItem)} linked task${usage(panelItem) === 1 ? '' : 's'}` : 'any linked tasks'}{' '}
+                onto the target and removes “{panelItem}” from this list. This can’t be undone.
+              </p>
+            </div>
           </div>
         )}
       </Modal>
