@@ -1,17 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { FlaskConical, Pencil } from 'lucide-react'
 import { Badge } from './ui/Badge'
 import { Modal } from './ui/Modal'
 import { AssetRatesModal } from './AssetRatesModal'
-import { useStore } from '../data/store'
 import { useAuth } from '../lib/auth'
-import { useScrollFade } from '../lib/useScrollFade'
-import { effortHeatColor, formatRatePerUnit, hoursPerUnit, sortAlpha } from '../constants'
 
 /**
- * Explains the workload chart's Assets ↔ Effort switch in plain language, shows
- * how the rated asset types compare, and (for signed-in editors) opens the rate
- * editor. Reached from the "?" beside the switch.
+ * Explains the workload chart's Assets ↔ Effort switch in plain language, and
+ * (for signed-in editors) opens the rate editor. Reached from the "?" beside the
+ * switch. Deliberately text only — the per-type comparison lives in the editor,
+ * where the numbers it describes are actually being set.
  */
 export function EffortInfoModal({
   open,
@@ -23,21 +21,8 @@ export function EffortInfoModal({
   /** Asset types with volume on the chart but no rate — they count as zero. */
   unratedInScope?: string[]
 }) {
-  const { settings } = useStore()
   const { canEdit } = useAuth()
   const [editOpen, setEditOpen] = useState(false)
-  const listRef = useScrollFade<HTMLUListElement>()
-  const rates = settings.assetRates ?? {}
-
-  /** Rated types, slowest first, with the bar scale taken from the slowest. */
-  const rows = useMemo(() => {
-    const rated = sortAlpha(settings.assetTypes)
-      .map((name) => ({ name, hours: hoursPerUnit(rates[name]), label: formatRatePerUnit(rates[name]).replace('≈ ', '') }))
-      .filter((r) => r.hours > 0)
-      .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name))
-    return { rated, slowest: rated.length ? rated[0].hours : 0 }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.assetTypes, settings.assetRates])
 
   return (
     <>
