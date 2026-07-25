@@ -29,7 +29,9 @@ export function EffortInfoModal({
       <Modal
         open={open}
         onClose={onClose}
-        widthClass="max-w-5xl"
+        // Text only now the bars are gone, so narrower than the editor — two
+        // ~26rem columns keep the line length comfortable to read.
+        widthClass="max-w-4xl"
         title={
           <span className="flex items-center gap-2">
             Measuring workload by effort
@@ -59,18 +61,35 @@ export function EffortInfoModal({
           <div className="space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-faint">What the switch does</p>
             <dl className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-xl border border-line px-3 py-2.5">
-                <dt className="text-xs font-semibold text-ink">Assets</dt>
-                <dd className="mt-1 text-xs leading-relaxed text-muted">
-                  Counts every deliverable as one, so a banner and a photo edit weigh the same. A team making
-                  many quick assets looks busier than one making a few slow ones.
+              <div className="space-y-1.5 rounded-xl border border-line px-3.5 py-3">
+                <dt className="text-sm font-semibold text-ink">Assets</dt>
+                <dd className="space-y-1.5 text-xs leading-relaxed text-muted">
+                  <p>
+                    Counts every deliverable as one. A photo edit and a 12-page publication each add 1, so the
+                    line measures <strong className="text-ink">volume</strong> — how many things the team
+                    shipped that month.
+                  </p>
+                  <p>
+                    This is the app&rsquo;s standard measure and what every other card uses. It&rsquo;s exact
+                    and easy to check against the task list, but it treats a quick job and a slow one as equal,
+                    so a month of heavy design work can look quieter than a month of light touch-ups.
+                  </p>
                 </dd>
               </div>
-              <div className="rounded-xl border border-line px-3 py-2.5">
-                <dt className="text-xs font-semibold text-ink">Effort</dt>
-                <dd className="mt-1 text-xs leading-relaxed text-muted">
-                  Multiplies each month&rsquo;s assets by how long that type takes to make. Shows how much work
-                  a month was — the shape is the point, so the scale is unlabelled.
+              <div className="space-y-1.5 rounded-xl border border-line px-3.5 py-3">
+                <dt className="text-sm font-semibold text-ink">Effort</dt>
+                <dd className="space-y-1.5 text-xs leading-relaxed text-muted">
+                  <p>
+                    Weights each deliverable by how long its type takes. Every asset type has an output rate —
+                    say 300 statics a day, or one guide every two weeks — and the chart multiplies the assets
+                    booked in a month by the time one of them takes.
+                  </p>
+                  <p>
+                    So 40 publications can outweigh 400 photo edits, which is usually closer to how the month
+                    actually felt. The rates are hand-set estimates, so read the{' '}
+                    <strong className="text-ink">shape and the peaks</strong>, not the height — that&rsquo;s why
+                    the scale carries no numbers.
+                  </p>
                 </dd>
               </div>
             </dl>
@@ -94,40 +113,6 @@ export function EffortInfoModal({
             </div>
           )}
 
-          {rows.rated.length > 0 ? (
-            // Divider + heading keeps the data clearly separate from the prose.
-            <div className="border-t border-line pt-4">
-              <h4 className="text-sm font-semibold text-ink">How the asset types compare</h4>
-              <p className="mt-0.5 text-xs text-muted">
-                Time one of each takes, drawn to scale and coloured from quick (cool) to slow (hot).
-              </p>
-              <ul ref={listRef} className="mt-3 max-h-[28rem] space-y-1.5 overflow-y-auto">
-                {rows.rated.map((r) => (
-                  <li key={r.name} className="flex items-center gap-2.5">
-                    <span className="w-56 shrink-0 truncate text-sm font-medium text-ink" title={r.name}>
-                      {r.name}
-                    </span>
-                    <span className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-subtle">
-                      <span
-                        className="block h-full rounded-full"
-                        style={{
-                          width: `${(r.hours / rows.slowest) * 100}%`,
-                          minWidth: '2px',
-                          backgroundColor: effortHeatColor(r.hours),
-                        }}
-                      />
-                    </span>
-                    <span className="w-28 shrink-0 text-right text-xs text-muted">{r.label}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <p className="rounded-xl border border-line px-3.5 py-3 text-xs text-muted">
-              No output rates recorded yet, so there&rsquo;s nothing to compare.
-              {canEdit ? ' Use “Edit output rates” below to add them.' : ''}
-            </p>
-          )}
         </div>
       </Modal>
 
