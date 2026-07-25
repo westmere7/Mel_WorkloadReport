@@ -167,18 +167,29 @@ export function countBySize(tasks: Task[]): NamedCount[] {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /**
- * Total assets booked in each month of the year (by task start date).
- * Shows how workload fluctuates across the year. Tasks without a start
+ * Monthly totals of any per-task value, by start date. Tasks without a start
  * date are excluded. Always returns 12 entries (Jan–Dec).
+ *
+ * `value` keeps the month bucketing in one place so the workload chart can sum
+ * something other than the asset count (effort hours) without a second copy of
+ * this logic — and without changing what `assetsByMonth` returns.
  */
-export function assetsByMonth(tasks: Task[]): NamedCount[] {
+export function valueByMonth(tasks: Task[], value: (task: Task) => number): NamedCount[] {
   const totals = new Array(12).fill(0)
   for (const t of tasks) {
     if (!t.startDate) continue
     const m = Number(t.startDate.split('-')[1])
-    if (m >= 1 && m <= 12) totals[m - 1] += t.assetTotal || 0
+    if (m >= 1 && m <= 12) totals[m - 1] += value(t)
   }
   return MONTHS.map((name, i) => ({ name, value: totals[i] }))
+}
+
+/**
+ * Total assets booked in each month of the year (by task start date).
+ * Shows how workload fluctuates across the year.
+ */
+export function assetsByMonth(tasks: Task[]): NamedCount[] {
+  return valueByMonth(tasks, (t) => t.assetTotal || 0)
 }
 
 /** The single most-requested work type across all tasks (null if none tagged). */

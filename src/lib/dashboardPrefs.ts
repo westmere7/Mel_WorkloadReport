@@ -7,6 +7,14 @@ import { useSyncExternalStore } from 'react'
 
 export type DemandDim = 'type' | 'asset'
 
+/**
+ * Unit for the "Workload across the year" chart only. 'assets' counts each
+ * deliverable as 1 (the default, and what every other chart always does);
+ * 'effort' weights each one by its asset type's recorded output rate. A local
+ * VIEW toggle — it changes nothing stored, and nobody else's screen.
+ */
+export type WorkloadUnit = 'assets' | 'effort'
+
 // NB: chart display GROUPS used to live here but moved into AppSettings.chartGroups
 // so they sync across devices via Supabase (see types.ts / chartGroups.ts). What
 // remains are lightweight, per-browser viewing toggles.
@@ -14,6 +22,8 @@ export type DemandDim = 'type' | 'asset'
 export interface DashboardPrefs {
   /** Dimension of the "Demand by stakeholders" chart. */
   demandDim: DemandDim
+  /** Unit of the workload-across-the-year chart. Assets unless switched. */
+  workloadUnit: WorkloadUnit
   /** Exclude the ongoing/catch-all campaigns from the campaign charts. */
   hideCommonCampaigns: boolean
   /** Show the "Tasks by person" chart (hidden by default). */
@@ -30,6 +40,7 @@ export const COMMON_CAMPAIGNS = ['BAU', 'Always On', 'Others']
 
 export const DEFAULT_DASHBOARD_PREFS: DashboardPrefs = {
   demandDim: 'asset',
+  workloadUnit: 'assets',
   hideCommonCampaigns: true,
   showTasksByPerson: false,
   groupAssetMix: true,

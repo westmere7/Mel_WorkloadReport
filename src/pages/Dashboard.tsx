@@ -7,6 +7,7 @@ import { TaskDetails } from '../components/TaskDetails'
 import { TaskStar } from '../components/TaskStar'
 import { FunctionFilter } from '../components/FunctionFilter'
 import { ChartGroupsModal } from '../components/ChartGroupsModal'
+import { EffortInfoModal } from '../components/EffortInfoModal'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
@@ -16,9 +17,9 @@ import { AreaTrendChart, HBarChart, MixChart, RankedBars, StackedBarChart, Stack
 import { useStore } from '../data/store'
 import {
   assetsByCampaign,
-  assetsByMonth,
   assetsBySquad,
   assetsByType,
+  valueByMonth,
   countByField,
   countByMulti,
   demandByStakeholder,
@@ -32,7 +33,8 @@ import { cx, todayISO, formatDate, formatDayMonth } from '../lib/format'
 import { sliceTasksByFunctions } from '../lib/functionData'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
-import { COMMON_CAMPAIGNS, setDashboardPrefs, useDashboardPrefs, type DemandDim } from '../lib/dashboardPrefs'
+import { COMMON_CAMPAIGNS, setDashboardPrefs, useDashboardPrefs, type DemandDim, type WorkloadUnit } from '../lib/dashboardPrefs'
+import { formatHours, hasAnyRate, taskEffortHours, unratedTypesWithVolume } from '../lib/effort'
 import { applyChartGroups, expandChartSelection } from '../lib/chartGroups'
 import { useAuth } from '../lib/auth'
 import type { Half, Squad, Task, TaskInput } from '../types'
@@ -83,8 +85,20 @@ export function Dashboard() {
     return `${parts[0]} ${parts[1]}` // e.g. "2 Jul"
   }, [today])
   // Chart display preferences — edited in Settings → Dashboard.
-  const { demandDim, hideCommonCampaigns, showTasksByPerson, groupAssetMix, groupWorkTypeMix, groupDemand } =
+  const { demandDim, hideCommonCampaigns, showTasksByPerson, groupAssetMix, groupWorkTypeMix, groupDemand, workloadUnit } =
     useDashboardPrefs()
+  // ── Effort weighting (experimental) — the workload chart ONLY ─────────────
+  // Every other card on this page keeps counting each asset as 1; this just
+  // re-values the across-the-year line, and only while the toggle is on.
+  const assetRates = settings.assetRates ?? {}
+  const ratesConfigured = hasAnyRate(assetRates)
+  const effortOn = workloadUnit === 'effort' && ratesConfigured
+  /** A task's value on the workload chart — assets, or effort hours. */
+  const workloadValue = useMemo(
+    () => (effortOn ? (t: Task) => taskEffortHours(t, assetRates) : (t: Task) => t.assetTotal || 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [effortOn, settings.assetRates],
+  )
   // Chart display GROUPS live in synced settings (shared across devices). Each
   // panel has its OWN local-only toggle to view grouped or fully individual,
   // without deleting the configured groups.
@@ -177,8 +191,8 @@ export function Dashboard() {
     if (compare && ytd) {
       list = list.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
     }
-    return assetsByMonth(list)
-  }, [fnTasks, chartYear, compare, ytd, todayMD])
+    return valueByMonth(list, workloadValue)
+  }, [fnTasks, chartYear, compare, ytd, todayMD, workloadValue])
   // The same set of tasks the workload chart aggregates — scattered under the
   // line as individual clickable columns.
   const chartYearTasks = useMemo(() => {
@@ -188,6 +202,13 @@ export function Dashboard() {
     }
     return list
   }, [fnTasks, chartYear, compare, ytd, todayMD])
+  // Asset types with volume on this chart but no output rate — they count as
+  // zero hours, so the panel says so rather than showing a quietly short total.
+  const unratedInScope = useMemo(
+    () => (effortOn ? unratedTypesWithVolume(chartYearTasks, assetRates) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [effortOn, chartYearTasks, settings.assetRates],
+  )
   // The task currently under the pointer on the workload chart — shown live in
   // the card's top-right corner in place of the year.
   const [hoverTask, setHoverTask] = useState<Task | null>(null)
@@ -208,6 +229,8 @@ export function Dashboard() {
   // which dimension tab to land on based on the panel that opened it.
   const [chartGroupsOpen, setChartGroupsOpen] = useState(false)
   const [chartGroupsTab, setChartGroupsTab] = useState<'asset' | 'type'>('asset')
+  // "What does Effort mean?" — explanation, comparison, and rate editing.
+  const [effortInfoOpen, setEffortInfoOpen] = useState(false)
 
   const handleUpdateTask = async (input: TaskInput) => {
     if (!editTask) return
@@ -257,8 +280,8 @@ export function Dashboard() {
     if (ytd) {
       list = list.filter((t) => t.startDate && t.startDate.slice(5) <= todayMD)
     }
-    return assetsByMonth(list)
-  }, [fnTasks, srcYear, ytd, todayMD])
+    return valueByMonth(list, workloadValue)
+  }, [fnTasks, srcYear, ytd, todayMD, workloadValue])
 
   // ── Deep-link to the Task List, filtered to a single selection ──────────
   // Each click passes the chosen filter(s) PLUS the dashboard's current scope
@@ -611,7 +634,11 @@ export function Dashboard() {
           <Card className="flex min-h-0 flex-1 flex-col">
             <CardHeader
               title="Workload & tasks across the year"
-              subtitle="Assets per month · hover or click a dot for task details · Shift + scroll to cycle overlapping dots"
+              subtitle={
+                effortOn
+                  ? 'Effort per month, not asset count · hover or click a dot for task details'
+                  : 'Assets per month · hover or click a dot for task details · Shift + scroll to cycle overlapping dots'
+              }
               action={
                 // Fixed height so the header (and card) doesn't resize as the
                 // hover readout swaps in and out.
@@ -622,7 +649,9 @@ export function Dashboard() {
                         {hoverTask.name}
                       </span>
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted">
-                        {hoverTask.assetTotal} {hoverTask.assetTotal === 1 ? 'asset' : 'assets'} ·{' '}
+                        {hoverTask.assetTotal} {hoverTask.assetTotal === 1 ? 'asset' : 'assets'}
+                        {/* In effort mode the dot's height is hours, so name them. */}
+                        {effortOn && ` ≈ ${formatHours(taskEffortHours(hoverTask, assetRates))}`} ·{' '}
                         {hoverTask.people.length} {hoverTask.people.length === 1 ? 'person' : 'people'} ·{' '}
                         {/* Functions recording workload on this task (legacy tasks = 1). */}
                         {hoverFnCount} {hoverFnCount === 1 ? 'function' : 'functions'} ·{' '}
@@ -639,11 +668,7 @@ export function Dashboard() {
                         {' '}· {hoverTask.size} · Start day: {formatDayMonth(hoverTask.startDate)}
                       </span>
                     </>
-                  ) : (
-                    <span className="rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
-                      {compare ? `${activeYear} over ${srcYear}` : chartYear}
-                    </span>
-                  )}
+                  ) : null}
                 </div>
               }
             />
@@ -663,6 +688,9 @@ export function Dashboard() {
                   tasks={chartYearTasks}
                   onTaskClick={setViewTask}
                   onHoverTask={setHoverTask}
+                  // Dots share the line's y-axis, so they must be valued the same way.
+                  taskValue={workloadValue}
+                  hideYLabels={effortOn}
                   compare={
                     compare
                       ? { data: srcByMonth, label: String(srcYear), currentLabel: String(activeYear), tasks: sourceTasks }
@@ -670,6 +698,69 @@ export function Dashboard() {
                   }
                 />
               </div>
+            </div>
+            {/* Under-chart bar: unit switch + help on the left, the year on the
+                right (both single-year and compare mode). */}
+            <div className="mt-2 flex shrink-0 items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                {/* Assets ↔ Effort, for THIS chart only. Hidden until at least one
+                    output rate exists — with none, every task would weigh 0 and
+                    the line would flatline. */}
+                {ratesConfigured && (
+                  <>
+                    <div className="inline-flex shrink-0 items-center gap-0.5 rounded-lg bg-subtle p-0.5">
+                      {(
+                        [
+                          ['assets', 'Assets'],
+                          ['effort', 'Effort'],
+                        ] as [WorkloadUnit, string][]
+                      ).map(([u, label]) => (
+                        <button
+                          key={u}
+                          type="button"
+                          onClick={() => setDashboardPrefs({ workloadUnit: u })}
+                          aria-pressed={workloadUnit === u}
+                          title={
+                            u === 'assets'
+                              ? 'Count every deliverable as one'
+                              : 'Weigh each deliverable by how long that asset type takes to make'
+                          }
+                          className={cx(
+                            'rounded-md px-2 py-0.5 text-[11px] font-semibold transition',
+                            workloadUnit === u
+                              ? 'bg-rmit-navy text-white dark:bg-navy-300'
+                              : 'text-muted hover:text-ink',
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEffortInfoOpen(true)}
+                      title="What does Effort mean?"
+                      aria-label="What does Effort mean?"
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-line text-[10px] font-bold text-muted transition hover:border-faint hover:text-ink"
+                    >
+                      ?
+                    </button>
+                    {effortOn && unratedInScope.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setEffortInfoOpen(true)}
+                        className="truncate text-[10px] font-medium text-accent-gold hover:underline"
+                        title={`No rate yet, so counted as zero: ${unratedInScope.join(', ')}`}
+                      >
+                        {unratedInScope.length} type{unratedInScope.length === 1 ? '' : 's'} unrated
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+              <span className="shrink-0 rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
+                {compare ? `${activeYear} over ${srcYear}` : chartYear}
+              </span>
             </div>
           </Card>
           <Card className="flex min-h-0 flex-1 flex-col">
@@ -863,6 +954,13 @@ export function Dashboard() {
           />
         )}
       </Modal>
+
+      {/* Effort explainer — opened by the "?" beside the workload unit switch. */}
+      <EffortInfoModal
+        open={effortInfoOpen}
+        onClose={() => setEffortInfoOpen(false)}
+        unratedInScope={unratedInScope}
+      />
 
       {/* Chart groups editor — opened by the panels' gear icons. */}
       <ChartGroupsModal

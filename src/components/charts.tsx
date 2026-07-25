@@ -962,10 +962,14 @@ function TaskDotsLayer({
   radius = DOT_R,
   interactive = true,
   xScaleMax = 1,
+  taskValue = (t: Task) => t.assetTotal || 0,
 }: {
   offset?: { left: number; top: number; width: number; height: number }
   tasks?: Task[]
   maxVal?: number
+  /** A task's value on the shared y-axis. Defaults to its asset count; the
+   *  dashboard swaps in effort hours so the dots stay on the line's scale. */
+  taskValue?: (task: Task) => number
   /** Fill colour for a task's dot (by squad, or by year in compare mode). */
   colorFor: (task: Task) => string
   hoveredId?: string | null
@@ -1028,7 +1032,7 @@ function TaskDotsLayer({
       const doy = new Date(y, mo - 1, day || 1).getTime() - new Date(y, 0, 1).getTime()
       // Remap the raw day-of-year fraction onto the (possibly zoomed) [0, xScaleMax] axis.
       const frac = Math.min(1, Math.max(0, doy / 86400000 / 366) / xScaleMax)
-      const val = t.assetTotal || 0
+      const val = taskValue(t)
       const cx = Math.max(minX, Math.min(maxX, left + frac * width))
       const cy = top + plotH - (val / maxVal) * plotH
       return { t, cx, cy, color: colorFor(t) }
@@ -1183,6 +1187,8 @@ export function AreaTrendChart({
   onTaskClick,
   onHoverTask,
   fillToNow,
+  taskValue = (t: Task) => t.assetTotal || 0,
+  hideYLabels,
 }: {
   data: NamedCount[]
   height?: number | string
@@ -1202,6 +1208,11 @@ export function AreaTrendChart({
       that span — the drawn range fills the width instead of leaving the rest of
       the year empty. Only takes effect when a "Now" month is in view. */
   fillToNow?: boolean
+  /** How to value a task for its scatter dot — must match whatever `data` sums,
+   *  since the dots share the line's y-axis. Defaults to the asset count. */
+  taskValue?: (task: Task) => number
+  /** Drop the y-axis tick labels — for a unit whose absolute value isn't the point. */
+  hideYLabels?: boolean
 }) {
   const colors = useChartColors()
   const squadColor = useSquadColor()
@@ -1217,7 +1228,7 @@ export function AreaTrendChart({
   // One dot per task with a start date and assets. Outside compare mode these are
   // coloured by squad and fully interactive (hover/click). In compare mode we draw
   // two display-only sets instead — target vs source year — each in its own colour.
-  const hasDot = (t: Task) => Boolean(t.startDate) && (t.assetTotal || 0) > 0
+  const hasDot = (t: Task) => Boolean(t.startDate) && taskValue(t) > 0
   const scatterTasks = compare ? [] : (tasks ?? []).filter(hasDot)
   const targetDots = compare ? (tasks ?? []).filter(hasDot) : []
   const sourceDots = compare ? (compare.tasks ?? []).filter(hasDot) : []
@@ -1371,10 +1382,13 @@ export function AreaTrendChart({
         />
         <YAxis
           allowDecimals={false}
-          tick={AXIS}
+          // Effort mode hides the numbers: weighted hours are a modelled figure,
+          // and the point of the line is its SHAPE, not a readable total. The
+          // gridline positions stay, so the profile is still legible.
+          tick={hideYLabels ? false : AXIS}
           axisLine={false}
           tickLine={false}
-          width={32}
+          width={hideYLabels ? 8 : 32}
           domain={scaleMax > 0 ? [0, yTop] : undefined}
           ticks={scaleMax > 0 ? yTicks : undefined}
         />
@@ -1447,6 +1461,7 @@ export function AreaTrendChart({
                 onPick={(t) => onTaskClick?.(t)}
                 animKey={animKey}
                 xScaleMax={xMax}
+                taskValue={taskValue}
               />
             }
           />
@@ -1468,6 +1483,7 @@ export function AreaTrendChart({
                 onPick={(t) => onTaskClick?.(t)}
                 animKey={`cmp-${animKey}`}
                 xScaleMax={xMax}
+                taskValue={taskValue}
               />
             }
           />
