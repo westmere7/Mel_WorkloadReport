@@ -332,6 +332,63 @@
   }
 }
 
+/* ── Function panel reveal (task form) ─────────────────────────────────
+   When a function is switched on, its panel introduces itself: a light beam
+   sweeps across the card while each block rises + fades in, staggered. */
+/* The beam is a third of the panel wide and sits at left:0, so translateX is in
+   thirds-of-a-panel: −300% parks it fully off the left edge, +300% fully off the
+   right. That guarantees one continuous pass with no mid-panel stall, and the
+   gradient's transparent ends do the fading (no opacity keyframes needed). */
+@keyframes fn-panel-sweep {
+  from {
+    transform: translateX(-300%) skewX(-14deg);
+  }
+  to {
+    transform: translateX(300%) skewX(-14deg);
+  }
+}
+.animate-fn-sweep {
+  animation: fn-panel-sweep 1000ms cubic-bezier(0.33, 0, 0.25, 1) both;
+}
+
+@keyframes fn-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-fn-panel-in {
+  animation: fn-panel-in 320ms ease-out both;
+}
+
+@keyframes fn-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Per-block delay comes from an inline --fn-delay so the order is explicit. */
+.animate-fn-rise {
+  animation: fn-rise-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--fn-delay, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fn-sweep,
+  .animate-fn-panel-in,
+  .animate-fn-rise {
+    animation: none;
+  }
+}
+
 @keyframes gentle-bob {
   0%, 100% {
     transform: translateY(0);

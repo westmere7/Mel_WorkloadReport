@@ -1150,6 +1150,15 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   })
   // Tab whose disable needs confirming because the save would drop its values.
   const [pendingDisable, setPendingDisable] = useState<string | null>(null)
+  // Function just switched ON — its panel plays a one-shot reveal, then this clears
+  // so re-selecting the tab later doesn't replay it.
+  const [justEnabledFn, setJustEnabledFn] = useState<string | null>(null)
+  useEffect(() => {
+    if (!justEnabledFn) return
+    // Must outlast the sweep (1000ms) so it never unmounts mid-pass.
+    const t = setTimeout(() => setJustEnabledFn(null), 1200)
+    return () => clearTimeout(t)
+  }, [justEnabledFn])
 
   // Auto-enable a function tab when a PIC is ADDED that matches its configured
   // people list. Keyed off newly-added people only (diffed against the previous
@@ -1227,6 +1236,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
     if (!d.enabled) {
       patchDraft(fnName, { enabled: true })
       setActiveFn(fnName) // enabling selects it so its body shows
+      setJustEnabledFn(fnName) // plays the panel's sweep + stagger reveal
     } else if (draftHasData(d)) {
       setPendingDisable(fnName) // has values — confirm before hiding them
     } else {
@@ -2196,10 +2206,29 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             )
             void saveSettings({ ...settings, assetTypes: nextAssets, functions: nextFns })
           }
+          // Just switched on → play the one-shot reveal (sweep + staggered blocks).
+          const reveal = justEnabledFn === f.name
           return (
             <div>
               {tabStrip}
-              <div className="space-y-4 rounded-xl border-2 bg-card p-4" style={{ borderColor: col.hex }}>
+              <div
+                className={cx(
+                  'relative space-y-4 overflow-hidden rounded-xl border-2 bg-card p-4',
+                  reveal && 'animate-fn-panel-in',
+                )}
+                style={{ borderColor: col.hex }}
+              >
+                {/* Light beam sweeping across the freshly-revealed panel. */}
+                {reveal && (
+                  <span className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-xl">
+                    <span
+                      className="animate-fn-sweep absolute inset-y-0 left-0 w-1/3"
+                      style={{
+                        background: `linear-gradient(90deg, transparent, ${col.hex}59, transparent)`,
+                      }}
+                    />
+                  </span>
+                )}
                 {emptyOffering && (
                   <div className="rounded-lg border border-dashed border-line bg-subtle/50 px-3 py-2.5 text-xs leading-relaxed text-muted">
                     No work or asset types are enabled for <strong className="text-ink">{f.name}</strong> yet. Add
@@ -2207,7 +2236,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                     <strong className="text-ink">Settings → Functions</strong>.
                   </div>
                 )}
-                <div>
+                <div
+                  className={cx(reveal && 'animate-fn-rise')}
+                  style={reveal ? ({ '--fn-delay': '60ms' } as React.CSSProperties) : undefined}
+                >
                   <label className={cx('label', d.types.length > 0 && 'is-filled')}>Work type(s)</label>
                   <div className="flex flex-wrap gap-2">
                     {tabTypes.map((t) => {
@@ -2241,7 +2273,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   </div>
                 </div>
 
-                <div>
+                <div
+                  className={cx(reveal && 'animate-fn-rise')}
+                  style={reveal ? ({ '--fn-delay': '150ms' } as React.CSSProperties) : undefined}
+                >
                   <div className="mb-2 flex items-center gap-2">
                     <label className={cx('label !mb-0', tabTotal > 0 && 'is-filled')}>Assets</label>
                     <span className="rounded-full border border-line bg-card px-2.5 py-0.5 text-xs font-semibold text-ink">
@@ -2267,7 +2302,10 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   </div>
                 </div>
 
-                <div>
+                <div
+                  className={cx(reveal && 'animate-fn-rise')}
+                  style={reveal ? ({ '--fn-delay': '240ms' } as React.CSSProperties) : undefined}
+                >
                   <div className="flex items-center gap-2.5">
                     <button
                       type="button"
