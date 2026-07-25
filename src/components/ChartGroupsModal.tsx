@@ -10,10 +10,21 @@ import type { ChartGroup, ChartGroups } from '../types'
 const EMPTY: ChartGroups = { asset: [], type: [] }
 const PALETTE = CHART_GROUP_COLORS
 
-/** Deep-clone so the draft never mutates the live settings. */
-function clone(src: ChartGroups): ChartGroups {
-  const dup = (gs: ChartGroup[]) => gs.map((g) => ({ ...g, items: [...g.items] }))
-  return { asset: dup(src.asset), type: dup(src.type) }
+/**
+ * Deep-clone into an editable draft, DROPPING members that no longer exist in
+ * their master list. Group membership is name-keyed, so an item renamed or
+ * removed by an older client (or straight in the DB) would otherwise linger as a
+ * dead entry — this self-heals it, and saving persists the cleanup.
+ */
+function clone(src: ChartGroups, masterAsset: string[], masterType: string[]): ChartGroups {
+  const dup = (gs: ChartGroup[], master: string[]) => {
+    // Guard: an empty master list means settings haven't loaded — copy as-is
+    // rather than "healing" every member away (which a Save would then persist).
+    if (!master.length) return gs.map((g) => ({ ...g, items: [...g.items] }))
+    const known = new Set(master)
+    return gs.map((g) => ({ ...g, items: g.items.filter((i) => known.has(i)) }))
+  }
+  return { asset: dup(src.asset, masterAsset), type: dup(src.type, masterType) }
 }
 
 /**
@@ -44,8 +55,11 @@ export function ChartGroupsModal({
   // may change them — the per-panel display toggle stays local for everyone.
   const { canEdit } = useAuth()
   const live = settings.chartGroups ?? EMPTY
+  // Master lists (incl. the "Others" fallback) — what a group member may name.
+  const masterAsset = withFallback(settings.assetTypes)
+  const masterType = withFallback(settings.types)
   const [tab, setTab] = useState<'asset' | 'type'>(initialTab)
-  const [draft, setDraft] = useState<ChartGroups>(() => clone(live))
+  const [draft, setDraft] = useState<ChartGroups>(() => clone(live, masterAsset, masterType))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragName, setDragName] = useState<string | null>(null)
@@ -59,7 +73,7 @@ export function ChartGroupsModal({
   // Snapshot the live groups into an editable draft each time the panel opens.
   useEffect(() => {
     if (open) {
-      setDraft(clone(settings.chartGroups ?? EMPTY))
+      setDraft(clone(settings.chartGroups ?? EMPTY, withFallback(settings.assetTypes), withFallback(settings.types)))
       setTab(initialTab)
       setError(null)
       setPaletteFor(null)
