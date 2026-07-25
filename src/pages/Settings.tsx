@@ -1299,12 +1299,15 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
   const [saving, setSaving] = useState(false)
   const listRef = useScrollFade<HTMLUListElement>()
 
-  // Re-seed each time the pop-up opens, and if the stored rates change under it.
+  // Re-seed each time the pop-up opens, and whenever the asset-type list or the
+  // stored rates change under it (adds, removals and renames from the Asset types
+  // panel flow straight through — both read the same settings).
   useEffect(() => {
-    if (open) {
-      setDraft(toDraft())
-      setManualOrder(null) // every visit starts A–Z
-    }
+    if (!open) return
+    const seeded = toDraft()
+    setDraft(seeded)
+    setSortMode('effort') // every visit opens ranked by effort
+    setEffortRank(rankByEffort(seeded))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, settings.assetRates, settings.assetTypes])
 
@@ -1349,29 +1352,31 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, assetTypes])
 
+  /** Row order — effort (slowest first) is the default; 'name' is plain A–Z. */
+  const [sortMode, setSortMode] = useState<'effort' | 'name'>('effort')
   /**
-   * Row order. null = alphabetical. Sorting is a FROZEN snapshot taken when the
-   * button is pressed, never derived live from the draft — re-ranking rows out
-   * from under someone mid-edit would move the field they're typing in.
+   * The effort ranking, FROZEN. Re-taken only when the pop-up opens or the sort
+   * button is pressed — never derived live from the draft, because re-ranking
+   * rows while someone types would move the field out from under their cursor.
    */
-  const [manualOrder, setManualOrder] = useState<string[] | null>(null)
+  const [effortRank, setEffortRank] = useState<string[]>([])
+
+  /** Rank a draft by effort: slowest first, unrated last, ties A–Z. */
+  const rankByEffort = (d: Record<string, RateDraft>) =>
+    assetTypes
+      .map((name) => ({ name, hours: hoursPerUnit(parseRow(d[name]) ?? undefined) }))
+      .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name))
+      .map((r) => r.name)
+
   const orderedTypes = useMemo(() => {
-    if (!manualOrder) return assetTypes
-    const rank = new Map(manualOrder.map((n, i) => [n, i]))
-    // Types added since the snapshot have no rank — they fall to the end, A–Z.
+    if (sortMode === 'name') return assetTypes // already alphabetical
+    const rank = new Map(effortRank.map((n, i) => [n, i]))
+    // A type ADDED since the snapshot has no rank — it falls to the end, A–Z —
+    // and one removed simply never appears, so the rows track the asset-type list.
     return [...assetTypes].sort(
       (a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity) || a.localeCompare(b),
     )
-  }, [assetTypes, manualOrder])
-
-  /** Freeze the current effort ranking, slowest first; unrated types sink last. */
-  const sortByEffort = () =>
-    setManualOrder(
-      assetTypes
-        .map((name) => ({ name, hours: rowHours(name) }))
-        .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name))
-        .map((r) => r.name),
-    )
+  }, [assetTypes, sortMode, effortRank])
 
   const same = (a: AssetRate | undefined, b: AssetRate | undefined) =>
     (!a && !b) || (!!a && !!b && a.qty === b.qty && a.every === b.every && a.per === b.per)
@@ -1470,16 +1475,23 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
               </span>
               <button
                 type="button"
-                onClick={manualOrder ? () => setManualOrder(null) : sortByEffort}
+                onClick={() => {
+                  if (sortMode === 'effort') {
+                    setSortMode('name')
+                  } else {
+                    setEffortRank(rankByEffort(draft)) // re-rank on demand, from what's typed now
+                    setSortMode('effort')
+                  }
+                }}
                 className="btn-outline flex h-7 shrink-0 items-center gap-1.5 px-2.5 text-[11px]"
                 title={
-                  manualOrder
-                    ? 'Back to alphabetical order'
-                    : 'Reorder the rows by effort, slowest first (a one-off — rows never move while you type)'
+                  sortMode === 'effort'
+                    ? 'List the rows alphabetically instead'
+                    : 'Re-rank the rows by effort, slowest first (a one-off — rows never move while you type)'
                 }
               >
                 <ArrowUpDown className="h-3 w-3" />
-                {manualOrder ? 'Sort A–Z' : 'Sort by effort'}
+                {sortMode === 'effort' ? 'Sort A–Z' : 'Sort by effort'}
               </button>
             </div>
             <div className="mb-1.5 flex items-center gap-2.5 px-2.5 text-[10px] font-semibold uppercase tracking-wide text-faint">
