@@ -457,6 +457,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           delete kw[oldValue]
           nextSettings = { ...nextSettings, [kwKey]: kw }
         }
+        // Rewrite chart-group membership (they store item NAMES) so a renamed
+        // type stays in its group instead of orphaning under the old name.
+        const cgDim = key === 'types' ? 'type' : key === 'assetTypes' ? 'asset' : null
+        if (cgDim) {
+          const cg = prev.chartGroups ?? { asset: [], type: [] }
+          nextSettings = {
+            ...nextSettings,
+            chartGroups: {
+              ...cg,
+              [cgDim]: cg[cgDim].map((g) =>
+                g.items.includes(oldValue)
+                  ? { ...g, items: Array.from(new Set(g.items.map((i) => (i === oldValue ? trimmed : i)))) }
+                  : g,
+              ),
+            },
+          }
+        }
         void repo.saveSettings(nextSettings)
         return nextSettings
       })
@@ -501,6 +518,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const kw = { ...prev[kwKey] }
           delete kw[value]
           nextSettings = { ...nextSettings, [kwKey]: kw }
+        }
+        // Drop the removed type from any chart group's membership.
+        const cgDim = key === 'types' ? 'type' : key === 'assetTypes' ? 'asset' : null
+        if (cgDim) {
+          const cg = prev.chartGroups ?? { asset: [], type: [] }
+          nextSettings = {
+            ...nextSettings,
+            chartGroups: {
+              ...cg,
+              [cgDim]: cg[cgDim].map((g) =>
+                g.items.includes(value) ? { ...g, items: g.items.filter((i) => i !== value) } : g,
+              ),
+            },
+          }
         }
         void repo.saveSettings(nextSettings)
         return nextSettings

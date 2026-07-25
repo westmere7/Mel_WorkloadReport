@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, GripVertical, Plus, X } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import { useStore } from '../data/store'
+import { useAuth } from '../lib/auth'
 import { CHART_GROUP_COLORS, sortAlpha, withFallback } from '../constants'
 import { cx, toMessage } from '../lib/format'
 import type { ChartGroup, ChartGroups } from '../types'
@@ -39,6 +40,9 @@ export function ChartGroupsModal({
   initialTab?: 'asset' | 'type'
 }) {
   const { settings, saveSettings } = useStore()
+  // The group DEFINITIONS are shared (synced) settings, so only signed-in users
+  // may change them — the per-panel display toggle stays local for everyone.
+  const { canEdit } = useAuth()
   const live = settings.chartGroups ?? EMPTY
   const [tab, setTab] = useState<'asset' | 'type'>(initialTab)
   const [draft, setDraft] = useState<ChartGroups>(() => clone(live))
@@ -131,6 +135,10 @@ export function ChartGroupsModal({
   const dirty = JSON.stringify(draft) !== JSON.stringify(live)
 
   const handleSave = async () => {
+    if (!canEdit) {
+      setError('Sign in to change chart groups.')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -246,7 +254,13 @@ export function ChartGroupsModal({
           <button type="button" className="btn-outline" onClick={onClose} disabled={saving}>
             Discard
           </button>
-          <button type="button" className="btn-primary" onClick={handleSave} disabled={!dirty || saving}>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleSave}
+            disabled={!dirty || saving || !canEdit}
+            title={canEdit ? undefined : 'Sign in to change chart groups'}
+          >
             {saving ? 'Saving…' : 'Save'}
           </button>
         </>

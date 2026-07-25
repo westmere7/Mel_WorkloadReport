@@ -306,18 +306,22 @@ export function Dashboard() {
           </span>
         </button>
       )}
-      <button
-        type="button"
-        onClick={() => {
-          setChartGroupsTab(openTab)
-          setChartGroupsOpen(true)
-        }}
-        title="Chart display settings — group items to declutter this chart"
-        aria-label="Chart display settings"
-        className="rounded-md p-1 text-faint transition hover:bg-subtle hover:text-ink"
-      >
-        <Settings2 className="h-4 w-4" />
-      </button>
+      {/* Editing the group DEFINITIONS writes shared settings — sign-in only. The
+          local Group toggle above stays available to everyone. */}
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => {
+            setChartGroupsTab(openTab)
+            setChartGroupsOpen(true)
+          }}
+          title="Chart display settings — group items to declutter this chart"
+          aria-label="Chart display settings"
+          className="rounded-md p-1 text-faint transition hover:bg-subtle hover:text-ink"
+        >
+          <Settings2 className="h-4 w-4" />
+        </button>
+      )}
     </div>
   )
   const demandHasGroups = (demandDim === 'asset' ? rawAssetGroups : rawTypeGroups).length > 0
