@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, ArrowRightLeft, Check, ChevronDown, Download, ExternalLink, FlaskConical, Loader2, Lock, Pencil, Plus, RotateCcw, Settings2, Tag, Timer, Trash2, Users, X } from 'lucide-react'
+import { AlertTriangle, Archive, ArrowRightLeft, ArrowUpDown, Check, ChevronDown, Download, ExternalLink, FlaskConical, Loader2, Lock, Pencil, Plus, RotateCcw, Settings2, Tag, Timer, Trash2, Users, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -21,7 +21,10 @@ import {
   RATE_UNITS,
   rateUnitLabel,
   formatRatePerUnit,
+  hoursPerUnit,
+  effortHeatColor,
   HOURS_PER_WORKING_DAY,
+  WORKING_DAYS_PER_WEEK,
 } from '../constants'
 import { cx, toMessage } from '../lib/format'
 import { isMondayLookupEnabled } from '../lib/monday'
@@ -123,7 +126,11 @@ export function SettingsPage() {
           />
         </PrefRow>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {/* `items-start` keeps each panel at its natural height. Stretching them
+            to the tallest sibling (Task sizes, which carries the Output rates
+            section) left dead space under the shorter lists — and their scroll
+            fade floating in the middle of the card instead of on its bottom edge. */}
+        <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
           <ListEditor
             title="Squads"
             description="Requesting stakeholder teams. DOM & INTON are locked (used by the demand chart) but their keywords stay editable."
@@ -756,9 +763,14 @@ function SnapshotsCard() {
   )
 }
 
-/** Editable per-size turnaround (days) used to auto-fill a task's end date. */
+/** Editable per-size turnaround (days) used to auto-fill a task's end date, plus
+ *  the experimental per-asset-type output rates (both are "how long work takes"
+ *  settings, so they sit in the same card). */
 function SizeDurationsCard() {
   const { settings, saveSettings } = useStore()
+  // Output-rates pop-up (experimental, recorded only — see AssetRatesModal).
+  const [ratesOpen, setRatesOpen] = useState(false)
+  const rateCount = settings.assetTypes.filter((t) => (settings.assetRates ?? {})[t] !== undefined).length
   const toDraft = () =>
     Object.fromEntries(SIZES.map((s) => [s, String(settings.sizeDurations[s])])) as Record<Size, string>
   const [draft, setDraft] = useState<Record<Size, string>>(toDraft)
@@ -853,6 +865,34 @@ function SizeDurationsCard() {
           {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
+
+      {/* Output rates — how many of each asset type we finish in how long.
+          EXPERIMENTAL: recorded only, no calculation reads it (see
+          AssetRatesModal). Keyed by asset type, but it belongs with the other
+          "how long does work take" settings rather than the asset-type LIST. */}
+      <div className="mt-4 border-t border-line pt-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h4 className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
+              <Timer className="h-3.5 w-3.5 shrink-0 text-accent-plum" />
+              Output rates
+              <Badge tone="plum">Experimental</Badge>
+            </h4>
+            <p className="mt-1 text-xs leading-relaxed text-muted">
+              Roughly how many of each asset type we finish, and in how long — so a banner isn&rsquo;t counted
+              as the same amount of work as a photo edit. Recorded only for now; no number in the app changes.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRatesOpen(true)}
+            className="btn-outline h-8 shrink-0 px-3 text-xs"
+          >
+            {rateCount > 0 ? `Edit rates · ${rateCount}/${settings.assetTypes.length}` : 'Set rates'}
+          </button>
+        </div>
+      </div>
+      <AssetRatesModal open={ratesOpen} onClose={() => setRatesOpen(false)} />
     </Card>
   )
 }
@@ -1164,6 +1204,74 @@ function BoardNameInput({ value, onCommit }: { value: string; onCommit: (v: stri
 type RateDraft = { qty: string; every: string; per: RatePer }
 
 /**
+ * Number field for the output-rate rows. Mouse-wheel steps the value (±1, ±10
+ * with Shift) whenever the pointer is over the field — no focus or click needed.
+ * The listener is registered natively with `passive: false`: React routes wheel
+ * events through a passive root listener, so an onWheel prop couldn't
+ * preventDefault and the surrounding list would scroll instead of the value
+ * changing. NB the flip side of hover-stepping is that the wheel can't scroll the
+ * list while the pointer sits on a field — move off the inputs to scroll.
+ */
+function RateNumberInput({
+  value,
+  onValue,
+  onEnter,
+  min,
+  ariaLabel,
+  className,
+  placeholder,
+}: {
+  value: string
+  onValue: (next: string) => void
+  onEnter: () => void
+  min: number
+  ariaLabel: string
+  className: string
+  placeholder?: string
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  // Latest callback in a ref so the listener is registered once, not per render.
+  const emit = useRef(onValue)
+  emit.current = onValue
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const current = Number(el.value)
+      const base = el.value.trim() === '' || !Number.isFinite(current) ? min : current
+      const step = e.shiftKey ? 10 : 1
+      const next = base + (e.deltaY < 0 ? step : -step)
+      emit.current(String(Math.max(min, Math.round(next * 100) / 100)))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [min])
+
+  return (
+    <input
+      ref={ref}
+      type="number"
+      min={min}
+      step="any"
+      inputMode="decimal"
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      className={className}
+      value={value}
+      onChange={(e) => onValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          onEnter()
+        }
+      }}
+    />
+  )
+}
+
+/**
  * Output rates per asset type — "how many assets in how long" (e.g. 300 images
  * per day, or 1 publication per 3 days).
  *
@@ -1193,7 +1301,10 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
 
   // Re-seed each time the pop-up opens, and if the stored rates change under it.
   useEffect(() => {
-    if (open) setDraft(toDraft())
+    if (open) {
+      setDraft(toDraft())
+      setManualOrder(null) // every visit starts A–Z
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, settings.assetRates, settings.assetTypes])
 
@@ -1222,6 +1333,46 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, assetTypes])
 
+  /** Hours one unit takes for a row's CURRENT draft (0 = unrated). */
+  const rowHours = (name: string) => hoursPerUnit(parseRow(draft[name]) ?? undefined)
+
+  /**
+   * Scale for the inline effort bars — the slowest rated type fills its bar and
+   * every other type is drawn in proportion, so the gap between a photo edit and
+   * a publication is visible right where the numbers are typed. Needs two rates
+   * before there's any relationship worth drawing.
+   */
+  const scale = useMemo(() => {
+    const rated = assetTypes.map(rowHours).filter((h) => h > 0)
+    if (rated.length < 2) return null
+    return { slowest: Math.max(...rated) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, assetTypes])
+
+  /**
+   * Row order. null = alphabetical. Sorting is a FROZEN snapshot taken when the
+   * button is pressed, never derived live from the draft — re-ranking rows out
+   * from under someone mid-edit would move the field they're typing in.
+   */
+  const [manualOrder, setManualOrder] = useState<string[] | null>(null)
+  const orderedTypes = useMemo(() => {
+    if (!manualOrder) return assetTypes
+    const rank = new Map(manualOrder.map((n, i) => [n, i]))
+    // Types added since the snapshot have no rank — they fall to the end, A–Z.
+    return [...assetTypes].sort(
+      (a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity) || a.localeCompare(b),
+    )
+  }, [assetTypes, manualOrder])
+
+  /** Freeze the current effort ranking, slowest first; unrated types sink last. */
+  const sortByEffort = () =>
+    setManualOrder(
+      assetTypes
+        .map((name) => ({ name, hours: rowHours(name) }))
+        .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name))
+        .map((r) => r.name),
+    )
+
   const same = (a: AssetRate | undefined, b: AssetRate | undefined) =>
     (!a && !b) || (!!a && !!b && a.qty === b.qty && a.every === b.every && a.per === b.per)
   const dirty = assetTypes.some((n) => !same(next[n], stored[n]))
@@ -1242,7 +1393,7 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
     <Modal
       open={open}
       onClose={onClose}
-      widthClass="max-w-5xl"
+      widthClass="max-w-7xl"
       title={
         <span className="flex items-center gap-2">
           <Timer className="h-4 w-4 text-accent-plum" />
@@ -1289,13 +1440,16 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
               compared fairly.
             </p>
             <p>
+              <strong className="text-ink">What to enter.</strong> Roughly how many of that asset type{' '}
+              <em>one person</em> finishes in a given stretch of time, for a typical job of that kind. Count
+              hands-on working time only — leave out waiting on feedback, approvals, or assets from someone
+              else. Use whichever span reads most naturally: &ldquo;300 per 1 day&rdquo; or &ldquo;1 per 3
+              days&rdquo;.
+            </p>
+            <p>
               <strong className="text-ink">Rough is fine.</strong> What matters is the gap between 30 minutes
               and 3 days, not 40 minutes versus 45. Leave anything you&rsquo;re unsure about blank — a blank
               rate is recorded as &ldquo;not specified&rdquo;, which is more useful to us than a guess.
-            </p>
-            <p className="text-faint">
-              The &ldquo;≈ each&rdquo; estimate beside a rate assumes a {HOURS_PER_WORKING_DAY}-hour working
-              day. It&rsquo;s shown only to help you sanity-check what you typed — it isn&rsquo;t stored.
             </p>
           </div>
         </div>
@@ -1306,21 +1460,50 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
           </p>
         ) : (
           <div className="flex min-w-0 flex-col">
-            <div className="mb-1.5 flex items-center gap-2 px-2.5 text-[10px] font-semibold uppercase tracking-wide text-faint">
+            {/* Sorting is explicit: ranking rows live as the numbers change would
+                shift the field under the cursor mid-edit. */}
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] text-faint">
+                {scale
+                  ? 'Bars are to scale against the slowest rated type. Hover a field and scroll to nudge it (Shift for ±10).'
+                  : 'Rate two or more types to see how they compare.'}
+              </span>
+              <button
+                type="button"
+                onClick={manualOrder ? () => setManualOrder(null) : sortByEffort}
+                className="btn-outline flex h-7 shrink-0 items-center gap-1.5 px-2.5 text-[11px]"
+                title={
+                  manualOrder
+                    ? 'Back to alphabetical order'
+                    : 'Reorder the rows by effort, slowest first (a one-off — rows never move while you type)'
+                }
+              >
+                <ArrowUpDown className="h-3 w-3" />
+                {manualOrder ? 'Sort A–Z' : 'Sort by effort'}
+              </button>
+            </div>
+            <div className="mb-1.5 flex items-center gap-2.5 px-2.5 text-[10px] font-semibold uppercase tracking-wide text-faint">
               <span className="min-w-0 flex-1">Asset type</span>
-              <span className="w-[13.5rem] shrink-0">Assets per time</span>
-              <span className="w-24 shrink-0 text-right">Works out as</span>
+              <span className="w-[16.75rem] shrink-0">Assets per time</span>
+              <span
+                className="w-40 shrink-0"
+                title={`Bar length is to scale against the slowest rated type; colour is a heat scale from under 15 min (cool) to over 3 days (hot). Assumes a ${HOURS_PER_WORKING_DAY}-hour working day and a ${WORKING_DAYS_PER_WEEK}-day week.`}
+              >
+                Relative effort
+              </span>
+              <span className="w-[5.5rem] shrink-0 text-right">Works out as</span>
               <span className="w-6 shrink-0" />
             </div>
             <ul ref={listRef} className="max-h-[30rem] space-y-1 overflow-y-auto">
-              {assetTypes.map((name) => {
+              {orderedTypes.map((name) => {
                 const row = draft[name] ?? { qty: '', every: '1', per: 'day' as RatePer }
                 const parsed = parseRow(row)
                 const everyNum = Number(row.every) || 1
+                const hours = parsed ? hoursPerUnit(parsed) : 0
                 return (
                   <li
                     key={name}
-                    className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-1"
+                    className="flex items-center gap-2.5 rounded-lg border border-line px-2.5 py-1"
                   >
                     <span className="flex min-w-0 flex-1 items-center gap-2">
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent-green" />
@@ -1328,44 +1511,28 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
                         {name}
                       </span>
                     </span>
-                    <span className="flex w-[13.5rem] shrink-0 items-center gap-1.5">
-                      <input
-                        type="number"
+                    <span className="flex w-[16.75rem] shrink-0 items-center gap-1.5">
+                      <RateNumberInput
                         min={0}
-                        step="any"
-                        inputMode="decimal"
                         placeholder="—"
-                        aria-label={`${name} — assets produced`}
-                        className="input h-7 w-16 px-2 py-0 text-right text-sm"
+                        ariaLabel={`${name} — assets produced`}
+                        className="input input-stepper h-8 w-[4.25rem] px-2 py-0 text-right text-sm"
                         value={row.qty}
-                        onChange={(e) => set(name, { qty: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            void save()
-                          }
-                        }}
+                        onValue={(qty) => set(name, { qty })}
+                        onEnter={() => void save()}
                       />
-                      <span className="text-[11px] text-muted">per</span>
-                      <input
-                        type="number"
+                      <span className="shrink-0 text-[11px] text-muted">per</span>
+                      <RateNumberInput
                         min={1}
-                        step="any"
-                        inputMode="decimal"
-                        aria-label={`${name} — length of the time span`}
-                        className="input h-7 w-12 px-2 py-0 text-right text-sm"
+                        ariaLabel={`${name} — length of the time span`}
+                        className="input input-stepper h-8 w-[4rem] px-2 py-0 text-right text-sm"
                         value={row.every}
-                        onChange={(e) => set(name, { every: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            void save()
-                          }
-                        }}
+                        onValue={(every) => set(name, { every })}
+                        onEnter={() => void save()}
                       />
                       <select
                         aria-label={`${name} — time unit`}
-                        className="h-7 min-w-0 flex-1 rounded-lg border border-line bg-card px-1.5 text-xs text-ink outline-none focus:border-rmit-red"
+                        className="h-8 min-w-0 flex-1 rounded-lg border border-line bg-card px-1.5 text-xs text-ink outline-none focus:border-rmit-red"
                         value={row.per}
                         onChange={(e) => set(name, { per: e.target.value as RatePer })}
                       >
@@ -1376,11 +1543,28 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
                         ))}
                       </select>
                     </span>
+                    {/* Effort bar — this row's time per unit against the slowest
+                        rated type, so the relationship between the asset types is
+                        visible right where the numbers are entered. */}
+                    <span className="h-2.5 w-40 shrink-0 overflow-hidden rounded-full bg-subtle">
+                      {scale && hours > 0 && (
+                        <span
+                          className="block h-full rounded-full"
+                          // Floored at 2px so a type that really is 3000× quicker
+                          // is still visible instead of vanishing to zero width.
+                          style={{
+                            width: `${(hours / scale.slowest) * 100}%`,
+                            minWidth: '2px',
+                            backgroundColor: effortHeatColor(hours),
+                          }}
+                        />
+                      )}
+                    </span>
                     {/* Implied time for one unit — a sanity check on the numbers
                         to the left, not a stored value. */}
                     <span
                       className={cx(
-                        'w-24 shrink-0 truncate text-right text-[11px]',
+                        'w-[5.5rem] shrink-0 truncate text-right text-[11px]',
                         parsed ? 'text-muted' : 'text-faint',
                       )}
                     >
@@ -1406,6 +1590,7 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
           </div>
         )}
       </div>
+
     </Modal>
   )
 }
@@ -1418,16 +1603,12 @@ function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void
 function TypesCard() {
   const { settings, saveSettings, tasks, renameListItem, removeListItem } = useStore()
   const [tab, setTab] = useState<'types' | 'assetTypes'>('types')
-  // Output-rates pop-up (experimental, recorded only) — Asset types tab.
-  const [ratesOpen, setRatesOpen] = useState(false)
   const isTypes = tab === 'types'
   const mutate = (key: 'types' | 'assetTypes', next: string[]) => void saveSettings({ ...settings, [key]: next })
   const usage = (key: 'types' | 'assetTypes', v: string) =>
     key === 'types'
       ? tasks.filter((t) => t.types.includes(v)).length
       : tasks.filter((t) => (t.assetBreakdown[v] ?? 0) > 0).length
-  // How many asset types already have an output rate recorded (button label).
-  const rateCount = settings.assetTypes.filter((t) => (settings.assetRates ?? {})[t] !== undefined).length
 
   const TabBtn = ({ value, label }: { value: 'types' | 'assetTypes'; label: string }) => (
     <button
@@ -1464,50 +1645,20 @@ function TypesCard() {
           usage={(v) => usage('types', v)}
         />
       ) : (
-        <>
-          <ListEditor
-            bare
-            hideHeading
-            title="Asset types"
-            dotColor="bg-accent-green"
-            description="Deliverable types counted in the asset breakdown. Each function picks which to show."
-            items={settings.assetTypes}
-            fallback={FALLBACK_ITEM}
-            allowRemoveUsed={settings.allowRemoveUsed}
-            onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
-            onRemove={(v) => removeListItem('assetTypes', v)}
-            onRename={(o, n) => renameListItem('assetTypes', o, n)}
-            usage={(v) => usage('assetTypes', v)}
-          />
-
-          {/* Output rates — how many of each asset type we finish in how long.
-              EXPERIMENTAL: recorded only, no calculation reads it (see
-              AssetRatesModal). Lives here because it's per asset type. */}
-          <div className="mt-4 border-t border-line pt-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h4 className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
-                  <Timer className="h-3.5 w-3.5 shrink-0 text-accent-plum" />
-                  Output rates
-                  <Badge tone="plum">Experimental</Badge>
-                </h4>
-                <p className="mt-1 text-xs leading-relaxed text-muted">
-                  Roughly how many of each asset type we finish, and in how long — so a banner isn&rsquo;t
-                  counted as the same amount of work as a photo edit. Recorded only for now; no number in the
-                  app changes.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setRatesOpen(true)}
-                className="btn-outline h-8 shrink-0 px-3 text-xs"
-              >
-                {rateCount > 0 ? `Edit rates · ${rateCount}/${settings.assetTypes.length}` : 'Set rates'}
-              </button>
-            </div>
-          </div>
-          <AssetRatesModal open={ratesOpen} onClose={() => setRatesOpen(false)} />
-        </>
+        <ListEditor
+          bare
+          hideHeading
+          title="Asset types"
+          dotColor="bg-accent-green"
+          description="Deliverable types counted in the asset breakdown. Each function picks which to show."
+          items={settings.assetTypes}
+          fallback={FALLBACK_ITEM}
+          allowRemoveUsed={settings.allowRemoveUsed}
+          onAdd={(v) => mutate('assetTypes', [...settings.assetTypes, v])}
+          onRemove={(v) => removeListItem('assetTypes', v)}
+          onRename={(o, n) => renameListItem('assetTypes', o, n)}
+          usage={(v) => usage('assetTypes', v)}
+        />
       )}
     </Card>
   )

@@ -142,6 +142,20 @@
     @apply ring-brand-500/25;
   }
 
+  /* Number input whose up/down arrows are a real click target: browsers hide the
+     spinner until hover and draw it only a few pixels tall, which is unusable in
+     a compact row. Force it always-visible, full-height and wider. Add
+     `input-stepper` to a type="number" .input; Firefox has no spinner to style,
+     so it just falls back to its own default control. */
+  .input-stepper::-webkit-outer-spin-button,
+  .input-stepper::-webkit-inner-spin-button {
+    opacity: 1;
+    height: 100%;
+    width: 1.15rem;
+    margin: 0 0 0 0.375rem;
+    cursor: pointer;
+  }
+
   .label {
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted;
   }

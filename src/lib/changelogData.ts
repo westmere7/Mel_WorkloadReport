@@ -32,7 +32,7 @@ export const CHANGELOG: Release[] = [
     notes: [
       {
         kind: 'new',
-        text: 'Output rates — record roughly how many of each asset type the team finishes, and in how long (e.g. 300 statics per 1 day, or 1 publication per 3 days). Open it from Settings → Groups → Asset types → “Set rates”. Nothing uses these yet: every dashboard number, chart and export still counts each asset as 1. We’re collecting the data so an effort-weighted view of workload can be built on it — today a banner and a photo edit count the same, which flatters whoever produces the lighter assets.',
+        text: 'Output rates — record roughly how many of each asset type the team finishes, and in how long: “300 per 1 day”, “1 per 2 weeks”, per hour, day or week. Open it from Settings → Groups → Task sizes → “Set rates”. Each row draws a heat-mapped bar to scale, so the gap between a photo edit and a publication is visible as you type, with a one-off “Sort by effort” button (rows never re-rank mid-edit). Nothing uses these yet: every dashboard number, chart and export still counts each asset as 1. We’re collecting the data so an effort-weighted view of workload can be built on it — today a banner and a photo edit count the same, which flatters whoever produces the lighter assets.',
       },
     ],
   },

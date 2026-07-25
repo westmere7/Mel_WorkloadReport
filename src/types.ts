@@ -16,7 +16,7 @@ export type Size = 'XS' | 'S' | 'M' | 'L' | 'XL'
 export type AssetBreakdown = Record<string, number>
 
 /** Time base a production rate is expressed against. */
-export type RatePer = 'hour' | 'day'
+export type RatePer = 'hour' | 'day' | 'week'
 
 /**
  * Approximate production rate for ONE asset type — how many units the team

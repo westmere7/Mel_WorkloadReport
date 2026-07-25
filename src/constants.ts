@@ -73,12 +73,13 @@ export const DEFAULT_ASSET_TYPES: string[] = ['Image', 'Video', 'Publication', '
 // ── Asset output rates (experimental, recorded only) ─────────────────────────
 
 /** Time bases an output rate can be expressed against, in picker order. */
-export const RATE_UNITS: RatePer[] = ['hour', 'day']
+export const RATE_UNITS: RatePer[] = ['hour', 'day', 'week']
 
 /** Singular/plural labels for the rate unit picker. */
 export const RATE_UNIT_LABELS: Record<RatePer, { one: string; many: string }> = {
   hour: { one: 'hour', many: 'hours' },
   day: { one: 'day', many: 'days' },
+  week: { one: 'week', many: 'weeks' },
 }
 
 /** The `per` unit pluralised for a span length, e.g. (2, 'day') → "days". */
@@ -92,6 +93,16 @@ export function rateUnitLabel(every: number, per: RatePer): string {
  * next to a rate so a typo is obvious, and nothing else.
  */
 export const HOURS_PER_WORKING_DAY = 8
+
+/** Working days assumed in one week, for the same display-only translation. */
+export const WORKING_DAYS_PER_WEEK = 5
+
+/** Hours in one unit of each time base — display-only, see HOURS_PER_WORKING_DAY. */
+const RATE_UNIT_HOURS: Record<RatePer, number> = {
+  hour: 1,
+  day: HOURS_PER_WORKING_DAY,
+  week: HOURS_PER_WORKING_DAY * WORKING_DAYS_PER_WEEK,
+}
 
 /**
  * Coerce a stored asset-rates value into a clean map: name → { qty, every, per }.
@@ -110,9 +121,20 @@ export function normalizeAssetRates(raw: unknown): AssetRates {
     const every = rec.every === undefined ? 1 : Number(rec.every)
     if (!Number.isFinite(qty) || qty <= 0) continue
     if (!Number.isFinite(every) || every <= 0) continue
-    out[name] = { qty, every, per: rec.per === 'hour' ? 'hour' : 'day' }
+    const per = RATE_UNITS.includes(rec.per as RatePer) ? (rec.per as RatePer) : 'day'
+    out[name] = { qty, every, per }
   }
   return out
+}
+
+/**
+ * Hours ONE unit takes at this rate. DISPLAY ONLY — it drives the "≈ each" hint
+ * and the relative-effort bars in Settings, and is deliberately NOT used by any
+ * workload total (see the AssetRate docs). 0 for a missing/invalid rate.
+ */
+export function hoursPerUnit(rate: AssetRate | undefined): number {
+  if (!rate || rate.qty <= 0 || rate.every <= 0) return 0
+  return (rate.every * RATE_UNIT_HOURS[rate.per]) / rate.qty
 }
 
 /**
@@ -121,16 +143,20 @@ export function normalizeAssetRates(raw: unknown): AssetRates {
  */
 export function formatRatePerUnit(rate: AssetRate | undefined): string {
   if (!rate || rate.qty <= 0 || rate.every <= 0) return ''
-  const spanHours = rate.every * (rate.per === 'hour' ? 1 : HOURS_PER_WORKING_DAY)
-  const hours = spanHours / rate.qty
+  const hours = hoursPerUnit(rate)
   if (hours < 1 / 60) return '≈ under a minute each'
   if (hours < 1) return `≈ ${Math.round(hours * 60)} min each`
   if (hours <= HOURS_PER_WORKING_DAY) {
     const rounded = Math.round(hours * 10) / 10
     return `≈ ${rounded} ${rounded === 1 ? 'hour' : 'hours'} each`
   }
-  const days = Math.round((hours / HOURS_PER_WORKING_DAY) * 10) / 10
-  return `≈ ${days} ${days === 1 ? 'day' : 'days'} each`
+  const days = hours / HOURS_PER_WORKING_DAY
+  if (days <= WORKING_DAYS_PER_WEEK) {
+    const rounded = Math.round(days * 10) / 10
+    return `≈ ${rounded} ${rounded === 1 ? 'day' : 'days'} each`
+  }
+  const weeks = Math.round((days / WORKING_DAYS_PER_WEEK) * 10) / 10
+  return `≈ ${weeks} ${weeks === 1 ? 'week' : 'weeks'} each`
 }
 
 // ── GCMC functions (per-function workload slices) ────────────────────────────
@@ -516,6 +542,19 @@ export const SIZE_COLORS: Record<Size, string> = {
   M: '#FFB81C',
   L: '#F58220',
   XL: '#E61E2A',
+}
+
+/**
+ * Heat colour for a per-unit effort, reusing the size heat scale (cool → hot).
+ * Bands are ABSOLUTE durations, not relative to the other rates, so a bar keeps
+ * its colour while a different asset type is being edited. Display only.
+ */
+export function effortHeatColor(hours: number): string {
+  if (hours < 0.25) return SIZE_COLORS.XS // under 15 minutes
+  if (hours < 1) return SIZE_COLORS.S // under an hour
+  if (hours < HOURS_PER_WORKING_DAY) return SIZE_COLORS.M // under a day
+  if (hours < HOURS_PER_WORKING_DAY * 3) return SIZE_COLORS.L // under three days
+  return SIZE_COLORS.XL
 }
 
 /** Badge tone per size (matches Badge `Tone` values). */
