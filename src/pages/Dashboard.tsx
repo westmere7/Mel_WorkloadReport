@@ -191,6 +191,13 @@ export function Dashboard() {
   // The task currently under the pointer on the workload chart — shown live in
   // the card's top-right corner in place of the year.
   const [hoverTask, setHoverTask] = useState<Task | null>(null)
+  // How many GCMC functions recorded workload on the hovered task. A legacy task
+  // (no per-function slices) belongs wholly to the legacy function, so it counts 1.
+  const hoverFnCount = hoverTask
+    ? hoverTask.functionData
+      ? Object.keys(hoverTask.functionData).length
+      : 1
+    : 0
   // Clicking a workload dot opens this task's read-only details, without leaving
   // the dashboard. Signed-in editors can jump from there into the edit form
   // (editTask) — and a delete confirm (deleteTask) — right on the dashboard.
@@ -602,6 +609,8 @@ export function Dashboard() {
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted">
                         {hoverTask.assetTotal} {hoverTask.assetTotal === 1 ? 'asset' : 'assets'} ·{' '}
                         {hoverTask.people.length} {hoverTask.people.length === 1 ? 'person' : 'people'} ·{' '}
+                        {/* Functions recording workload on this task (legacy tasks = 1). */}
+                        {hoverFnCount} {hoverFnCount === 1 ? 'function' : 'functions'} ·{' '}
                         <span
                           className="inline-block rounded-full px-1.5 py-px font-semibold"
                           style={{
