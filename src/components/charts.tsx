@@ -938,6 +938,7 @@ const DOT_R = 3.5 // task-dot radius in px
 const DOT_R_HOT = 6 // hovered task-dot radius
 const DOT_R_COMPARE = 2.25 // smaller radius for the two overlaid year sets in compare mode
 const COL_STAGGER_MS = 700 // total left→right entry-animation spread
+const CYCLE_R = 44 // px radius of the Shift+wheel "cycle through nearby dots" pool
 
 /**
  * One dot per task, scattered under the workload line: x = the task's true
@@ -980,6 +981,38 @@ function TaskDotsLayer({
       their day-of-year fraction onto [0, xScaleMax] → full plot width. */
   xScaleMax?: number
 }) {
+  // Hooks must run before the early return below.
+  const hitRef = useRef<SVGRectElement>(null)
+  const ptrRef = useRef<{ x: number; y: number } | null>(null)
+  // Latest render values for the native wheel listener (kept in a ref so the
+  // listener is attached once instead of on every render).
+  const liveRef = useRef<{
+    candidatesAt: (x: number, y: number, box: DOMRect) => { t: Task }[]
+    hoveredId: string | null | undefined
+    onHover?: (task: Task | null) => void
+  }>({ candidatesAt: () => [], hoveredId: null, onHover: undefined })
+
+  // Shift + wheel steps through the dots under the pointer — the only way to reach
+  // ones hidden beneath others. Plain wheel is left alone so the page still
+  // scrolls (non-passive listener because we preventDefault only when cycling).
+  useEffect(() => {
+    const el = hitRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.shiftKey) return // plain scroll belongs to the page
+      const p = ptrRef.current ?? { x: e.clientX, y: e.clientY }
+      const cands = liveRef.current.candidatesAt(p.x, p.y, el.getBoundingClientRect())
+      if (cands.length < 2) return // nothing to disambiguate — let the page scroll
+      e.preventDefault()
+      const dir = e.deltaY > 0 || e.deltaX > 0 ? 1 : -1
+      const cur = cands.findIndex((c) => c.t.id === liveRef.current.hoveredId)
+      const next = cands[(((cur < 0 ? 0 : cur + dir) % cands.length) + cands.length) % cands.length]
+      if (next) liveRef.current.onHover?.(next.t)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [interactive])
+
   if (!offset || !tasks.length || maxVal <= 0) return null
   const { left, top, width, height: plotH } = offset
   const minX = left + radius
@@ -1020,6 +1053,21 @@ function TaskDotsLayer({
     }
     return best
   }
+
+  // Every dot within CYCLE_R of the pointer, nearest first — the pool Shift+wheel
+  // steps through so dots buried under others are still reachable.
+  const candidatesAt = (clientX: number, clientY: number, box: DOMRect) => {
+    const mx = left + (clientX - box.left)
+    const my = top + (clientY - box.top)
+    const R2 = CYCLE_R * CYCLE_R
+    return placed
+      .map((c) => ({ c, d: (c.cx - mx) ** 2 + (c.cy - my) ** 2 }))
+      .filter((x) => x.d <= R2)
+      .sort((a, b) => a.d - b.d)
+      .map((x) => x.c)
+  }
+  // Keep the wheel listener reading this render's data.
+  liveRef.current = { candidatesAt, hoveredId, onHover }
 
   return (
     <g>
@@ -1069,6 +1117,7 @@ function TaskDotsLayer({
           the pointer or the target-year layer's own hit testing. */}
       {interactive && (
         <rect
+          ref={hitRef}
           x={left}
           y={top}
           width={width}
@@ -1076,11 +1125,15 @@ function TaskDotsLayer({
           fill="transparent"
           className="cursor-pointer"
           onMouseMove={(e) => {
+            ptrRef.current = { x: e.clientX, y: e.clientY }
             const box = e.currentTarget.getBoundingClientRect()
             const c = nearest(e.clientX, e.clientY, box)
             if (c && c.t.id !== hoveredId) onHover?.(c.t)
           }}
-          onMouseLeave={() => onHover?.(null)}
+          onMouseLeave={() => {
+            ptrRef.current = null
+            onHover?.(null)
+          }}
           onClick={(e) => {
             const box = e.currentTarget.getBoundingClientRect()
             const c = nearest(e.clientX, e.clientY, box)
@@ -1168,6 +1221,8 @@ export function AreaTrendChart({
   const scatterTasks = compare ? [] : (tasks ?? []).filter(hasDot)
   const targetDots = compare ? (tasks ?? []).filter(hasDot) : []
   const sourceDots = compare ? (compare.tasks ?? []).filter(hasDot) : []
+  // Which dots belong to the SOURCE year — the merged compare layer colours by this.
+  const sourceIds = new Set(sourceDots.map((t) => t.id))
 
   const monthsWithData = data.filter((d) => d.value > 0).length
   const compareMonths = compare ? compare.data.filter((d) => d.value > 0).length : 0
@@ -1396,33 +1451,22 @@ export function AreaTrendChart({
             }
           />
         )}
-        {/* Compare mode: two small, display-only sets — source year first (below),
-            then the target year on top — each in its line's colour. No interaction. */}
-        {!isMobile && compare && sourceDots.length > 0 && (
+        {/* Compare mode: BOTH years in one layer, each dot in its own year's colour.
+            One layer (not two) because overlapping hit rects would let only the
+            upper one receive the pointer — merged, either year's tasks can be
+            hovered/clicked, and Shift+wheel cycles the whole overlapping pool. */}
+        {!isMobile && compare && (sourceDots.length > 0 || targetDots.length > 0) && (
           <Customized
             component={
               <TaskDotsLayer
-                tasks={sourceDots}
+                tasks={[...sourceDots, ...targetDots]}
                 maxVal={yTop}
-                colorFor={() => compareColor}
+                colorFor={(t) => (sourceIds.has(t.id) ? compareColor : WORKLOAD_LINE)}
                 radius={DOT_R_COMPARE}
-                interactive={false}
-                animKey={`src-${animKey}`}
-                xScaleMax={xMax}
-              />
-            }
-          />
-        )}
-        {!isMobile && compare && targetDots.length > 0 && (
-          <Customized
-            component={
-              <TaskDotsLayer
-                tasks={targetDots}
-                maxVal={yTop}
-                colorFor={() => WORKLOAD_LINE}
-                radius={DOT_R_COMPARE}
-                interactive={false}
-                animKey={`tgt-${animKey}`}
+                hoveredId={hoveredId}
+                onHover={setHover}
+                onPick={(t) => onTaskClick?.(t)}
+                animKey={`cmp-${animKey}`}
                 xScaleMax={xMax}
               />
             }

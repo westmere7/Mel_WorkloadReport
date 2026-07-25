@@ -611,7 +611,7 @@ export function Dashboard() {
           <Card className="flex min-h-0 flex-1 flex-col">
             <CardHeader
               title="Workload & tasks across the year"
-              subtitle="Assets per month · hover or click a dot for task details"
+              subtitle="Assets per month · hover or click a dot for task details · Shift + scroll to cycle overlapping dots"
               action={
                 // Fixed height so the header (and card) doesn't resize as the
                 // hover readout swaps in and out.
