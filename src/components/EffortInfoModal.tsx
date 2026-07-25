@@ -44,7 +44,7 @@ export function EffortInfoModal({
       <Modal
         open={open}
         onClose={onClose}
-        widthClass="max-w-3xl"
+        widthClass="max-w-5xl"
         title={
           <span className="flex items-center gap-2">
             Measuring workload by effort
@@ -76,20 +76,20 @@ export function EffortInfoModal({
             <dl className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-xl border border-line px-3 py-2.5">
                 <dt className="text-xs font-semibold text-ink">Assets</dt>
-                <dd className="mt-1 text-[11px] leading-relaxed text-muted">
+                <dd className="mt-1 text-xs leading-relaxed text-muted">
                   Counts every deliverable as one, so a banner and a photo edit weigh the same. A team making
                   many quick assets looks busier than one making a few slow ones.
                 </dd>
               </div>
               <div className="rounded-xl border border-line px-3 py-2.5">
                 <dt className="text-xs font-semibold text-ink">Effort</dt>
-                <dd className="mt-1 text-[11px] leading-relaxed text-muted">
+                <dd className="mt-1 text-xs leading-relaxed text-muted">
                   Multiplies each month&rsquo;s assets by how long that type takes to make. Shows how much work
                   a month was — the shape is the point, so the scale is unlabelled.
                 </dd>
               </div>
             </dl>
-            <p className="text-[11px] leading-relaxed text-faint">
+            <p className="text-xs leading-relaxed text-faint">
               Effort changes this chart only, and only for you. Every other card, export and stored total still
               counts each asset as one — the switch re-draws a line, it never edits data.
             </p>
@@ -113,16 +113,16 @@ export function EffortInfoModal({
             // Divider + heading keeps the data clearly separate from the prose.
             <div className="border-t border-line pt-4">
               <h4 className="text-sm font-semibold text-ink">How the asset types compare</h4>
-              <p className="mt-0.5 text-[11px] text-muted">
+              <p className="mt-0.5 text-xs text-muted">
                 Time one of each takes, drawn to scale and coloured from quick (cool) to slow (hot).
               </p>
-              <ul ref={listRef} className="mt-3 max-h-72 space-y-1 overflow-y-auto">
+              <ul ref={listRef} className="mt-3 max-h-[28rem] space-y-1.5 overflow-y-auto">
                 {rows.rated.map((r) => (
                   <li key={r.name} className="flex items-center gap-2.5">
-                    <span className="w-44 shrink-0 truncate text-xs font-medium text-ink" title={r.name}>
+                    <span className="w-56 shrink-0 truncate text-sm font-medium text-ink" title={r.name}>
                       {r.name}
                     </span>
-                    <span className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-subtle">
+                    <span className="h-3 min-w-0 flex-1 overflow-hidden rounded-full bg-subtle">
                       <span
                         className="block h-full rounded-full"
                         style={{
@@ -132,7 +132,7 @@ export function EffortInfoModal({
                         }}
                       />
                     </span>
-                    <span className="w-24 shrink-0 text-right text-[11px] text-muted">{r.label}</span>
+                    <span className="w-28 shrink-0 text-right text-xs text-muted">{r.label}</span>
                   </li>
                 ))}
               </ul>
