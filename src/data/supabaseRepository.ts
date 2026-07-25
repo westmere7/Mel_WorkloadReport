@@ -11,6 +11,7 @@ import {
   normalizeKeywordMap,
   normalizeMondayBoards,
   normalizeChartGroups,
+  normalizeAssetRates,
   normalizeSizeDurations,
 } from '../constants'
 import {
@@ -180,6 +181,12 @@ function isMissingKeywordsColumn(err: unknown): boolean {
 function isMissingChartGroupsColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
   return msg.includes('chart_groups') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** True if a Supabase error is complaining about a missing `asset_rates` column (pre-migration). */
+function isMissingAssetRatesColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('asset_rates') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
 /** True if a Supabase error is complaining about a missing `created_by` column (pre-migration). */
@@ -613,6 +620,7 @@ export class SupabaseRepository implements Repository {
       types: data.types ?? DEFAULT_SETTINGS.types,
       people: data.people ?? DEFAULT_SETTINGS.people,
       assetTypes: data.asset_types ?? DEFAULT_SETTINGS.assetTypes,
+      assetRates: normalizeAssetRates(data.asset_rates),
       sizeDurations: normalizeSizeDurations(data.size_durations),
       allowRemoveUsed: data.allow_remove_used ?? DEFAULT_SETTINGS.allowRemoveUsed,
       peopleMondayIds: data.people_monday ?? DEFAULT_SETTINGS.peopleMondayIds,
@@ -653,6 +661,7 @@ export class SupabaseRepository implements Repository {
       squad_keywords: settings.squadKeywords,
       campaign_keywords: settings.campaignKeywords,
       chart_groups: settings.chartGroups,
+      asset_rates: settings.assetRates,
     }
     let { data, error } = await upsert(payload)
     // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
@@ -667,6 +676,10 @@ export class SupabaseRepository implements Repository {
     }
     if (error && isMissingChartGroupsColumn(error)) {
       delete payload.chart_groups
+      ;({ data, error } = await upsert(payload))
+    }
+    if (error && isMissingAssetRatesColumn(error)) {
+      delete payload.asset_rates
       ;({ data, error } = await upsert(payload))
     }
     if (error && isMissingMondayBoardsColumn(error)) {
@@ -700,6 +713,7 @@ export class SupabaseRepository implements Repository {
       types: data.types,
       people: data.people,
       assetTypes: data.asset_types ?? settings.assetTypes,
+      assetRates: data.asset_rates ? normalizeAssetRates(data.asset_rates) : settings.assetRates,
       sizeDurations: normalizeSizeDurations(data.size_durations ?? settings.sizeDurations),
       allowRemoveUsed: data.allow_remove_used ?? settings.allowRemoveUsed,
       peopleMondayIds: data.people_monday ?? settings.peopleMondayIds,

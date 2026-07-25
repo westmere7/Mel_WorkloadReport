@@ -26,6 +26,17 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.8.0',
+    date: '2026-07-26',
+    title: 'Asset output rates (experimental)',
+    notes: [
+      {
+        kind: 'new',
+        text: 'Output rates — record roughly how many of each asset type the team finishes, and in how long (e.g. 300 statics per 1 day, or 1 publication per 3 days). Open it from Settings → Groups → Asset types → “Set rates”. Nothing uses these yet: every dashboard number, chart and export still counts each asset as 1. We’re collecting the data so an effort-weighted view of workload can be built on it — today a banner and a photo edit count the same, which flatters whoever produces the lighter assets.',
+      },
+    ],
+  },
+  {
     version: '0.7.0',
     date: '2026-07-24',
     title: 'Chart groups & task edit logs',

@@ -15,6 +15,35 @@ export type Size = 'XS' | 'S' | 'M' | 'L' | 'XL'
 /** Breakdown of the total asset count, keyed by asset-type name (editable in Settings). */
 export type AssetBreakdown = Record<string, number>
 
+/** Time base a production rate is expressed against. */
+export type RatePer = 'hour' | 'day'
+
+/**
+ * Approximate production rate for ONE asset type — how many units the team
+ * finishes per hour, or per day.
+ *
+ * EXPERIMENTAL / RECORDED ONLY. Nothing reads this yet: no dashboard number, no
+ * chart, no export column and no total changes because a rate is set. It exists
+ * so the real effort difference between asset types can be captured now (a team
+ * might finish 300 photo edits a day but only 1 banner every 2 days), giving a
+ * later weighted-workload measure something real to be built on. Until then the
+ * app keeps counting every asset as 1.
+ */
+export interface AssetRate {
+  /** Units finished in the `every` × `per` span. Always > 0 — an unset rate is an ABSENT key. */
+  qty: number
+  /** Length of the span, in `per` units — "3 assets per 2 days" is qty 3, every 2, per 'day'. Always > 0. */
+  every: number
+  per: RatePer
+}
+
+/**
+ * Production rates keyed by asset-type NAME (matches `AppSettings.assetTypes`;
+ * renames rewrite these keys and removals drop them, like the other name-keyed
+ * maps in the app). An absent key means "not specified".
+ */
+export type AssetRates = Record<string, AssetRate>
+
 /**
  * One GCMC function's slice of a task (Vietnam Design / Melbourne Design /
  * Production / Contents…). Work types, asset counts and an optional timeline are
@@ -170,6 +199,11 @@ export interface AppSettings {
   types: string[]
   people: string[]
   assetTypes: string[]
+  /**
+   * Approximate production rate per asset type (Settings → Asset types → Output
+   * rates). EXPERIMENTAL and recorded only — see `AssetRate`. Empty by default.
+   */
+  assetRates: AssetRates
   /** GCMC functions that record workload (task-form tabs). Order = tab order. */
   functions: FunctionConfig[]
   /** Days each task size adds to the start date when auto-filling the end date. */

@@ -143,6 +143,15 @@ alter table public.settings
 alter table public.settings
   add column if not exists chart_groups jsonb not null default '{"asset":[],"type":[]}'::jsonb;
 
+-- Approximate output rate per asset type: { "<asset type>": { "qty": 12, "per": "day" } }
+-- where `per` is 'hour' or 'day'. An absent key = not specified (never a stored 0).
+-- EXPERIMENTAL / RECORDED ONLY: no dashboard number, chart, export column or total
+-- reads this — the app still counts every asset as 1. It captures how much effort one
+-- unit of each asset type really takes (300 photo edits/day vs 2 banners/day) so a
+-- weighted workload measure can be built on real data later.
+alter table public.settings
+  add column if not exists asset_rates jsonb not null default '{}'::jsonb;
+
 -- GCMC functions that record workload (task-form tabs). Array of
 -- { name, color, workTypes, assetTypes }; order = tab order. The type lists are
 -- INCLUSIONS (only listed types appear on that tab); the seed offers the full

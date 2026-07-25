@@ -478,6 +478,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             },
           }
         }
+        // Carry an asset type's recorded output rate across a rename — it's keyed
+        // by NAME like the maps above, so it would orphan otherwise. On a merge
+        // into an existing type, that type's own rate wins.
+        if (key === 'assetTypes') {
+          const rates = { ...(prev.assetRates ?? {}) }
+          if (rates[oldValue] !== undefined) {
+            if (!dupe) rates[trimmed] = rates[oldValue]
+            delete rates[oldValue]
+            nextSettings = { ...nextSettings, assetRates: rates }
+          }
+        }
         void repo.saveSettings(nextSettings)
         return nextSettings
       })
@@ -536,6 +547,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               ),
             },
           }
+        }
+        // Drop the removed asset type's recorded output rate.
+        if (key === 'assetTypes' && (prev.assetRates ?? {})[value] !== undefined) {
+          const rates = { ...prev.assetRates }
+          delete rates[value]
+          nextSettings = { ...nextSettings, assetRates: rates }
         }
         void repo.saveSettings(nextSettings)
         return nextSettings

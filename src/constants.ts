@@ -1,4 +1,4 @@
-import type { Squad, Size, AppSettings, FunctionConfig, FunctionData, FunctionEntry, ChartGroup, ChartGroups } from './types'
+import type { Squad, Size, AppSettings, AssetRate, AssetRates, FunctionConfig, FunctionData, FunctionEntry, ChartGroup, ChartGroups, RatePer } from './types'
 
 /**
  * Default squads (stakeholders). Editable in Settings like the other lists — this
@@ -69,6 +69,69 @@ export const DEFAULT_PEOPLE: string[] = [
 
 /** Default asset (deliverable) types — editable in Settings. */
 export const DEFAULT_ASSET_TYPES: string[] = ['Image', 'Video', 'Publication', 'HTML5 ad', 'GIF / Motion']
+
+// ── Asset output rates (experimental, recorded only) ─────────────────────────
+
+/** Time bases an output rate can be expressed against, in picker order. */
+export const RATE_UNITS: RatePer[] = ['hour', 'day']
+
+/** Singular/plural labels for the rate unit picker. */
+export const RATE_UNIT_LABELS: Record<RatePer, { one: string; many: string }> = {
+  hour: { one: 'hour', many: 'hours' },
+  day: { one: 'day', many: 'days' },
+}
+
+/** The `per` unit pluralised for a span length, e.g. (2, 'day') → "days". */
+export function rateUnitLabel(every: number, per: RatePer): string {
+  return every === 1 ? RATE_UNIT_LABELS[per].one : RATE_UNIT_LABELS[per].many
+}
+
+/**
+ * Working hours assumed in one working day when translating a per-day rate into
+ * a per-unit time estimate. DISPLAY ONLY — it feeds the "≈ 40 min each" hint
+ * next to a rate so a typo is obvious, and nothing else.
+ */
+export const HOURS_PER_WORKING_DAY = 8
+
+/**
+ * Coerce a stored asset-rates value into a clean map: name → { qty, every, per }.
+ * Junk-tolerant like the other normalizers. Entries with a non-positive or
+ * non-finite qty/every are DROPPED, so "not specified" has exactly one
+ * representation (an absent key) and never a stored zero. A missing `every`
+ * reads as 1, so rates written before the span was configurable still load.
+ */
+export function normalizeAssetRates(raw: unknown): AssetRates {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out: AssetRates = {}
+  for (const [name, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!name.trim() || !v || typeof v !== 'object') continue
+    const rec = v as Partial<AssetRate>
+    const qty = Number(rec.qty)
+    const every = rec.every === undefined ? 1 : Number(rec.every)
+    if (!Number.isFinite(qty) || qty <= 0) continue
+    if (!Number.isFinite(every) || every <= 0) continue
+    out[name] = { qty, every, per: rec.per === 'hour' ? 'hour' : 'day' }
+  }
+  return out
+}
+
+/**
+ * The time ONE unit takes at this rate, as a friendly label ("≈ 40 min each").
+ * A sanity check for the person typing the rate — display only, never a total.
+ */
+export function formatRatePerUnit(rate: AssetRate | undefined): string {
+  if (!rate || rate.qty <= 0 || rate.every <= 0) return ''
+  const spanHours = rate.every * (rate.per === 'hour' ? 1 : HOURS_PER_WORKING_DAY)
+  const hours = spanHours / rate.qty
+  if (hours < 1 / 60) return '≈ under a minute each'
+  if (hours < 1) return `≈ ${Math.round(hours * 60)} min each`
+  if (hours <= HOURS_PER_WORKING_DAY) {
+    const rounded = Math.round(hours * 10) / 10
+    return `≈ ${rounded} ${rounded === 1 ? 'hour' : 'hours'} each`
+  }
+  const days = Math.round((hours / HOURS_PER_WORKING_DAY) * 10) / 10
+  return `≈ ${days} ${days === 1 ? 'day' : 'days'} each`
+}
 
 // ── GCMC functions (per-function workload slices) ────────────────────────────
 
@@ -359,6 +422,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   types: DEFAULT_TYPES,
   people: DEFAULT_PEOPLE,
   assetTypes: DEFAULT_ASSET_TYPES,
+  // No rates out of the box — every asset type starts "not specified".
+  assetRates: {},
   functions: DEFAULT_FUNCTIONS.map((f) => ({
     ...f,
     workTypes: [...f.workTypes],
