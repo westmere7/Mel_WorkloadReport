@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowUpDown, FlaskConical, Timer, X } from 'lucide-react'
 import { Badge } from './ui/Badge'
 import { Modal } from './ui/Modal'
@@ -21,13 +21,10 @@ import type { AssetRate, AssetRates, RatePer } from '../types'
 type RateDraft = { qty: string; every: string; per: RatePer }
 
 /**
- * Number field for the output-rate rows. Mouse-wheel steps the value (±1, ±10
- * with Shift) whenever the pointer is over the field — no focus or click needed.
- * The listener is registered natively with `passive: false`: React routes wheel
- * events through a passive root listener, so an onWheel prop couldn't
- * preventDefault and the surrounding list would scroll instead of the value
- * changing. NB the flip side of hover-stepping is that the wheel can't scroll the
- * list while the pointer sits on a field — move off the inputs to scroll.
+ * Number field for the output-rate rows: type, or use the (enlarged) spinner
+ * arrows. Deliberately NOT wheel-steppable — the rows sit in a scrollable list,
+ * so a wheel that edited values would rewrite rates while someone was just
+ * scrolling past, and would block scrolling whenever the pointer sat on a field.
  */
 function RateNumberInput({
   value,
@@ -46,29 +43,8 @@ function RateNumberInput({
   className: string
   placeholder?: string
 }) {
-  const ref = useRef<HTMLInputElement>(null)
-  // Latest callback in a ref so the listener is registered once, not per render.
-  const emit = useRef(onValue)
-  emit.current = onValue
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault()
-      const current = Number(el.value)
-      const base = el.value.trim() === '' || !Number.isFinite(current) ? min : current
-      const step = e.shiftKey ? 10 : 1
-      const next = base + (e.deltaY < 0 ? step : -step)
-      emit.current(String(Math.max(min, Math.round(next * 100) / 100)))
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [min])
-
   return (
     <input
-      ref={ref}
       type="number"
       min={min}
       step="any"
@@ -287,7 +263,7 @@ export function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () 
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] text-faint">
                 {scale
-                  ? 'Bars are to scale against the slowest rated type. Hover a field and scroll to nudge it (Shift for ±10).'
+                  ? 'Bars are to scale against the slowest rated type.'
                   : 'Rate two or more types to see how they compare.'}
               </span>
               <button
