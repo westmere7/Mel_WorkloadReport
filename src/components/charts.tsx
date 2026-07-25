@@ -565,9 +565,16 @@ export function RankedBars({
 }
 
 /** Horizontal category-axis tick that wraps long labels onto multiple lines. */
-function WrappedTick(props: { x?: number; y?: number; payload?: { value?: string | number } }) {
-  const { x = 0, y = 0, payload } = props
-  const words = String(payload?.value ?? '').split(' ')
+function WrappedTick(props: {
+  x?: number
+  y?: number
+  payload?: { value?: string | number }
+  /** Chart-group name → member items. Matching labels get the stack icon + tooltip. */
+  groups?: Record<string, string[]>
+}) {
+  const { x = 0, y = 0, payload, groups } = props
+  const label = String(payload?.value ?? '')
+  const words = label.split(' ')
   const lines: string[] = []
   let cur = ''
   for (const w of words) {
@@ -580,14 +587,26 @@ function WrappedTick(props: { x?: number; y?: number; payload?: { value?: string
     }
   }
   if (cur) lines.push(cur)
+  const members = groups?.[label]
+  // Icon sits centred just under the last label line (11px font: ~8px to the
+  // first baseline, ~11.5px per extra line).
+  const iconY = y + 8 + (lines.length - 1) * 11.5 + 3
   return (
-    <text x={x} y={y} textAnchor="middle" fontSize={11} fill="var(--chart-axis)">
-      {lines.map((line, i) => (
-        <tspan key={i} x={x} dy={i === 0 ? '0.72em' : '1.05em'}>
-          {line}
-        </tspan>
-      ))}
-    </text>
+    <>
+      <text x={x} y={y} textAnchor="middle" fontSize={11} fill="var(--chart-axis)">
+        {lines.map((line, i) => (
+          <tspan key={i} x={x} dy={i === 0 ? '0.72em' : '1.05em'}>
+            {line}
+          </tspan>
+        ))}
+      </text>
+      {members && (
+        <g>
+          <title>{`Group of ${members.length}: ${members.join(', ')}`}</title>
+          <Layers x={x - 6} y={iconY} width={12} height={12} stroke="var(--chart-axis)" strokeWidth={2} />
+        </g>
+      )}
+    </>
   )
 }
 
@@ -762,17 +781,26 @@ export function StackedBarChart({
   }
   if (rows.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
 
+  // Chart-group rows (merged by applyChartGroups) → axis labels get the stack icon.
+  // Read from `data`, since compare mode rebuilds `rows` without the metadata.
+  const axisGroups: Record<string, string[]> = {}
+  for (const r of data) {
+    if (r.isGroup) axisGroups[String(r.name)] = Array.isArray(r.groupItems) ? r.groupItems : []
+  }
+  const hasAxisGroups = Object.keys(axisGroups).length > 0
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={rows} stackOffset="expand" margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
         <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
         <XAxis
           dataKey="name"
-          tick={<WrappedTick />}
+          tick={<WrappedTick groups={axisGroups} />}
           axisLine={false}
           tickLine={false}
           interval={0}
-          height={52}
+          // Extra room for the group icon rendered under grouped labels.
+          height={hasAxisGroups ? 66 : 52}
         />
         <YAxis
           tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
