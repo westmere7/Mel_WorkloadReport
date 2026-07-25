@@ -262,6 +262,10 @@ function evalMath(input: string): number | null {
   return st.length === 1 && Number.isFinite(st[0]) ? st[0] : null
 }
 
+/** Roughly how tall the "+ Add" picker gets (input + max-h-52 list + padding),
+ *  used to decide whether it still fits below the button. */
+const PICKER_MAX_H = 260
+
 /**
  * Inline "+ Add" control for a function tab's Work-type / Asset-type lists. Opens
  * a small combobox to either PICK a master type this tab doesn't offer yet, or
@@ -286,11 +290,16 @@ function AddTypeInline({
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  // Open upwards when there isn't room below — the asset-type Add sits near the
+  // bottom of the function panel, so downwards would run off the viewport.
+  const [dropUp, setDropUp] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
+    const box = wrapRef.current?.getBoundingClientRect()
+    if (box) setDropUp(window.innerHeight - box.bottom < PICKER_MAX_H && box.top > PICKER_MAX_H)
     inputRef.current?.focus()
     const onDown = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
@@ -325,7 +334,12 @@ function AddTypeInline({
         Add
       </button>
       {open && (
-        <div className="absolute left-0 top-[calc(100%+4px)] z-50 w-60 rounded-xl border border-line bg-subtle p-1.5 shadow-2xl ring-1 ring-black/10 dark:ring-white/10">
+        <div
+          className={cx(
+            'absolute left-0 z-50 w-60 rounded-xl border border-line bg-subtle p-1.5 shadow-2xl ring-1 ring-black/10 dark:ring-white/10',
+            dropUp ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]',
+          )}
+        >
           <input
             ref={inputRef}
             value={q}
@@ -2213,7 +2227,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               {tabStrip}
               <div
                 className={cx(
-                  'relative space-y-4 overflow-hidden rounded-xl border-2 bg-card p-4',
+                  // NB: no `overflow-hidden` — it used to crop the "+ Add" type
+                  // picker, which drops out of the panel's bottom edge. The reveal
+                  // sweep clips itself (its own wrapper below) and fn-panel-in is
+                  // only opacity/scale, so nothing here needs the panel to clip.
+                  'relative space-y-4 rounded-xl border-2 bg-card p-4',
                   reveal && 'animate-fn-panel-in',
                 )}
                 style={{ borderColor: col.hex }}
