@@ -198,8 +198,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateTask = useCallback(
     async (id: string, input: TaskInput) => {
-      const task = await repo.updateTask(id, withLog(tasks.find((t) => t.id === id), input))
-      setTasks((prev) => prev.map((t) => (t.id === id ? task : t)))
+      const prev = tasks.find((t) => t.id === id)
+      // A save that changes nothing is a no-op: skip the write so `updated_at`
+      // (which drives the task list's "No." order) only moves on a real edit.
+      if (prev && diffTask(prev, input).length === 0) return prev
+      const task = await repo.updateTask(id, withLog(prev, input))
+      setTasks((cur) => cur.map((t) => (t.id === id ? task : t)))
       return task
     },
     [repo, tasks, withLog],

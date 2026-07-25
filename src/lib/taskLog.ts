@@ -57,9 +57,13 @@ export function diffTask(prev: Task, next: TaskInput): string[] {
   if ((prev.draft === true) !== (next.draft === true)) out.push(next.draft ? 'Saved as draft' : 'Draft completed')
   if ((prev.starred === true) !== (next.starred === true)) out.push(next.starred ? 'Starred' : 'Unstarred')
 
-  const prevImgs = (prev.images ?? []).length
-  const nextImgs = (next.images ?? []).length
-  if (prevImgs !== nextImgs) out.push(`Demo images: ${prevImgs} → ${nextImgs}`)
+  // Compare image IDENTITY, not just the count — so a same-count swap still
+  // registers as a change (callers treat "no diff" as "nothing to save").
+  const prevImgs = prev.images ?? []
+  const nextImgs = next.images ?? []
+  if (prevImgs.length !== nextImgs.length) out.push(`Demo images: ${prevImgs.length} → ${nextImgs.length}`)
+  else if (prevImgs.map((i) => i.id).join('|') !== nextImgs.map((i) => i.id).join('|'))
+    out.push('Demo images updated')
 
   if (show(prev.mondayUrl) !== show(next.mondayUrl))
     out.push(next.mondayUrl ? 'monday.com link updated' : 'monday.com link removed')

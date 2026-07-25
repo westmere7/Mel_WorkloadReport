@@ -869,11 +869,25 @@ export function StackedBarChart({
  * palette. Render it outside the plot (e.g. a card header) to save the vertical
  * space the built-in bottom legend would take.
  */
-export function StackedLegend({ keys, paletteIndices }: { keys: string[]; paletteIndices?: number[] }) {
+export function StackedLegend({
+  keys,
+  paletteIndices,
+  center,
+}: {
+  keys: string[]
+  paletteIndices?: number[]
+  /** Centre the row — for a legend sitting under the chart instead of in the header. */
+  center?: boolean
+}) {
   const themed = useChartColors()
   const colorAt = (i: number) => themed[(paletteIndices?.[i] ?? i) % themed.length]
   return (
-    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-[11px] font-semibold text-muted">
+    <div
+      className={cx(
+        'flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-muted',
+        center ? 'justify-center' : 'justify-end',
+      )}
+    >
       {keys.map((k, i) => (
         <span key={k} className="inline-flex items-center gap-1.5">
           <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: colorAt(i) }} />
@@ -1236,23 +1250,6 @@ export function AreaTrendChart({
   }
 
   // One little dot per real month on the target line, in RMIT red.
-  const renderDot = (props: { cx?: number; cy?: number; index?: number; payload?: any }) => {
-    const { cx, cy, index = 0, payload } = props
-    // Skip the flat end-caps; cut-off future months are already null (no dot).
-    if (cx == null || cy == null || payload?.anchor) return <g key={`dot-${index}`} />
-    return (
-      <circle
-        key={`dot-${index}`}
-        cx={cx}
-        cy={cy}
-        r={2.5}
-        fill="var(--card)"
-        stroke="#E61E2A"
-        strokeWidth={1.5}
-      />
-    )
-  }
-
   // Signature of the current dataset — changes on year / span / compare / ytd
   // switches but NOT on hover. Keying the areas by it remounts them so recharts
   // replays its left-to-right reveal, matching the task columns' L→R entrance.
@@ -1358,7 +1355,7 @@ export function AreaTrendChart({
             strokeWidth={2}
             fill={compareColor}
             fillOpacity={0.06}
-            dot={{ r: 2, fill: 'var(--card)', stroke: compareColor, strokeWidth: 1.5 }}
+            dot={false} // see the target-year line: month dots look like tasks
             activeDot={{ r: 4 }}
             // The L→R "draw" is a CSS clip wipe (see .workload-area); recharts'
             // own rise/morph animation is disabled so they don't fight.
@@ -1374,7 +1371,9 @@ export function AreaTrendChart({
           stroke="#E61E2A"
           strokeWidth={3}
           fill="url(#workloadFill)"
-          dot={renderDot}
+          // No month dots on the line — they read as individual tasks, which are
+          // the scattered dots below. Hover still highlights the month (activeDot).
+          dot={false}
           activeDot={{ r: 5 }}
           // L→R "draw" via CSS clip wipe (.workload-area); recharts' morph off.
           isAnimationActive={false}

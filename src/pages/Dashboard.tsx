@@ -32,7 +32,7 @@ import { cx, todayISO, formatDate, formatDayMonth } from '../lib/format'
 import { sliceTasksByFunctions } from '../lib/functionData'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
-import { COMMON_CAMPAIGNS, setDashboardPrefs, useDashboardPrefs } from '../lib/dashboardPrefs'
+import { COMMON_CAMPAIGNS, setDashboardPrefs, useDashboardPrefs, type DemandDim } from '../lib/dashboardPrefs'
 import { applyChartGroups, expandChartSelection } from '../lib/chartGroups'
 import { useAuth } from '../lib/auth'
 import type { Half, Squad, Task, TaskInput } from '../types'
@@ -508,6 +508,21 @@ export function Dashboard() {
   const squadCompareSuffix = compare ? ` — ${activeYear} over ${srcYear} (bar)${ytdLabel}` : ''
   // Human-readable description of the current (non-compare) span, for stat hints.
   const spanDesc = span === 'total' ? 'all time' : span === 'half' ? `${activeYear} ${half}` : `${activeYear}`
+  // Earliest recorded start date in the current scope — for "Total" the hint names
+  // that date instead of a vague "all time".
+  const earliestStart = useMemo(() => {
+    let min: string | null = null
+    for (const t of filtered) {
+      if (t.startDate && (min === null || t.startDate < min)) min = t.startDate
+    }
+    return min
+  }, [filtered])
+  const assetsHint =
+    span === 'total'
+      ? earliestStart
+        ? `deliverables since ${formatDate(earliestStart)}`
+        : 'deliverables recorded'
+      : `deliverables from ${spanDesc}`
   // When isolating functions, empty charts say WHY (that function simply has no
   // recorded workload here yet) instead of the generic "add tasks" nudges.
   const fnLabel =
@@ -538,7 +553,7 @@ export function Dashboard() {
               ? ytd
                 ? `deliverables up to ${todayDM} · was ${srcSummary.totalAssets.toLocaleString()} in ${srcYear} (same period)`
                 : `deliverables from ${activeYear} · was ${srcSummary.totalAssets.toLocaleString()} in ${srcYear}`
-              : `deliverables from ${spanDesc}`
+              : assetsHint
           }
         />
         <StatCard
@@ -756,8 +771,32 @@ export function Dashboard() {
               title="Squads demand distribution"
               subtitle={`Share of each ${demandDim === 'asset' ? 'asset type' : 'work type'} across stakeholder groups${compareSubtitleSuffix}`}
               action={
-                <div className="flex items-center gap-2">
-                  <StackedLegend keys={[...STAKEHOLDER_GROUPS]} paletteIndices={[0, 1, 2]} />
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {/* Dimension tabs — split the chart by asset type or work type
+                      (mirrors the Settings → Dashboard preference; local only). */}
+                  <div className="inline-flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
+                    {(
+                      [
+                        ['asset', 'Asset types'],
+                        ['type', 'Work types'],
+                      ] as [DemandDim, string][]
+                    ).map(([d, label]) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setDashboardPrefs({ demandDim: d })}
+                        aria-pressed={demandDim === d}
+                        className={cx(
+                          'rounded-md px-2 py-0.5 text-[11px] font-semibold transition',
+                          demandDim === d
+                            ? 'bg-rmit-navy text-white dark:bg-navy-300'
+                            : 'text-muted hover:text-ink',
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                   <span className="h-4 w-px shrink-0 bg-line" aria-hidden="true" />
                   {groupControls(
                     groupDemand,
@@ -797,6 +836,10 @@ export function Dashboard() {
                   }
                 />
               </div>
+            </div>
+            {/* Stakeholder legend sits under the chart (centred), not in the header. */}
+            <div className="mt-2 shrink-0">
+              <StackedLegend keys={[...STAKEHOLDER_GROUPS]} paletteIndices={[0, 1, 2]} center />
             </div>
           </Card>
         </div>

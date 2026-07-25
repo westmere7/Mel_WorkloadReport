@@ -489,7 +489,9 @@ export class SupabaseRepository implements Repository {
     if (field === 'squad' || field === 'campaign') {
       const { error } = await sb
         .from('tasks')
-        .update({ [field]: newValue, updated_at: new Date().toISOString() })
+        // NB: deliberately no `updated_at` — a Settings rename is maintenance,
+        // not a task edit, so it must not reorder the task list's "No." column.
+        .update({ [field]: newValue })
         .eq(field, oldValue)
       if (error) throw error
       return
@@ -511,7 +513,7 @@ export class SupabaseRepository implements Repository {
             if (!next) return null
             return sb
               .from('tasks')
-              .update({ function_data: next, updated_at: new Date().toISOString() })
+              .update({ function_data: next }) // no updated_at — maintenance, not an edit
               .eq('id', (row as { id: string }).id)
               .then(({ error: e }) => {
                 if (e) throw e
@@ -546,7 +548,8 @@ export class SupabaseRepository implements Repository {
               b[newValue] = (b[newValue] ?? 0) + (b[k] ?? 0)
               delete b[k]
             }
-            const patch: Record<string, unknown> = { asset_breakdown: b, updated_at: new Date().toISOString() }
+            // no updated_at — maintenance, not an edit
+            const patch: Record<string, unknown> = { asset_breakdown: b }
             if (nextFd) patch.function_data = nextFd
             return sb
               .from('tasks')
@@ -581,7 +584,8 @@ export class SupabaseRepository implements Repository {
           const nextFd = fd ? renameWorkTypeInFunctionData(fd, oldValue, newValue) : null
           if (!arr.includes(oldValue) && !nextFd) return null
           const nextArr = Array.from(new Set(arr.map((v) => (v === oldValue ? newValue : v))))
-          const patch: Record<string, unknown> = { [field]: nextArr, updated_at: new Date().toISOString() }
+          // no updated_at — maintenance, not an edit
+          const patch: Record<string, unknown> = { [field]: nextArr }
           if (nextFd) patch.function_data = nextFd
           return sb
             .from('tasks')
