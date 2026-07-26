@@ -26,6 +26,25 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.9.0',
+    date: '2026-07-26',
+    title: 'Effort goes live',
+    notes: [
+      {
+        kind: 'improved',
+        text: 'Effort mode is no longer experimental — it’s an official way to read the dashboard, and the “Experimental” tags are gone from the switch, the Effort panel, the explainer and the output-rates editor. The rates editor now says what the rates actually drive instead of “nothing uses these yet”. Nothing about how it works changed: exports and stored totals still count every asset as one.',
+      },
+      {
+        kind: 'improved',
+        text: '“Tasks by person” has been removed from the dashboard, along with its show/hide toggle in Settings — the mix panels now always sit two-up, which gives “Workload across the year” the wider layout permanently. Per-person numbers are still tracked: filter the task list by person, export them in the CSV, or see “Busiest people” in a Showcase.',
+      },
+      {
+        kind: 'improved',
+        text: 'The Help guide is now laid out like documentation: three tabs (The dashboard · Recording work · Settings & more), an “on this page” contents panel that follows your scrolling, and links between sections that jump you straight to the right tab. It also gained close-ups of the monday.com auto-fill, the per-function workload tabs and the task list.',
+      },
+    ],
+  },
+  {
     version: '0.8.0',
     date: '2026-07-26',
     title: 'Effort-weighted workload',
