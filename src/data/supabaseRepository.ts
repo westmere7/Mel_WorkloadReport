@@ -183,6 +183,12 @@ function isMissingChartGroupsColumn(err: unknown): boolean {
   return msg.includes('chart_groups') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
+/** True if a Supabase error is complaining about a missing `advisor_prompt` column (pre-migration). */
+function isMissingAdvisorPromptColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('advisor_prompt') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
 /** True if a Supabase error is complaining about a missing `asset_rates` column (pre-migration). */
 function isMissingAssetRatesColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
@@ -634,6 +640,7 @@ export class SupabaseRepository implements Repository {
       squadKeywords: normalizeKeywordMap(data.squad_keywords),
       campaignKeywords: normalizeKeywordMap(data.campaign_keywords),
       chartGroups: normalizeChartGroups(data.chart_groups),
+      advisorPrompt: typeof data.advisor_prompt === 'string' ? data.advisor_prompt : '',
     }
   }
 
@@ -662,6 +669,7 @@ export class SupabaseRepository implements Repository {
       campaign_keywords: settings.campaignKeywords,
       chart_groups: settings.chartGroups,
       asset_rates: settings.assetRates,
+      advisor_prompt: settings.advisorPrompt,
     }
     let { data, error } = await upsert(payload)
     // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
@@ -680,6 +688,10 @@ export class SupabaseRepository implements Repository {
     }
     if (error && isMissingAssetRatesColumn(error)) {
       delete payload.asset_rates
+      ;({ data, error } = await upsert(payload))
+    }
+    if (error && isMissingAdvisorPromptColumn(error)) {
+      delete payload.advisor_prompt
       ;({ data, error } = await upsert(payload))
     }
     if (error && isMissingMondayBoardsColumn(error)) {
@@ -727,6 +739,8 @@ export class SupabaseRepository implements Repository {
         ? normalizeKeywordMap(data.campaign_keywords)
         : settings.campaignKeywords,
       chartGroups: data.chart_groups ? normalizeChartGroups(data.chart_groups) : settings.chartGroups,
+      advisorPrompt:
+        typeof data.advisor_prompt === 'string' ? data.advisor_prompt : settings.advisorPrompt,
     }
   }
 

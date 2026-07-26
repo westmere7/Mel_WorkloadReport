@@ -39,6 +39,9 @@ import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, setDashboardPrefs, useDashboardPrefs, type DemandDim, type WorkloadUnit } from '../lib/dashboardPrefs'
 import { effortByAssetType, formatHours, hasAnyRate, taskEffortHours, unratedTypesWithVolume } from '../lib/effort'
 import { applyChartGroups, expandChartSelection } from '../lib/chartGroups'
+import { buildFindings } from '../lib/advisor/findings'
+import { buildAdvisorInput } from '../lib/advisor/scope'
+import { auditForbidden, auditNumbers, isAdvisorEnabled, narrate } from '../lib/advisor/narrate'
 import { useAuth } from '../lib/auth'
 import type { Half, Squad, Task, TaskInput } from '../types'
 import { TaskForm } from '../components/TaskForm'
@@ -242,6 +245,38 @@ export function Dashboard() {
 
   // Asset types with volume on this chart but no output rate — they count as
   // zero hours, so the panel says so rather than showing a quietly short total.
+  // ── Advisor (findings + narration; no UI yet) ─────────────────────────────
+  // Reads the WHOLE record, NOT the current view — see lib/advisor/scope.ts. That
+  // is why this deliberately depends on neither span/half/fnFilter/compare nor the
+  // Assets/Effort toggle: an analysis that moved when someone flipped a switch
+  // would be a view, not a finding. Exposed on `window.__advisor` in dev only.
+  const advisorInput = useMemo(() => buildAdvisorInput(tasks, settings), [tasks, settings])
+  const advisorFindings = useMemo(() => buildFindings(advisorInput), [advisorInput])
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    ;(window as unknown as Record<string, unknown>).__advisor = {
+      findings: advisorFindings,
+      scopeLabel: advisorInput.scopeLabel,
+      useEffort: advisorInput.useEffort,
+      enabled: isAdvisorEnabled(),
+      // Accepts an override so a voice brief can be tried from the console without
+      // saving it to settings or redeploying the function.
+      narrate: (over?: Record<string, unknown>) =>
+        narrate({
+          findings: advisorFindings,
+          scopeLabel: advisorInput.scopeLabel,
+          effortOn: advisorInput.useEffort,
+          people: settings.people,
+          prompt: settings.advisorPrompt,
+          ...over,
+        }),
+      audit: (text: string) => ({
+        unsupportedNumbers: auditNumbers(text, advisorFindings),
+        namedPeople: auditForbidden(text, settings.people),
+      }),
+    }
+  }, [advisorFindings, advisorInput, settings.people, settings.advisorPrompt])
+
   const unratedInScope = useMemo(
     () => (effortOn ? unratedTypesWithVolume(chartYearTasks, assetRates) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps

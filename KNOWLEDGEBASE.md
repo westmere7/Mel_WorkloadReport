@@ -1056,3 +1056,103 @@ is still tracked: `people` on tasks, the task-list person filter and `?person=`
 deep links, the CSV `People` column, and `analytics.assetsByPerson()` which still
 feeds the Showcase's **"Busiest people"** stat. A stale
 `showTasksByPerson: true` in localStorage is inert.
+
+## 23. Advisor (generated analysis) ⚠️ v0.9.0
+
+Turns the dashboard's data into a written briefing. The design goal is **prose you
+can trust**: a model chooses the words, never the facts.
+
+**The pipeline**
+
+```
+findings.ts (TypeScript, deterministic)   ← decides WHAT is true
+      ↓  aggregate facts only
+scope.ts        ← decides WHAT IS LOOKED AT (the whole record)
+      ↓
+narrate.ts      ← sends it, then AUDITS the reply
+      ↓
+supabase/functions/advisor  ← holds the Gemini key; only rephrases
+```
+
+**Why the audit is the load-bearing part.** Prose is unverifiable in general, but
+"every figure in the output must appear verbatim in the facts we supplied" is a
+*total* check — a model that invents a trend has to invent a number to state it, and
+that fails. `auditNumbers` whitelists the fact strings; `auditForbidden` asserts no
+person is named; `auditShape` rejects bullet-point walls. Failing any of them retries,
+then falls back to `fallbackNarration()` — deterministic, robotic, always correct. The
+feature degrades, never breaks, and works with no API key at all.
+
+**Scope: the whole record, deliberately.** `buildAdvisorInput()` ignores the
+dashboard's year, function filter and Assets/Effort toggle. An analysis that changed
+when someone flipped a switch would be a view, not a finding, and two people looking
+at the same data would be told different things. `useEffort` therefore follows
+*whether any output rate exists*, not the toggle.
+
+**Findings are computed client-side on purpose.** The Edge Function is only a key
+holder and a phrasing service. It cannot compute, so it cannot be wrong about the
+data — and `looksAggregate()` rejects any payload carrying record-shaped values, so
+the function can't be repurposed as a general LLM proxy.
+
+**The editable prompt is only half the prompt.** Settings → Advisor edits the *voice
+brief*. The function appends `ACCURACY_RULES` after it, worded to outrank it, so a bad
+edit can make the briefing read badly but not falsely. Blank = follow
+`DEFAULT_ADVISOR_PROMPT`, so improvements to the default reach teams that never
+customised theirs. Keep `DEFAULT_ADVISOR_PROMPT` (src/constants.ts) and `DEFAULT_VOICE`
+(the function) in step.
+
+- Column: `settings.advisor_prompt text not null default ''` + the usual
+  strip-and-retry in `saveSettings` (see §12), so it works pre-migration.
+- Enable with `VITE_ADVISOR=1` **and** a `GEMINI_API_KEY` secret on the function.
+  `isAdvisorEnabled()` gates the client path.
+- No UI yet beyond Settings: a dedicated Advisor page is planned, which will quote
+  the figures and charts next to each finding.
+
+### Gotchas & lessons learned
+
+- ⚠️ **Facts must be ATOMIC.** The gate whitelists whole fact strings, so a combined
+  `"2026 vs 2025"` leaves each bare year looking invented. Store `recentYear` and
+  `previousYear` separately. This is why every fact is a single value.
+- ⚠️ **The token pattern eats sentence punctuation.** `[\d,.]*` matches "2026," in
+  "…in 2026, effort grew…", which then isn't whitelisted and rejects a faithful
+  sentence. `auditNumbers` trims a TRAILING `[.,]+` only — internal separators
+  (`1,796`, `−2.0%`) must survive.
+- ⚠️ **`valueByMonth` buckets by month-of-year and ignores the year.** Fed the whole
+  record it yields *seasonal* totals, so "the busiest month" is a claim about the
+  annual cycle. `coverage.years > 1` switches the wording; don't let it read as one
+  particular February.
+- ⚠️ **Never compare a part-finished year with a complete one.** Seven months of 2026
+  against all of 2025 reads as a collapse in output that never happened. `yearPair()`
+  clips both sides to today's day-of-year (as the dashboard's YTD compare does) and
+  sets `partial`, which makes the claims disclose what they compared.
+- ⚠️ **The year pair is "two most recent years WITH DATA", not latest and latest−1** —
+  a gap year would otherwise silence every change rule.
+- ⚠️ **supabase-js hides a non-2xx function body.** `functions.invoke` reports only
+  "Edge Function returned a non-2xx status code"; the real error is on
+  `error.context` as a `Response`. `errorDetail()` digs it out — without it, every
+  upstream failure looks identical and is undiagnosable.
+- ⚠️ **A pinned Gemini model is a time bomb.** Google retires superseded models two
+  ways that both look like our bug: older generations keep answering but with
+  free-tier `limit: 0` (surfaces as `429 RESOURCE_EXHAUSTED`, reads as "out of
+  quota"), and retired ones return `404 … no longer available to new users`. Default
+  to the rolling alias `gemini-flash-latest`; override via the `GEMINI_MODEL` secret,
+  which needs no redeploy.
+- ⚠️ **Thinking tokens come out of `maxOutputTokens`.** Current flash models reason by
+  default, so a tight budget returns a truncated fragment (`finishReason
+  MAX_TOKENS`) that looks like a bad generation. `THINKING_VARIANTS` walks
+  `thinkingBudget: 0` → `thinkingLevel: 'low'` → nothing, advancing only on a 400,
+  because a model that dislikes the field replies `INVALID_ARGUMENT` naming no field
+  — sniffing the message doesn't work.
+- Don't retry a rate limit instantly; `RETRY_DELAY_MS` exists so one 429 doesn't
+  become two.
+- `GEMINI_API_KEY` must never be a `VITE_` var — those are baked into the client
+  bundle and readable by anyone.
+
+### Testing gotchas
+
+- `window.__advisor` (dev only) exposes `{ findings, scopeLabel, useEffort, enabled,
+  narrate(over?), audit(text) }`. `narrate()` takes an override, so a voice brief can
+  be tried from the console without saving it or redeploying.
+- Prove view-independence by fingerprinting `findings` before and after toggling
+  mode/compare/function — the JSON must be identical.
+- A cross-check that the whole-record year pair is right: its `assetsChange` /
+  `effortChange` must equal what the dashboard's YTD compare mode shows.

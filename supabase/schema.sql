@@ -152,6 +152,15 @@ alter table public.settings
 alter table public.settings
   add column if not exists asset_rates jsonb not null default '{}'::jsonb;
 
+-- Advisor voice brief: free text controlling HOW the generated analysis reads
+-- (length, tone, what to lead with). Empty string = follow the app's built-in
+-- default, so later improvements to it reach teams that never customised theirs.
+-- It cannot affect WHAT the analysis says: the findings and every number in them
+-- are computed client-side, and the `advisor` Edge Function appends accuracy rules
+-- after this text that outrank it.
+alter table public.settings
+  add column if not exists advisor_prompt text not null default '';
+
 -- GCMC functions that record workload (task-form tabs). Array of
 -- { name, color, workTypes, assetTypes }; order = tab order. The type lists are
 -- INCLUSIONS (only listed types appear on that tab); the seed offers the full
