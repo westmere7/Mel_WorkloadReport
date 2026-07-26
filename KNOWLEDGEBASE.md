@@ -1147,6 +1147,92 @@ customised theirs. Keep `DEFAULT_ADVISOR_PROMPT` (src/constants.ts) and `DEFAULT
 - `GEMINI_API_KEY` must never be a `VITE_` var — those are baked into the client
   bundle and readable by anyone.
 
+### Cached briefing (phase 3)
+
+Reading NEVER generates. That's a hard rule: the free tier allows **20 requests a
+day**, so a page generating on mount would exhaust it in a handful of views.
+`useAdvisor()` loads the stored briefing; only `regenerate()` spends a call, and only
+editors may call it (`canEdit`) since the quota is shared by the whole team.
+
+- One row: `advisor_cache` with `id = 'current'`. The analysis covers the whole
+  record, so there is only ever one current briefing — nothing to key it by.
+- **Staleness is derived, never flagged.** The row stores `fingerprint`, a hash of the
+  findings and the voice brief it was written from; the app recomputes and compares.
+  Adding a task, editing a rate or changing the brief therefore marks the briefing out
+  of date automatically, with nothing to remember to invalidate.
+- The fingerprint covers ids, **claims** and facts. Claims matter because their wording
+  is sent upstream and shapes the prose, so improving a rule's phrasing in a deploy
+  should invalidate briefings written under the old one. `severity` is excluded: it only
+  affects listing order, which the narrator is told to ignore.
+- FNV-1a, not a crypto digest, because `crypto.subtle` is async and this only needs to
+  be compared. A collision costs a stale briefing, nothing more.
+- Pre-migration tolerant: no table → `getAdvisorCache()` returns null and
+  `saveAdvisorCache()` is a no-op, so the advisor still works and simply regenerates.
+- `saveAdvisorCache` failing does NOT discard the text — the call has already been
+  spent, and losing the briefing on top of that is the worse outcome.
+
+**Verified properties of the fingerprint** (`window.__advisor.cache.fingerprintOf` in
+dev): deterministic across reloads; changes on a fact value, a claim rewording, an
+added finding, or a different brief; unchanged by severity; blank brief and `undefined`
+hash identically (both mean "follow the default").
+
+### The Advisor page & the built-in analyst (phase 4)
+
+`/advisor` — public route (reading needs no sign-in; generating stays editor-only via
+`useAdvisor`), nav entry between Help and Showcase. Layout is data-first by design:
+totals strip → one card per finding with its chart NEXT TO the claim → the written
+briefing last, as the synthesis.
+
+**Evidence.** `Finding.evidence` carries the raw series each rule already computes
+(three shapes: `months`, `bars` incl. signed, `pairs`). Raw numbers are safe here
+because evidence never leaves the browser — `narrate()` strips findings to
+`{id, severity, claim, facts}` before anything is sent upstream, and the Edge
+Function's aggregate guard rejects numeric values anyway. Charts are hand-rolled
+div/flex bars (`components/advisor/EvidenceChart.tsx`), NOT Recharts: they're
+annotations beside a sentence, they inherit the theme for free, and every value is
+printed — no hover needed.
+
+**The built-in analyst** (`lib/advisor/compose.ts`) replaced the robotic
+`fallbackNarration`. It composes a full 3-paragraph briefing from findings alone —
+lead → connected supports → planning implication + caveat — with hand-written variant
+sentences chosen by a PRNG seeded from the findings, so same data → same words
+(cache-stable) and different data → different shapes. Correct by construction: every
+figure interpolates from `facts`. The UI labels authorship explicitly: teal
+"AI-written · <model> · checked against the data" vs gold "Written without AI ·
+composed by the app, every figure exact". Note compose verbalises signs ("slipped
+2.0%" for `−2.0%`), so composed prose won't pass `auditNumbers` — it doesn't need to;
+only MODEL output is audited, and there the sign-copying rule is a real protection
+(it catches a direction lie).
+
+### Gotchas & lessons learned (phase 4)
+
+- ⚠️ **StrictMode kills load-once ref guards.** `if (loaded.current) return;
+  loaded.current = true` in a fetch effect = first mount's result lands in a dead
+  closure (cleanup ran), second mount is blocked by the ref → `loading` never
+  clears. Symptom: permanent skeleton in dev. Let the effect run per mount; a
+  duplicate GET is the cheap side.
+- ⚠️ **Percentage bar heights need a definite parent height.** `items-end` on the
+  row made each flex column shrink to content, so `height: N%` bars collapsed to ~0
+  for unlabelled months — the chart looked plausible because the two highlighted
+  months still rendered. Let columns stretch (no `items-end` on the row) and push
+  bars down with `justify-end` on the column.
+- One `useAdvisor()` instance per page — a second call in a child means two cache
+  loads and disconnected generating/stale state. Pass `AdvisorState` down as a prop.
+- Chart labels must round like the facts (`signedPct`: 1dp under 10, integers
+  above), or the bar says +33.3% while the chip says +33%.
+
+### Testing gotchas (phase 4)
+
+- Composed narration without spending quota: `__advisor.narrate({ maxAttempts: 0 })`
+  skips the model loop entirely and returns the composed text with `attempts: 0`.
+- Briefing-card states are testable without the DB: Playwright-route
+  `**/rest/v1/advisor_cache**` and fulfill with `[row]` — MUST include
+  `access-control-allow-origin: *` (fulfilled responses still face CORS) or the
+  fetch silently fails and the card shows its empty state.
+- `page.screenshot({ fullPage: true })` captures only the viewport here — the app
+  shell scrolls in an inner container, so body height = viewport. Screenshot cards
+  via `locator.screenshot()` instead.
+
 ### Testing gotchas
 
 - `window.__advisor` (dev only) exposes `{ findings, scopeLabel, useEffort, enabled,

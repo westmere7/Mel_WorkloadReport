@@ -79,7 +79,7 @@ export function SettingsPage() {
           brief carries real risk of a worse briefing. */}
       <CollapsibleSection
         title="Advisor"
-        subtitle="How the generated analysis is written. The findings themselves are computed from every task on record."
+        subtitle="Reads every task on record and writes a plain-English briefing — where the team's effort actually goes, what has shifted year on year, and when the peaks land."
         storageKey="mwr.settings.advisorOpen"
         defaultOpen={false}
         icon={Sparkles}
@@ -988,7 +988,7 @@ function AdvisorCard() {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-line bg-card/40 p-3">
-        <h4 className="text-sm font-semibold text-ink">What this changes</h4>
+        <h4 className="text-sm font-semibold text-ink">What you&rsquo;re editing here</h4>
         <p className="mt-1 text-xs leading-relaxed text-muted">
           The Advisor reads <strong className="text-ink">every task on record</strong> — all years, all
           functions — and works out the findings itself. It doesn&rsquo;t follow the year, function or

@@ -8,6 +8,7 @@ import {
   List,
   Plus,
   Settings,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 import { cx } from '../lib/format'
@@ -24,6 +25,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/tasks', label: 'Task List', icon: List },
   { to: '/help', label: 'Help', icon: BookOpen },
+  { to: '/advisor', label: 'Advisor', icon: Sparkles },
   { to: '/showcase', label: 'Showcase', icon: Clapperboard },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -33,7 +35,7 @@ const EDIT_ONLY = ['/settings', '/showcase']
 
 /** Pages hidden from the mobile tab bar — the Showcase builder/player are
     desktop-only, and the Help manual's screenshots read best on desktop. */
-const MOBILE_HIDDEN = ['/showcase', '/help']
+const MOBILE_HIDDEN = ['/showcase', '/help', '/advisor']
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { openNewTask } = useNewTask()
@@ -48,7 +50,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
   // Help + Showcase sit together at the BOTTOM of the rail (Help directly above
   // the Showcase icon); the rest stay grouped up top.
-  const BOTTOM = ['/help', '/showcase']
+  const BOTTOM = ['/help', '/advisor', '/showcase']
   const topNav = nav.filter((item) => !BOTTOM.includes(item.to))
   const bottomNav = nav.filter((item) => BOTTOM.includes(item.to))
 

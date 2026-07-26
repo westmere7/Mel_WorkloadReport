@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
+import type { AdvisorCacheEntry } from '../lib/advisor/cache'
 import type { Repository } from './repository'
 import { LocalRepository } from './localRepository'
 import { SupabaseRepository } from './supabaseRepository'
@@ -94,6 +95,10 @@ interface StoreValue {
   generateShowcase: (draft: ShowcaseDraft) => Promise<ShowcaseMeta>
   deleteShowcase: (id: string) => Promise<void>
   getShowcase: (id: string) => Promise<ShowcaseRecord | null>
+  /** The stored Advisor briefing, or null when none exists yet. */
+  getAdvisorCache: () => Promise<AdvisorCacheEntry | null>
+  /** Replace the stored Advisor briefing. */
+  saveAdvisorCache: (entry: AdvisorCacheEntry) => Promise<void>
   /** True while a live (realtime/cross-tab) subscription is active. */
   live: boolean
 }
@@ -630,6 +635,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [repo, functionUsage],
   )
 
+  const getAdvisorCache = useCallback(() => repo.getAdvisorCache(), [repo])
+  const saveAdvisorCache = useCallback(
+    (entry: AdvisorCacheEntry) => repo.saveAdvisorCache(entry),
+    [repo],
+  )
+
   const value = useMemo<StoreValue>(
     () => ({
       backend: repo.backend,
@@ -664,6 +675,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       generateShowcase,
       deleteShowcase,
       getShowcase,
+      getAdvisorCache,
+      saveAdvisorCache,
       live,
     }),
     [
@@ -700,6 +713,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       generateShowcase,
       deleteShowcase,
       getShowcase,
+      getAdvisorCache,
+      saveAdvisorCache,
     ],
   )
 

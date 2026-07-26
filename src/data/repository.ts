@@ -1,6 +1,7 @@
 import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
 import type { ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
+import type { AdvisorCacheEntry } from '../lib/advisor/cache'
 
 /**
  * Storage-agnostic contract for the app's data.
@@ -59,6 +60,16 @@ export interface Repository {
   /** Load a full showcase by id. Null when it doesn't exist (expiry NOT enforced here). */
   getShowcase(id: string): Promise<ShowcaseRecord | null>
   deleteShowcase(id: string): Promise<void>
+
+  // ── Advisor (cached briefing) ─────────────────────────────────
+  /**
+   * The single stored briefing, or null when none has been generated (or the table
+   * hasn't been created). There is exactly one: the analysis covers the whole record,
+   * so there's nothing to key it by beyond its own fingerprint.
+   */
+  getAdvisorCache(): Promise<AdvisorCacheEntry | null>
+  /** Store the briefing, replacing whatever was there. */
+  saveAdvisorCache(entry: AdvisorCacheEntry): Promise<void>
 
   /**
    * Rename a value across all tasks (used when a campaign/type/person is

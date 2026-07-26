@@ -1,5 +1,6 @@
 import { getSupabase, isSupabaseConfigured } from '../supabaseClient'
-import { allowedTokens, fallbackNarration, type Finding } from './findings'
+import { allowedTokens, type Finding } from './findings'
+import { composeNarration } from './compose'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Advisor · narration + validation gate
@@ -184,7 +185,9 @@ export async function narrate({
   prompt,
 }: NarrateOptions): Promise<Narration> {
   const fallback = (rejected?: string[], attempts = 0): Narration => ({
-    text: fallbackNarration(findings),
+    // The built-in analyst (compose.ts): a full authored briefing, not an error
+    // state. Correct by construction, so it skips the audit the model must pass.
+    text: composeNarration(findings),
     source: 'fallback',
     rejected,
     attempts,

@@ -4,6 +4,7 @@ import { NewTaskProvider } from './components/NewTaskModal'
 import { StoreProvider, useStore } from './data/store'
 import { useAuth } from './lib/auth'
 import { Dashboard } from './pages/Dashboard'
+import { AdvisorPage } from './pages/Advisor'
 import { HelpPage } from './pages/Help'
 import { TaskList } from './pages/TaskList'
 import { SettingsPage } from './pages/Settings'
@@ -23,6 +24,8 @@ export default function App() {
         <Route path="/tasks" element={<TaskList />} />
         {/* Public like the dashboard — reading the manual needs no sign-in. */}
         <Route path="/help" element={<HelpPage />} />
+        {/* Public too: anyone may READ the analysis; generating is gated inside. */}
+        <Route path="/advisor" element={<AdvisorPage />} />
         <Route
           path="/showcase"
           element={

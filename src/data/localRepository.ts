@@ -2,6 +2,7 @@ import type { AppSettings, Task, TaskInput } from '../types'
 import type { Repository } from './repository'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
 import type { ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
+import type { AdvisorCacheEntry } from '../lib/advisor/cache'
 import {
   DEFAULT_SETTINGS,
   canonicalAssetName,
@@ -27,6 +28,7 @@ const SEEDED_KEY = 'mwr.seeded.v1'
 const SNAPSHOTS_KEY = 'mwr.snapshots.v1' // metadata list
 const snapshotKey = (id: string) => `mwr.snapshot.${id}` // full payload
 const SHOWCASES_KEY = 'mwr.showcases.v1' // ShowcaseMeta[]
+const ADVISOR_CACHE_KEY = 'mwr.advisorCache.v1' // AdvisorCacheEntry (single entry)
 const showcaseKey = (id: string) => `mwr.showcase.${id}` // full ShowcaseRecord
 
 function read<T>(key: string, fallback: T): T {
@@ -268,6 +270,15 @@ export class LocalRepository implements Repository {
     const list = read<ShowcaseMeta[]>(SHOWCASES_KEY, []).filter((s) => s.id !== meta.id)
     write(SHOWCASES_KEY, [meta, ...list])
     return meta
+  }
+
+  // ── Advisor (cached briefing) ─────────────────────────────────
+  async getAdvisorCache(): Promise<AdvisorCacheEntry | null> {
+    return read<AdvisorCacheEntry | null>(ADVISOR_CACHE_KEY, null)
+  }
+
+  async saveAdvisorCache(entry: AdvisorCacheEntry): Promise<void> {
+    write(ADVISOR_CACHE_KEY, entry)
   }
 
   async getShowcase(id: string): Promise<ShowcaseRecord | null> {

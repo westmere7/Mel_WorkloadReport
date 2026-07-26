@@ -39,8 +39,9 @@ import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { COMMON_CAMPAIGNS, setDashboardPrefs, useDashboardPrefs, type DemandDim, type WorkloadUnit } from '../lib/dashboardPrefs'
 import { effortByAssetType, formatHours, hasAnyRate, taskEffortHours, unratedTypesWithVolume } from '../lib/effort'
 import { applyChartGroups, expandChartSelection } from '../lib/chartGroups'
-import { buildFindings } from '../lib/advisor/findings'
+import { buildFindings, type Finding } from '../lib/advisor/findings'
 import { buildAdvisorInput } from '../lib/advisor/scope'
+import { fingerprintFindings, type AdvisorCacheEntry } from '../lib/advisor/cache'
 import { auditForbidden, auditNumbers, isAdvisorEnabled, narrate } from '../lib/advisor/narrate'
 import { useAuth } from '../lib/auth'
 import type { Half, Squad, Task, TaskInput } from '../types'
@@ -252,6 +253,7 @@ export function Dashboard() {
   // would be a view, not a finding. Exposed on `window.__advisor` in dev only.
   const advisorInput = useMemo(() => buildAdvisorInput(tasks, settings), [tasks, settings])
   const advisorFindings = useMemo(() => buildFindings(advisorInput), [advisorInput])
+  const { getAdvisorCache, saveAdvisorCache } = useStore()
   useEffect(() => {
     if (!import.meta.env.DEV) return
     ;(window as unknown as Record<string, unknown>).__advisor = {
@@ -274,8 +276,23 @@ export function Dashboard() {
         unsupportedNumbers: auditNumbers(text, advisorFindings),
         namedPeople: auditForbidden(text, settings.people),
       }),
+      // Cache primitives, so the store/repo round trip can be exercised without
+      // spending a model call (see lib/advisor/cache.ts).
+      cache: {
+        fingerprint: fingerprintFindings(advisorFindings, settings.advisorPrompt),
+        fingerprintOf: (f: Finding[], prompt?: string) => fingerprintFindings(f, prompt),
+        get: () => getAdvisorCache(),
+        save: (entry: AdvisorCacheEntry) => saveAdvisorCache(entry),
+      },
     }
-  }, [advisorFindings, advisorInput, settings.people, settings.advisorPrompt])
+  }, [
+    advisorFindings,
+    advisorInput,
+    settings.people,
+    settings.advisorPrompt,
+    getAdvisorCache,
+    saveAdvisorCache,
+  ])
 
   const unratedInScope = useMemo(
     () => (effortOn ? unratedTypesWithVolume(chartYearTasks, assetRates) : []),

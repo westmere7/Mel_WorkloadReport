@@ -26,6 +26,32 @@ import { effortByAssetType, formatHours, taskEffortHours, unratedTypesWithVolume
 // third-party model.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** How an evidence value should be formatted and labelled. */
+export type EvidenceUnit = 'assets' | 'hours' | 'percent' | 'tasks'
+
+/**
+ * The series behind a finding, for the Advisor page to chart NEXT TO the claim.
+ *
+ * Raw numbers, unlike `facts` — safe because evidence never leaves the browser:
+ * `narrate()` strips findings to `{id, severity, claim, facts}` before anything is
+ * sent upstream, and the Edge Function's aggregate guard would reject numeric
+ * values anyway. Three shapes cover every rule:
+ *
+ *  - `months`  a year curve (Jan-Dec), with the months the claim is about marked
+ *  - `bars`    one value per category; `signed` centres the axis for +/- values
+ *  - `pairs`   the same categories measured two ways (before/after, output/effort)
+ */
+export type Evidence =
+  | { kind: 'months'; unit: EvidenceUnit; points: { name: string; value: number }[]; highlight: string[] }
+  | { kind: 'bars'; unit: EvidenceUnit; rows: { name: string; value: number; accent?: boolean }[]; signed?: boolean }
+  | {
+      kind: 'pairs'
+      unit: EvidenceUnit
+      beforeLabel: string
+      afterLabel: string
+      rows: { name: string; before: number; after: number }[]
+    }
+
 export interface Finding {
   /** Stable id — the narrator cites it, so the UI can trace prose back to data. */
   id: string
@@ -39,6 +65,8 @@ export interface Finding {
    * exactly these tokens.
    */
   facts: Record<string, string>
+  /** Chartable series behind the claim. Client-side only — never sent upstream. */
+  evidence?: Evidence
 }
 
 export interface AdvisorInput {
@@ -101,6 +129,8 @@ const signedPct = (now: number, before: number) => {
   return `${d >= 0 ? '+' : '−'}${mag}%`
 }
 const round1 = (n: number) => String(Math.round(n * 10) / 10)
+/** Same rounding signedPct applies, as a number — keeps chart labels equal to facts. */
+const roundLikePct = (n: number) => (Math.abs(n) < 10 ? Math.round(n * 10) / 10 : Math.round(n))
 const sum = (rows: { value: number }[]) => rows.reduce((a, r) => a + r.value, 0)
 /** Days between two ISO dates, or null when either is missing. */
 /**
@@ -154,6 +184,15 @@ function volumeEffortDivergence({ yoy, rates }: AdvisorInput): Finding | null {
       hoursPerAssetNow: `${round1(nowPer)} h`,
       hoursPerAssetBefore: `${round1(beforePer)} h`,
     },
+    evidence: {
+      kind: 'bars',
+      unit: 'percent',
+      signed: true,
+      rows: [
+        { name: `Assets vs ${yoy.previousYear}`, value: roundLikePct(volD) },
+        { name: `Effort vs ${yoy.previousYear}`, value: roundLikePct(effD), accent: true },
+      ],
+    },
   }
 }
 
@@ -186,6 +225,7 @@ function peakConcentration({ tasks, rates, useEffort, coverage }: AdvisorInput):
       evenShare: pct(1, active),
       ...(coverage && coverage.years > 1 ? { yearsCovered: String(coverage.years) } : {}),
     },
+    evidence: { kind: 'months', unit: useEffort ? 'hours' : 'assets', points: months, highlight: [peak.name] },
   }
 }
 
@@ -207,6 +247,12 @@ function rampSteepness({ tasks, rates, useEffort }: AdvisorInput): Finding | nul
     severity: 3,
     claim: `Workload climbs sharply from ${best.from} into ${best.to}.`,
     facts: { rampFrom: best.from, rampTo: best.to, rampMultiple: `${round1(best.mult)}×` },
+    evidence: {
+      kind: 'months',
+      unit: useEffort ? 'hours' : 'assets',
+      points: months,
+      highlight: [best.from, best.to],
+    },
   }
 }
 
@@ -233,6 +279,19 @@ function sizeEffortMismatch({ tasks, rates }: AdvisorInput): Finding | null {
       heaviestSize: byEff.reduce((m, d) => (d.value > m.value ? d : m)).name,
       heaviestSizeEffortShare: pct(byEff.reduce((m, d) => (d.value > m.value ? d : m)).value, eTotal),
     },
+    evidence: {
+      kind: 'pairs',
+      unit: 'percent',
+      beforeLabel: 'share of output',
+      afterLabel: 'share of the work',
+      rows: byVol
+        .map((d) => ({
+          name: d.name,
+          before: Math.round((d.value / vTotal) * 100),
+          after: Math.round(((byEff.find((e) => e.name === d.name)?.value ?? 0) / eTotal) * 100),
+        }))
+        .filter((r) => r.before > 0 || r.after > 0),
+    },
   }
 }
 
@@ -255,6 +314,18 @@ function heavyAssetType({ tasks, rates, assetTypes }: AdvisorInput): Finding | n
       typeEffortShare: pct(top.value, eTotal),
       typeVolumeShare: pct(topVol, vTotal),
       typeHours: formatHours(top.value),
+    },
+    evidence: {
+      kind: 'pairs',
+      unit: 'percent',
+      beforeLabel: 'share of output',
+      afterLabel: 'share of hours',
+      // Top time consumers, the subject first — the gap between its bars IS the finding.
+      rows: byEff.slice(0, 4).map((d) => ({
+        name: d.name,
+        before: Math.round(((vol.find((v) => v.name === d.name)?.value ?? 0) / Math.max(1, vTotal)) * 100),
+        after: Math.round((d.value / eTotal) * 100),
+      })),
     },
   }
 }
@@ -281,6 +352,11 @@ function squadConcentration({ tasks }: AdvisorInput): Finding | null {
       squadAssets: top.value.toLocaleString(),
       squadPerBrief: topTasks > 0 ? round1(top.value / topTasks) : '0',
       othersPerBrief: otherTasks > 0 ? round1(otherAssets / otherTasks) : '0',
+    },
+    evidence: {
+      kind: 'bars',
+      unit: 'assets',
+      rows: byAssets.slice(0, 6).map((d) => ({ name: d.name, value: d.value, accent: d.name === top.name })),
     },
   }
 }
@@ -316,6 +392,21 @@ function mixShift({ yoy, assetTypes }: AdvisorInput): Finding | null {
       shareBefore: `${Math.round(best.beforeShare * 100)}%`,
       shareChange: `${best.delta > 0 ? '+' : '−'}${Math.abs(Math.round(best.delta * 100))} points`,
     },
+    evidence: {
+      kind: 'pairs',
+      unit: 'percent',
+      beforeLabel: yoy.previousYear,
+      afterLabel: yoy.recentYear,
+      // The biggest movers, the headline shift first.
+      rows: now
+        .map((row) => ({
+          name: row.name,
+          before: Math.round(((before.find((d) => d.name === row.name)?.value ?? 0) / bTotal) * 100),
+          after: Math.round((row.value / nTotal) * 100),
+        }))
+        .sort((a, b) => Math.abs(b.after - b.before) - Math.abs(a.after - a.before))
+        .slice(0, 4),
+    },
   }
 }
 
@@ -339,6 +430,14 @@ function turnaroundOverrun({ tasks, sizeDurations }: AdvisorInput): Finding | nu
       overrunCount: String(over),
       measuredCount: String(measured),
     },
+    evidence: {
+      kind: 'bars',
+      unit: 'tasks',
+      rows: [
+        { name: 'Within turnaround', value: measured - over },
+        { name: 'Ran over', value: over, accent: true },
+      ],
+    },
   }
 }
 
@@ -346,6 +445,7 @@ function turnaroundOverrun({ tasks, sizeDurations }: AdvisorInput): Finding | nu
 function coverageGap({ tasks, rates }: AdvisorInput): Finding | null {
   const unrated = unratedTypesWithVolume(tasks, rates)
   if (!unrated.length) return null
+  const volumes = assetsByType(tasks, unrated).sort((a, b) => b.value - a.value)
   return {
     id: 'coverage-gap',
     severity: 2,
@@ -353,6 +453,11 @@ function coverageGap({ tasks, rates }: AdvisorInput): Finding | null {
     facts: {
       unratedCount: String(unrated.length),
       unratedTypes: unrated.slice(0, 4).join(', '),
+    },
+    evidence: {
+      kind: 'bars',
+      unit: 'assets',
+      rows: volumes.slice(0, 5).map((d) => ({ name: d.name, value: d.value })),
     },
   }
 }
@@ -419,14 +524,4 @@ export function allowedTokens(findings: Finding[]): Set<string> {
   const out = new Set<string>()
   for (const f of findings) for (const v of Object.values(f.facts)) out.add(v)
   return out
-}
-
-/** Bare-bones narration used only when the model is unreachable. Reads robotically
- *  by design — it exists so the feature degrades instead of failing. */
-export function fallbackNarration(findings: Finding[]): string {
-  return findings
-    .filter((f) => f.id !== 'scope-totals')
-    .slice(0, 4)
-    .map((f) => `${f.claim} (${Object.values(f.facts).slice(0, 3).join(', ')})`)
-    .join(' ')
 }
