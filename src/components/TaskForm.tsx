@@ -788,7 +788,8 @@ function CodeNameField({
   }
 
   return (
-    <div>
+    // data-help: anchor for the Help-page screenshot of the name + auto-fill row.
+    <div data-help="task-identity">
       <label className={cx('label', filledIdentity && 'is-filled')}>Task code &amp; name</label>
       <div ref={wrapRef} className="relative">
         <div
@@ -1993,7 +1994,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       </div>
 
       {/* Right column — the tall workload panel */}
-      <div>
+      {/* data-help: anchor for the Help-page screenshot of the function tabs. */}
+      <div data-help="fn-workload">
       {/* ── Function-specific workload: one tab per GCMC function ────────── */}
       <Section
         first

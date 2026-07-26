@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clapperboard,
+  BookOpen,
   LayoutDashboard,
   List,
   Plus,
@@ -22,6 +23,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/tasks', label: 'Task List', icon: List },
+  { to: '/help', label: 'Help', icon: BookOpen },
   { to: '/showcase', label: 'Showcase', icon: Clapperboard },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -30,8 +32,8 @@ const NAV: NavItem[] = [
 const EDIT_ONLY = ['/settings', '/showcase']
 
 /** Pages hidden from the mobile tab bar — the Showcase builder/player are
-    desktop-only (both routes already show a "not on mobile" screen). */
-const MOBILE_HIDDEN = ['/showcase']
+    desktop-only, and the Help manual's screenshots read best on desktop. */
+const MOBILE_HIDDEN = ['/showcase', '/help']
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { openNewTask } = useNewTask()
@@ -44,10 +46,11 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const railOnly = (expandedMd: string) => (collapsed ? '' : expandedMd)
   const hideLabel = collapsed ? 'hidden' : 'hidden md:inline'
 
-  // The Showreel/Showcase link sits on its own at the BOTTOM of the rail; the
-  // rest stay grouped up top.
-  const topNav = nav.filter((item) => item.to !== '/showcase')
-  const bottomNav = nav.filter((item) => item.to === '/showcase')
+  // Help + Showcase sit together at the BOTTOM of the rail (Help directly above
+  // the Showcase icon); the rest stay grouped up top.
+  const BOTTOM = ['/help', '/showcase']
+  const topNav = nav.filter((item) => !BOTTOM.includes(item.to))
+  const bottomNav = nav.filter((item) => BOTTOM.includes(item.to))
 
   const renderLink = ({ to, label, icon: Icon }: NavItem) => (
     <NavLink

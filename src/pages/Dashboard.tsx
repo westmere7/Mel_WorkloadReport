@@ -437,7 +437,8 @@ export function Dashboard() {
   useEffect(() => {
     setHeaderSlots({
       left: (
-        <div className="flex flex-wrap items-center gap-2">
+        // data-help: anchor for the Help-page screenshot of the scope controls.
+        <div className="flex flex-wrap items-center gap-2" data-help="header-scope">
           <FunctionFilter functions={settings.functions} selected={fnFilter} onChange={setFnFilter} />
           {/* Assets ↔ Effort sits beside the function filter: both re-scope the
               whole dashboard, so they belong at the same level. Hidden until at
@@ -683,7 +684,6 @@ export function Dashboard() {
             <VolumeCompactCard
               assets={summary.totalAssets}
               tasks={summary.totalTasks}
-              campaigns={summary.totalCampaigns}
               srcAssets={srcSummary.totalAssets}
               srcTasks={srcSummary.totalTasks}
               bySize={assetsBySize}

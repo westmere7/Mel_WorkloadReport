@@ -32,7 +32,11 @@ export const CHANGELOG: Release[] = [
     notes: [
       {
         kind: 'new',
-        text: 'The workload chart can now be read as EFFORT instead of asset count — an Assets / Effort switch sits under the line, with a “?” explaining it and letting you edit the rates on the spot. Effort weights each deliverable by how long its asset type takes, so a month of banners no longer looks quieter than a month of photo edits. It changes that one chart and only for you: every other card, export and stored total still counts each asset as one.',
+        text: 'The dashboard can now be read as EFFORT instead of asset count — an Assets / Effort switch beside the function filter, with a “?” explaining it and letting you edit the rates on the spot. Effort weights each deliverable by how long its asset type takes, re-draws the workload chart in hours, and swaps the hero cards for a compact Volume panel plus an Effort panel (total hours, hours per asset, top 3 time consumers). It changes only how the dashboard reads, and only for you: every export and stored total still counts each asset as one.',
+      },
+      {
+        kind: 'new',
+        text: 'Help & user guide — a full in-app manual (sidebar, just above Showcase) covering recording work, every dashboard panel with real screenshots, Effort mode, comparing years, the task list, settings, the Showcase and how data is stored. Every dashboard panel also gained its own “?” with a plain-language explanation and a worked example.',
       },
       {
         kind: 'new',

@@ -5,6 +5,7 @@ import { AnimatedNumber } from './ui/AnimatedNumber'
 import { TrendDelta } from './ui/TrendDelta'
 import { SIZE_COLORS, SIZE_SHORT } from '../constants'
 import { formatHours } from '../lib/effort'
+import { cx } from '../lib/format'
 import type { NamedCount } from '../lib/analytics'
 
 /** Shared comparison context for the effort-mode header panels. */
@@ -26,7 +27,6 @@ export interface CompareCtx {
 export function VolumeCompactCard({
   assets,
   tasks,
-  campaigns,
   srcAssets,
   srcTasks,
   bySize,
@@ -35,7 +35,6 @@ export function VolumeCompactCard({
 }: {
   assets: number
   tasks: number
-  campaigns: number
   srcAssets: number
   srcTasks: number
   /** Assets per task size — the volume counterpart of Effort's breakdown. */
@@ -51,12 +50,14 @@ export function VolumeCompactCard({
   const stat = (value: number, prev: number, unit: string) => (
     // Equal halves with centred content: the figures scale to fill their own half,
     // and the divider between them lands exactly midway between the two.
-    <div className="min-w-0 flex-1 text-center">
+    <div className="flex min-w-0 flex-1 flex-col text-center">
       {/* cq units resolve against the card's CONTENT box and each figure gets half
           of it, so ~17cqw is the ceiling for a 5-glyph number. The max is
           deliberately high — cqw should be what limits the size, not the clamp. */}
-      <span className="font-display block text-[clamp(2.25rem,17cqw,12rem)] font-bold leading-[0.8] tracking-tighter text-rmit-navy dark:text-ink">
-        <AnimatedNumber value={value} />
+      <span className={cx(FIGURE_ROW, 'justify-center')}>
+        <span className="font-display block text-[clamp(2.25rem,17cqw,12rem)] font-bold leading-[0.8] tracking-tighter text-rmit-navy dark:text-ink">
+          <AnimatedNumber value={value} />
+        </span>
       </span>
       <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">{unit}</span>
@@ -86,32 +87,42 @@ export function VolumeCompactCard({
             : 'What was produced, counted'
         }
         action={<PanelInfo panel="volume" />}
+        className={HEADER_BOX}
       />
-      <div className="flex flex-1 items-center gap-4">
+      <div className="flex items-stretch gap-4">
         {stat(assets, srcAssets, 'assets')}
-        {/* Short centred rule, not a full-height divider — it only needs to
-            separate the two figures, not stripe the whole card. */}
-        <span className="h-16 w-px shrink-0 self-center bg-line" aria-hidden="true" />
+        {/* Short rule beside the figures, not a full-height divider — it only needs
+            to separate the two, not stripe the whole card. */}
+        <span className="mt-2 h-16 w-px shrink-0 bg-line" aria-hidden="true" />
         {stat(tasks, srcTasks, 'tasks')}
       </div>
       {/* Same breakdown as the Effort panel, but by asset COUNT — put side by side
           they show where the volume sits versus where the work actually is. */}
-      <SizeBreakdown
-        data={bySize}
-        srcData={srcBySize}
-        cmp={cmp}
-        label="Assets by task size"
-        fmt={(v) => `${Math.round(v).toLocaleString()} assets`}
-      />
-      <p className="mt-auto text-[11px] text-faint">
-        Across {campaigns} campaign{campaigns === 1 ? '' : 's'} · every asset counted as one
-      </p>
+      <div className="mt-6">
+        <SizeBreakdown
+          data={bySize}
+          srcData={srcBySize}
+          cmp={cmp}
+          label="Assets by task size"
+          fmt={(v) => `${Math.round(v).toLocaleString()} assets`}
+        />
+      </div>
     </Card>
   )
 }
 
 /** How many of the leading asset types to list before collapsing the rest. */
 const TOP_TYPES = 3
+
+// Volume and Effort sit side by side, so their big FIGURES must land on the same
+// horizontal line. Centring each block in its own card can't do that, and a header
+// min-height isn't enough either: Effort's card is narrower, so its subtitle wraps
+// to two lines and pushes everything below it down. Hence a FIXED header box (tall
+// enough for two subtitle lines, clamped so it can never be three) followed by a
+// fixed-height figure row that bottom-aligns the glyphs. Captions below keep their
+// own natural spacing.
+const HEADER_BOX = 'h-[3.75rem] [&_p]:line-clamp-2'
+const FIGURE_ROW = 'flex h-[5.5rem] items-end'
 
 /**
  * One task-size distribution bar. `fmt` renders a segment's value for the tooltip.
@@ -124,19 +135,21 @@ function SizeBar({
   total,
   muted,
   label,
+  inlineLabel,
   fmt,
 }: {
   data: NamedCount[]
   total: number
   muted?: boolean
   label?: string
+  /** Put the label to the LEFT of the bar instead of above it — for short labels
+   *  like a year, where stacking would waste a row per bar. */
+  inlineLabel?: boolean
   fmt: (value: number) => string
 }) {
   if (total <= 0) return null
-  return (
-    <div className="space-y-1">
-      {label && <span className="text-[10px] font-semibold uppercase tracking-wide text-faint">{label}</span>}
-      <div className="flex h-2 w-full overflow-hidden rounded-full bg-subtle">
+  const bar = (
+    <div className="flex h-3.5 w-full overflow-hidden rounded-full bg-subtle">
         {data.map((d) =>
           d.value > 0 ? (
             <span
@@ -153,7 +166,20 @@ function SizeBar({
             />
           ) : null,
         )}
+    </div>
+  )
+  if (inlineLabel && label) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="w-8 shrink-0 text-[10px] font-semibold uppercase tracking-wide text-faint">{label}</span>
+        <div className="min-w-0 flex-1">{bar}</div>
       </div>
+    )
+  }
+  return (
+    <div className="space-y-1">
+      {label && <span className="text-[10px] font-semibold uppercase tracking-wide text-faint">{label}</span>}
+      {bar}
     </div>
   )
 }
@@ -183,10 +209,16 @@ function SizeBreakdown({
   // Only the sizes carrying something, biggest share first.
   const legend = [...data].filter((d) => d.value > 0).sort((a, b) => b.value - a.value)
   return (
-    <div className="space-y-2">
-      <SizeBar data={data} total={total} label={cmp.on ? String(cmp.activeYear) : label} fmt={fmt} />
+    <div className="space-y-1.5">
+      <SizeBar
+        data={data}
+        total={total}
+        label={cmp.on ? String(cmp.activeYear) : label}
+        inlineLabel={cmp.on}
+        fmt={fmt}
+      />
       {cmp.on && srcTotal > 0 && (
-        <SizeBar data={srcData} total={srcTotal} muted label={String(cmp.srcYear)} fmt={fmt} />
+        <SizeBar data={srcData} total={srcTotal} muted label={String(cmp.srcYear)} inlineLabel fmt={fmt} />
       )}
       <ul className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {legend.map((d) => (
@@ -255,6 +287,7 @@ export function EffortSummaryCard({
               }`
             : 'How much work that actually was, weighted by output rate'
         }
+        className={HEADER_BOX}
         action={
           onExplain && (
             <button
@@ -272,12 +305,12 @@ export function EffortSummaryCard({
 
       {/* The hours total is the headline, so it gets the card's whole width; the
           intensity figure sits under it as supporting detail. */}
-      <div className="flex min-w-0 flex-1 flex-col justify-center">
-        <div className="flex min-w-0 items-baseline gap-1">
+      <div className="flex min-w-0 flex-col">
+        <div className={cx(FIGURE_ROW, 'min-w-0 gap-1')}>
           <span className="font-display text-[clamp(2rem,24cqw,10rem)] font-bold leading-[0.8] tracking-tighter text-rmit-navy dark:text-ink">
             <AnimatedNumber value={Math.round(hours)} />
           </span>
-          <span className="text-[clamp(1.125rem,7cqw,2.5rem)] font-semibold text-muted">h</span>
+          <span className="pb-0.5 text-[clamp(1.125rem,7cqw,2.5rem)] font-semibold leading-none text-muted">h</span>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
           {cmp.on && (
@@ -305,9 +338,17 @@ export function EffortSummaryCard({
           Volume panel; this is the view only effort can give — a type can be a
           sliver of the output and a big slice of the work. */}
       {byType.length > 0 && (
-        <div className="space-y-1.5">
+        <div className="mt-3 space-y-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-faint">
             Top {Math.min(TOP_TYPES, byType.length)} time consumers
+            {byType.length > TOP_TYPES && (
+              // The three shares don't sum to 100%, so name what's left out.
+              <span className="normal-case">
+                {' '}
+                (remaining {Math.round((byType.slice(TOP_TYPES).reduce((a, d) => a + d.value, 0) / hours) * 100)}%
+                hidden)
+              </span>
+            )}
           </span>
           <ol className="space-y-1">
             {byType.slice(0, TOP_TYPES).map((d, i) => (
@@ -328,12 +369,6 @@ export function EffortSummaryCard({
               </li>
             ))}
           </ol>
-          {byType.length > TOP_TYPES && (
-            <p className="text-[10px] text-faint">
-              + {byType.length - TOP_TYPES} more type{byType.length - TOP_TYPES === 1 ? '' : 's'} ·{' '}
-              {Math.round((byType.slice(TOP_TYPES).reduce((a, d) => a + d.value, 0) / hours) * 100)}% of the hours
-            </p>
-          )}
         </div>
       )}
     </Card>

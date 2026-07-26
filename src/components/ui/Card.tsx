@@ -15,14 +15,18 @@ export function CardHeader({
   title,
   subtitle,
   action,
+  className,
 }: {
   /** ReactNode so a heading can carry an inline badge, not just text. */
   title: ReactNode
   subtitle?: string
   action?: ReactNode
+  /** Extra classes on the header row — e.g. a min-height so sibling cards' bodies
+   *  start at the same offset even when one subtitle wraps to two lines. */
+  className?: string
 }) {
   return (
-    <div className="mb-4 flex items-start justify-between gap-3">
+    <div className={cx('mb-4 flex items-start justify-between gap-3', className)}>
       {/* min-w-0 so a long title/badge can shrink or wrap in a narrow card instead
           of forcing the header wider than the card. */}
       <div className="min-w-0">

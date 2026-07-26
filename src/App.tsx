@@ -4,6 +4,7 @@ import { NewTaskProvider } from './components/NewTaskModal'
 import { StoreProvider, useStore } from './data/store'
 import { useAuth } from './lib/auth'
 import { Dashboard } from './pages/Dashboard'
+import { HelpPage } from './pages/Help'
 import { TaskList } from './pages/TaskList'
 import { SettingsPage } from './pages/Settings'
 import { ShowcasePage } from './pages/Showcase'
@@ -20,6 +21,8 @@ export default function App() {
       <Route element={<StoreShell />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/tasks" element={<TaskList />} />
+        {/* Public like the dashboard — reading the manual needs no sign-in. */}
+        <Route path="/help" element={<HelpPage />} />
         <Route
           path="/showcase"
           element={
