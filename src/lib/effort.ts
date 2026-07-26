@@ -58,6 +58,25 @@ export function unratedTypesWithVolume(tasks: Task[], rates: AssetRates): string
   return [...out].sort((a, b) => a.localeCompare(b))
 }
 
+/**
+ * Hours per ASSET TYPE across `tasks`, biggest first (types with no effort are
+ * dropped). Answers "which deliverables consume the team's time" — a question the
+ * asset count can't reach, since it's the whole point of recording rates: a type
+ * can be a small share of the output and a large share of the work.
+ */
+export function effortByAssetType(tasks: Task[], rates: AssetRates): { name: string; value: number }[] {
+  const rec: Record<string, number> = {}
+  for (const t of tasks) {
+    for (const [name, count] of Object.entries(t.assetBreakdown ?? {})) {
+      const hours = (Number(count) || 0) * hoursPerUnit(rates[name])
+      if (hours > 0) rec[name] = (rec[name] ?? 0) + hours
+    }
+  }
+  return Object.entries(rec)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
+}
+
 /** Hours as a compact label — "1,240 h", "6.5 h". Display only. */
 export function formatHours(hours: number): string {
   if (!Number.isFinite(hours) || hours <= 0) return '0 h'

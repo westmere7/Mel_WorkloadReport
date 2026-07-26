@@ -157,11 +157,20 @@ export function addedOrderMap(tasks: Task[]): Map<string, number> {
   return map
 }
 
+/**
+ * Totals of any per-task value per T-shirt size, in fixed XS→XL order (zeros
+ * included). Parameterized so the dashboard can total effort hours per size
+ * without a second copy of the bucketing.
+ */
+export function valueBySize(tasks: Task[], value: (task: Task) => number): NamedCount[] {
+  const rec: Record<string, number> = {}
+  for (const t of tasks) rec[t.size] = (rec[t.size] ?? 0) + value(t)
+  return SIZES.map((s) => ({ name: s, value: rec[s] ?? 0 }))
+}
+
 /** Task counts per T-shirt size, in fixed XS→XL order (zeros included). */
 export function countBySize(tasks: Task[]): NamedCount[] {
-  const rec: Record<string, number> = {}
-  for (const t of tasks) rec[t.size] = (rec[t.size] ?? 0) + 1
-  return SIZES.map((s) => ({ name: s, value: rec[s] ?? 0 }))
+  return valueBySize(tasks, () => 1)
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

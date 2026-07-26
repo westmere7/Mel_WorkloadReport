@@ -90,11 +90,14 @@ export function SettingsPage() {
           />
         </PrefRow>
 
-        {/* `items-start` keeps each panel at its natural height. Stretching them
-            to the tallest sibling (Task sizes, which carries the Output rates
-            section) left dead space under the shorter lists — and their scroll
-            fade floating in the middle of the card instead of on its bottom edge. */}
-        <div className="grid items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {/* Panels stretch to a shared height per row (the grid default). Each
+            ListEditor is a flex column whose list takes the slack — capped at its
+            own max height — so the bottoms line up AND a scrollable list's fade
+            still lands on the card's real bottom edge. */}
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {/* Turnaround per task size + the asset output rates — first panel in
+              the grid, since both are about how long work takes. */}
+          <TimingEffortCard />
           <ListEditor
             title="Squads"
             description="Requesting stakeholder teams. DOM & INTON are locked (used by the demand chart) but their keywords stay editable."
@@ -141,8 +144,6 @@ export function SettingsPage() {
             mondayIds={settings.peopleMondayIds}
             onMondayId={setPersonMondayId}
           />
-          {/* Editable task-size turnaround durations — sits beside People */}
-          <SizeDurationsCard />
         </div>
       </CollapsibleSection>
 
@@ -727,10 +728,11 @@ function SnapshotsCard() {
   )
 }
 
-/** Editable per-size turnaround (days) used to auto-fill a task's end date, plus
- *  the experimental per-asset-type output rates (both are "how long work takes"
- *  settings, so they sit in the same card). */
-function SizeDurationsCard() {
+/** "Timing & effort": editable per-size turnaround (days) used to auto-fill a
+ *  task's end date, alongside the experimental per-asset-type output rates. Both
+ *  answer "how long does this work take", so they share one full-width card at the
+ *  top of Groups. */
+function TimingEffortCard() {
   const { settings, saveSettings } = useStore()
   // Output-rates pop-up (experimental, recorded only — see AssetRatesModal).
   const [ratesOpen, setRatesOpen] = useState(false)
@@ -767,15 +769,19 @@ function SizeDurationsCard() {
     setDraft(Object.fromEntries(SIZES.map((s) => [s, String(DEFAULT_SIZE_DURATIONS[s])])) as Record<Size, string>)
 
   return (
-    <Card className="bg-subtle">
+    <Card className="flex h-full flex-col bg-subtle">
       <CardHeader
-        title="Task sizes"
-        subtitle="Days added to the start date when auto-filling the end date"
+        title="Timing & effort"
+        subtitle="How long work takes — turnaround per task size, and how much effort one of each asset type is"
       />
-      <p className="mb-3 text-xs text-muted">
-        Only affects new tasks and re-auto-fills — existing end dates are left as-is.
-      </p>
-      <ul className="space-y-1.5">
+      <div>
+        <div>
+          <h4 className="text-sm font-semibold text-ink">Task sizes</h4>
+          <p className="mb-3 mt-1 text-xs leading-relaxed text-muted">
+            Days added to the start date when auto-filling the end date. Only affects new tasks and
+            re-auto-fills — existing end dates are left as-is.
+          </p>
+          <ul className="space-y-1.5">
         {SIZES.map((s) => (
           <li
             key={s}
@@ -809,48 +815,48 @@ function SizeDurationsCard() {
             </span>
           </li>
         ))}
-      </ul>
-      <div className="mt-3 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={fillDefaults}
-          disabled={draftIsDefault}
-          className="btn-outline h-9 px-3 text-sm disabled:cursor-default disabled:opacity-40"
-          title="Fill the inputs with the default durations"
-        >
-          Default
-        </button>
-        <button
-          type="button"
-          onClick={save}
-          disabled={!dirty || saving}
-          className="btn-primary h-9 px-4 text-sm disabled:cursor-default disabled:opacity-40"
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-      </div>
-
-      {/* Output rates — how many of each asset type we finish in how long.
-          EXPERIMENTAL: recorded only, no calculation reads it (see
-          AssetRatesModal). Keyed by asset type, but it belongs with the other
-          "how long does work take" settings rather than the asset-type LIST. */}
-      <div className="mt-4 border-t border-line pt-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h4 className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
-              <Timer className="h-3.5 w-3.5 shrink-0 text-accent-plum" />
-              Output rates
-              <Badge tone="plum">Experimental</Badge>
-            </h4>
-            <p className="mt-1 text-xs leading-relaxed text-muted">
-              Roughly how many of each asset type we finish, and in how long — so a banner isn&rsquo;t counted
-              as the same amount of work as a photo edit. Recorded only for now; no number in the app changes.
-            </p>
+          </ul>
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={fillDefaults}
+              disabled={draftIsDefault}
+              className="btn-outline h-9 px-3 text-sm disabled:cursor-default disabled:opacity-40"
+              title="Fill the inputs with the default durations"
+            >
+              Default
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={!dirty || saving}
+              className="btn-primary h-9 px-4 text-sm disabled:cursor-default disabled:opacity-40"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
           </div>
+        </div>
+
+        {/* Output rates — how many of each asset type we finish in how long.
+            EXPERIMENTAL: it feeds the dashboard's Effort view only; every stored
+            total still counts each asset as 1 (see AssetRatesModal). Keyed by asset
+            type, but it belongs with the other "how long does work take" settings
+            rather than the asset-type LIST. */}
+        <div className="mt-4 border-t border-line pt-3">
+          <h4 className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
+            <Timer className="h-3.5 w-3.5 shrink-0 text-accent-plum" />
+            Output rates
+            <Badge tone="plum">Experimental</Badge>
+          </h4>
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            Roughly how many of each asset type we finish, and in how long — so a banner isn&rsquo;t counted as
+            the same amount of work as a photo edit. Powers the <strong className="text-ink">Effort</strong>{' '}
+            view on the dashboard&rsquo;s workload chart; no stored total changes.
+          </p>
           <button
             type="button"
             onClick={() => setRatesOpen(true)}
-            className="btn-outline h-8 shrink-0 px-3 text-xs"
+            className="btn-outline mt-3 h-8 px-3 text-xs"
           >
             {rateCount > 0 ? `Edit rates · ${rateCount}/${settings.assetTypes.length}` : 'Set rates'}
           </button>
@@ -1194,8 +1200,8 @@ function TypesCard() {
   )
 
   return (
-    <Card className="bg-subtle">
-      <div className="mb-3 inline-flex items-center gap-0.5 rounded-lg bg-card p-1 shadow-soft">
+    <Card className="flex h-full flex-col bg-subtle">
+      <div className="mb-3 inline-flex shrink-0 items-center gap-0.5 self-start rounded-lg bg-card p-1 shadow-soft">
         <TabBtn value="types" label="Work types" />
         <TabBtn value="assetTypes" label="Asset types" />
       </div>
@@ -1299,7 +1305,7 @@ function FunctionsCard() {
   }
 
   return (
-    <Card className="bg-subtle">
+    <Card className="flex h-full flex-col bg-subtle">
       <CardHeader
         title="Functions"
         subtitle="GCMC functions that record workload — each gets its own tab in the task form. Expand one to pick its colour, type offers, and auto-enable PICs."
@@ -1316,7 +1322,7 @@ function FunctionsCard() {
           <Plus className="h-4 w-4" />
         </button>
       </div>
-      <ul ref={listRef} className="max-h-[34rem] space-y-1.5 overflow-y-auto">
+      <ul ref={listRef} className="max-h-[34rem] min-h-0 flex-1 space-y-1.5 overflow-y-auto">
         {functions.map((f) => {
           const count = functionUsage(f.name)
           const isOpen = expanded === f.name
@@ -1790,7 +1796,7 @@ function ListEditor({
 
   const Wrapper = bare ? 'div' : Card
   return (
-    <Wrapper className={cx(!bare && 'bg-subtle', className)}>
+    <Wrapper className={cx('flex h-full flex-col', !bare && 'bg-subtle', className)}>
       {bare ? (
         <div className="mb-2">
           {!hideHeading && <h4 className="text-sm font-semibold text-ink">{title}</h4>}
@@ -1821,7 +1827,11 @@ function ListEditor({
           </span>
         </div>
       )}
-      <ul ref={listRef} className="max-h-[27rem] space-y-1.5 overflow-y-auto">
+      {/* `flex-1` lets the list absorb the row's shared height so panel bottoms
+          align; `max-h` keeps it from growing past its normal size when there's
+          lots of slack. Both are needed — flex-1 alone would let a long list run
+          the whole page height. */}
+      <ul ref={listRef} className="max-h-[34rem] min-h-0 flex-1 space-y-1.5 overflow-y-auto">
         {sortedItems.map((item) => {
           const count = usage(item)
           const isLocked = !!locked?.includes(item)

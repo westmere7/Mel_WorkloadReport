@@ -8,6 +8,10 @@ import { cx } from '../../lib/format'
  *
  * `size="lg"` is the prominent variant — an infinite escalator of chevrons
  * moving in the trend direction, with a large percentage.
+ *
+ * `size="prominent"` is the same escalator laid out HORIZONTALLY: animated
+ * chevrons beside a large percentage, for cards where a stacked column would cost
+ * too much height.
  */
 export function TrendDelta({
   current,
@@ -17,14 +21,15 @@ export function TrendDelta({
 }: {
   current: number
   previous: number
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'prominent'
   title?: string
 }) {
   const lg = size === 'lg'
   const sm = size === 'sm'
-  const textCls = lg ? 'text-2xl' : sm ? 'text-[11px]' : 'text-sm'
+  const prominent = size === 'prominent'
+  const textCls = lg ? 'text-2xl' : prominent ? 'text-xl' : sm ? 'text-[11px]' : 'text-sm'
   // Non-hero deltas use a lighter weight so they don't overpower the count.
-  const weight = lg ? 'font-bold' : 'font-medium'
+  const weight = lg || prominent ? 'font-bold' : 'font-medium'
 
   if (previous <= 0 && current <= 0) {
     return (
@@ -94,7 +99,8 @@ export function TrendDelta({
   }
 
   return (
-    <span className={cx('inline-flex items-center', weight, color, textCls)} title={title}>
+    <span className={cx('inline-flex items-center', prominent && 'gap-0.5', weight, color, textCls)} title={title}>
+      {prominent && <ChevronEscalator up={up} compact />}
       {up ? '+' : '−'}
       {magnitude}%
     </span>
@@ -105,15 +111,23 @@ export function TrendDelta({
  * A vertical "escalator" of three chevrons that continuously travel in the trend
  * direction and loop forever — the prominent comparison indicator.
  */
-function ChevronEscalator({ up }: { up: boolean }) {
+function ChevronEscalator({ up, compact }: { up: boolean; compact?: boolean }) {
   const Icon = up ? ChevronUp : ChevronDown
   const anim = up ? 'animate-chevron-rise' : 'animate-chevron-fall'
   return (
-    <span className="relative flex h-9 w-7 items-center justify-center overflow-hidden mb-1" aria-hidden="true">
+    <span
+      className={cx(
+        'relative flex items-center justify-center overflow-hidden',
+        // Compact sits inline beside the percentage; the tall box is for the
+        // stacked `lg` variant, where the chevrons run above the number.
+        compact ? 'h-5 w-4' : 'mb-1 h-9 w-7',
+      )}
+      aria-hidden="true"
+    >
       {[0, -0.4, -0.8].map((delay) => (
         <Icon
           key={delay}
-          className={cx('absolute h-6 w-6', anim)}
+          className={cx('absolute', compact ? 'h-4 w-4' : 'h-6 w-6', anim)}
           strokeWidth={3}
           style={{ animationDelay: `${delay}s` }}
         />
