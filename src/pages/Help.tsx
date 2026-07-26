@@ -310,7 +310,7 @@ export function HelpPage() {
                 <Shot src="dashboard-demand" caption="Share of each type across Domestic, INTON and other stakeholders" />
               </Section>
 
-              <Section id="effort" n="03" title="Effort mode" badge="Experimental">
+              <Section id="effort" n="03" title="Effort mode">
                 <P>
                   Counting assets flatters whoever makes the quickest ones: 300 photo edits and 10 banners
                   read as a 30:1 difference in output even when the banners took longer. Effort mode fixes the

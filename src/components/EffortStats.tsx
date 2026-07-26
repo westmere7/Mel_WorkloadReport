@@ -1,6 +1,5 @@
 import { Card, CardHeader } from './ui/Card'
 import { PanelInfo } from './PanelInfo'
-import { Badge } from './ui/Badge'
 import { AnimatedNumber } from './ui/AnimatedNumber'
 import { TrendDelta } from './ui/TrendDelta'
 import { SIZE_COLORS, SIZE_SHORT } from '../constants'
@@ -274,12 +273,7 @@ export function EffortSummaryCard({
     // cq units only, and the card can push its row taller again.
     <Card className="flex h-full flex-col gap-2 [container-type:inline-size]">
       <CardHeader
-        title={
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            Effort
-            <Badge tone="plum">Experimental</Badge>
-          </span>
-        }
+        title="Effort"
         subtitle={
           cmp.on
             ? `Weighted by output rate — ${cmp.activeYear} over ${cmp.srcYear}${

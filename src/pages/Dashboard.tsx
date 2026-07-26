@@ -90,7 +90,7 @@ export function Dashboard() {
   // Chart display preferences — edited in Settings → Dashboard.
   const { demandDim, hideCommonCampaigns, showTasksByPerson, groupAssetMix, groupWorkTypeMix, groupDemand, workloadUnit } =
     useDashboardPrefs()
-  // ── Effort weighting (experimental) ───────────────────────────────────────
+  // ── Effort weighting ──────────────────────────────────────────────────────
   // While on, it re-values the across-the-year chart and swaps the two hero stat
   // cards for a compact Volume panel + an Effort panel. The by-squad, mix, demand
   // and campaign panels keep counting each asset as 1, and nothing is persisted —
@@ -470,8 +470,8 @@ export function Dashboard() {
                       'rounded-md px-3 py-1 text-xs font-bold transition',
                       workloadUnit !== u
                         ? 'text-faint hover:bg-card hover:text-ink'
-                        : // Only Effort takes the red: it's the experimental mode, so
-                          // the fill doubles as a "you're off the default" signal.
+                        : // Only Effort takes the red, so the fill doubles as a
+                          // "you're off the default measure" signal.
                           u === 'effort'
                           ? 'bg-rmit-red text-white shadow-soft'
                           : 'bg-rmit-navy text-white shadow-soft dark:bg-navy-300',

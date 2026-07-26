@@ -70,7 +70,7 @@ export const DEFAULT_PEOPLE: string[] = [
 /** Default asset (deliverable) types — editable in Settings. */
 export const DEFAULT_ASSET_TYPES: string[] = ['Image', 'Video', 'Publication', 'HTML5 ad', 'GIF / Motion']
 
-// ── Asset output rates (experimental, recorded only) ─────────────────────────
+// ── Asset output rates (drive the dashboard's Effort view) ───────────────────
 
 /** Time bases an output rate can be expressed against, in picker order. */
 export const RATE_UNITS: RatePer[] = ['hour', 'day', 'week']
@@ -128,9 +128,9 @@ export function normalizeAssetRates(raw: unknown): AssetRates {
 }
 
 /**
- * Hours ONE unit takes at this rate. DISPLAY ONLY — it drives the "≈ each" hint
- * and the relative-effort bars in Settings, and is deliberately NOT used by any
- * workload total (see the AssetRate docs). 0 for a missing/invalid rate.
+ * Hours ONE unit takes at this rate — the basis of every Effort figure, and of the
+ * "≈ each" hint and relative-effort bars in Settings. Returns 0 for a
+ * missing/invalid rate, so unrated types contribute nothing rather than a guess.
  */
 export function hoursPerUnit(rate: AssetRate | undefined): number {
   if (!rate || rate.qty <= 0 || rate.every <= 0) return 0

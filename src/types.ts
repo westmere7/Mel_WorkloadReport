@@ -20,14 +20,14 @@ export type RatePer = 'hour' | 'day' | 'week'
 
 /**
  * Approximate production rate for ONE asset type — how many units the team
- * finishes per hour, or per day.
+ * finishes per hour, per day, or per week.
  *
- * EXPERIMENTAL / RECORDED ONLY. Nothing reads this yet: no dashboard number, no
- * chart, no export column and no total changes because a rate is set. It exists
- * so the real effort difference between asset types can be captured now (a team
- * might finish 300 photo edits a day but only 1 banner every 2 days), giving a
- * later weighted-workload measure something real to be built on. Until then the
- * app keeps counting every asset as 1.
+ * Drives the dashboard's Effort view, which weighs every deliverable by its
+ * type's rate so slow, heavy work isn't read as unproductive next to quick,
+ * high-volume work (a team might finish 300 photo edits a day but only 1 banner
+ * every 2 days). Effort is DERIVED at render time: no task field, stored total or
+ * export is affected, so editing a rate re-reads history rather than rewriting it.
+ * Asset types with no rate contribute zero and are reported, never guessed.
  */
 export interface AssetRate {
   /** Units finished in the `every` × `per` span. Always > 0 — an unset rate is an ABSENT key. */
@@ -201,7 +201,8 @@ export interface AppSettings {
   assetTypes: string[]
   /**
    * Approximate production rate per asset type (Settings → Asset types → Output
-   * rates). EXPERIMENTAL and recorded only — see `AssetRate`. Empty by default.
+   * rates) — see `AssetRate`. Empty by default; the dashboard's Effort view is
+   * only offered once at least one rate exists.
    */
   assetRates: AssetRates
   /** GCMC functions that record workload (task-form tabs). Order = tab order. */

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpDown, FlaskConical, Timer, X } from 'lucide-react'
-import { Badge } from './ui/Badge'
+import { ArrowUpDown, Timer, X } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import { useStore } from '../data/store'
 import { cx } from '../lib/format'
@@ -68,10 +67,10 @@ function RateNumberInput({
  * Output rates per asset type — "how many assets in how long" (e.g. 300 images
  * per day, or 1 publication per 3 days).
  *
- * EXPERIMENTAL / RECORDED ONLY. This writes `settings.assetRates` and NOTHING
- * reads it: every dashboard number, chart, total and export still counts each
- * asset as 1. It exists so the real per-unit effort of each asset type is
- * captured now, for an effort-weighted view to be built on later.
+ * Writes `settings.assetRates`, which powers the dashboard's Effort view: it
+ * weighs every deliverable by its type's rate. Stored totals and exports are
+ * untouched — they still count each asset as 1 — so editing a rate re-reads
+ * history rather than rewriting it.
  */
 export function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings, saveSettings } = useStore()
@@ -196,7 +195,6 @@ export function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () 
         <span className="flex items-center gap-2">
           <Timer className="h-4 w-4 text-accent-plum" />
           Output rates — asset types
-          <Badge tone="plum">Experimental</Badge>
         </span>
       }
       footer={
@@ -219,14 +217,12 @@ export function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () 
           type list is long, so it gets the room and its own scroll. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
         <div className="space-y-3">
-          {/* What this does RIGHT NOW — stated first so nobody expects the
-              dashboard to move after filling this in. */}
-          <div className="flex gap-2.5 rounded-xl border border-line bg-subtle px-3 py-2.5">
-            <FlaskConical className="mt-0.5 h-4 w-4 shrink-0 text-accent-plum" />
+          {/* What these drive, stated up front. */}
+          <div className="rounded-xl border border-line bg-subtle px-3 py-2.5">
             <p className="text-xs leading-relaxed text-muted">
-              <strong className="text-ink">Nothing uses these yet.</strong> Saving a rate changes no number
-              anywhere in the app — the dashboard, every chart and all exports still count each asset as 1.
-              We&rsquo;re collecting the data now so an effort-weighted view can be built on it later.
+              <strong className="text-ink">These power the Effort view.</strong> Switching the dashboard to
+              Effort weighs every deliverable by its rate, so what you set here shapes what that view shows.
+              Stored totals and exports are untouched — they always count each asset as 1.
             </p>
           </div>
 

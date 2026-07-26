@@ -1,7 +1,7 @@
 import type { AssetRates, Task } from '../types'
 import { FALLBACK_ITEM, hoursPerUnit } from '../constants'
 
-// ── Effort-weighted workload (experimental) ─────────────────────────────────
+// ── Effort-weighted workload ────────────────────────────────────────────────
 //
 // Turns the per-asset-type output rates recorded in Settings into hours of work,
 // so the workload chart can show EFFORT instead of a raw asset count — 300 photo

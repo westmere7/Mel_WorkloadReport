@@ -729,12 +729,12 @@ function SnapshotsCard() {
 }
 
 /** "Timing & effort": editable per-size turnaround (days) used to auto-fill a
- *  task's end date, alongside the experimental per-asset-type output rates. Both
+ *  task's end date, alongside the per-asset-type output rates. Both
  *  answer "how long does this work take", so they share one full-width card at the
  *  top of Groups. */
 function TimingEffortCard() {
   const { settings, saveSettings } = useStore()
-  // Output-rates pop-up (experimental, recorded only — see AssetRatesModal).
+  // Output-rates pop-up — the rates behind the dashboard's Effort view.
   const [ratesOpen, setRatesOpen] = useState(false)
   const rateCount = settings.assetTypes.filter((t) => (settings.assetRates ?? {})[t] !== undefined).length
   const toDraft = () =>
@@ -837,16 +837,14 @@ function TimingEffortCard() {
           </div>
         </div>
 
-        {/* Output rates — how many of each asset type we finish in how long.
-            EXPERIMENTAL: it feeds the dashboard's Effort view only; every stored
-            total still counts each asset as 1 (see AssetRatesModal). Keyed by asset
-            type, but it belongs with the other "how long does work take" settings
-            rather than the asset-type LIST. */}
+        {/* Output rates — how many of each asset type we finish in how long. Feeds
+            the dashboard's Effort view; every stored total still counts each asset
+            as 1 (see AssetRatesModal). Keyed by asset type, but it belongs with the
+            other "how long does work take" settings rather than the asset-type LIST. */}
         <div className="mt-4 border-t border-line pt-3">
           <h4 className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
             <Timer className="h-3.5 w-3.5 shrink-0 text-accent-plum" />
             Output rates
-            <Badge tone="plum">Experimental</Badge>
           </h4>
           <p className="mt-1 text-xs leading-relaxed text-muted">
             Roughly how many of each asset type we finish, and in how long — so a banner isn&rsquo;t counted as

@@ -145,10 +145,10 @@ alter table public.settings
 
 -- Approximate output rate per asset type: { "<asset type>": { "qty": 12, "per": "day" } }
 -- where `per` is 'hour' or 'day'. An absent key = not specified (never a stored 0).
--- EXPERIMENTAL / RECORDED ONLY: no dashboard number, chart, export column or total
--- reads this — the app still counts every asset as 1. It captures how much effort one
--- unit of each asset type really takes (300 photo edits/day vs 2 banners/day) so a
--- weighted workload measure can be built on real data later.
+-- Drives the dashboard's Effort view, which weighs every deliverable by its type's
+-- rate (300 photo edits/day vs 2 banners/day) so slow work isn't read as
+-- unproductive. Effort is derived at read time: stored totals and exports still
+-- count every asset as 1, so editing a rate never rewrites history.
 alter table public.settings
   add column if not exists asset_rates jsonb not null default '{}'::jsonb;
 

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { FlaskConical, Pencil } from 'lucide-react'
-import { Badge } from './ui/Badge'
 import { Modal } from './ui/Modal'
 import { AssetRatesModal } from './AssetRatesModal'
 import { useStore } from '../data/store'
@@ -52,12 +51,7 @@ export function EffortInfoModal({
         open={open}
         onClose={onClose}
         widthClass="max-w-5xl"
-        title={
-          <span className="flex items-center gap-2">
-            Measuring workload by effort
-            <Badge tone="plum">Experimental</Badge>
-          </span>
-        }
+        title="Measuring workload by effort"
         footer={
           <>
             {canEdit && (
@@ -114,8 +108,8 @@ export function EffortInfoModal({
               </div>
             </dl>
             <p className="text-xs leading-relaxed text-faint">
-              Effort changes this chart only, and only for you. Every other card, export and stored total still
-              counts each asset as one — the switch changes how this chart is measured, never the data itself.
+              Effort re-reads the dashboard, and only for you. Every export and stored total still counts each
+              asset as one — the switch changes how the dashboard is measured, never the data itself.
             </p>
           </div>
 
