@@ -9,6 +9,7 @@ import { FunctionFilter } from '../components/FunctionFilter'
 import { ChartGroupsModal } from '../components/ChartGroupsModal'
 import { EffortInfoModal } from '../components/EffortInfoModal'
 import { EffortSummaryCard, VolumeCompactCard } from '../components/EffortStats'
+import { PanelInfo } from '../components/PanelInfo'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
@@ -751,7 +752,11 @@ export function Dashboard() {
         )}
 
         <Card className="flex flex-col">
-          <CardHeader title="Tasks by squad" subtitle={`Requests by stakeholder team${squadCompareSuffix}`} />
+          <CardHeader
+            title="Tasks by squad"
+            subtitle={`Requests by stakeholder team${squadCompareSuffix}`}
+            action={<PanelInfo panel="tasksBySquad" />}
+          />
           <RankedBars
             data={bySquadTasks}
             emptyMessage={fnEmpty ?? 'Add tasks for at least 2 squads.'}
@@ -762,7 +767,11 @@ export function Dashboard() {
         </Card>
 
         <Card className="flex flex-col">
-          <CardHeader title="Assets by squad" subtitle={`Deliverables by stakeholder team${squadCompareSuffix}`} />
+          <CardHeader
+            title="Assets by squad"
+            subtitle={`Deliverables by stakeholder team${squadCompareSuffix}`}
+            action={<PanelInfo panel="assetsBySquad" />}
+          />
           <RankedBars
             data={bySquad}
             emptyMessage={fnEmpty ?? 'Add tasks for at least 2 squads.'}
@@ -789,9 +798,11 @@ export function Dashboard() {
                   : 'Assets per month · hover or click a dot for task details · Shift + scroll to cycle overlapping dots'
               }
               action={
-                // Fixed height so the header (and card) doesn't resize as the
-                // hover readout swaps in and out.
-                <div className="flex h-10 flex-col items-end justify-start gap-1">
+                <div className="flex items-start gap-2">
+                  <PanelInfo panel="workload" />
+                  {/* Fixed height so the header (and card) doesn't resize as the
+                      hover readout swaps in and out. */}
+                  <div className="flex h-10 flex-col items-end justify-start gap-1">
                   {hoverTask ? (
                     <>
                       <span className="inline-block max-w-[24rem] truncate rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
@@ -818,6 +829,7 @@ export function Dashboard() {
                       </span>
                     </>
                   ) : null}
+                  </div>
                 </div>
               }
             />
@@ -853,6 +865,7 @@ export function Dashboard() {
             <CardHeader
               title="Asset count by campaign"
               subtitle={`Total deliverables produced per campaign${campaignSubtitleSuffix}${compareSubtitleSuffix}`}
+              action={<PanelInfo panel="campaign" />}
             />
             <div className="relative min-h-[220px] flex-1">
               <div className="absolute inset-0">
@@ -884,12 +897,17 @@ export function Dashboard() {
               <CardHeader
                 title="Asset mix"
                 subtitle={compare ? `Deliverables by type — ${activeYear} over ${srcYear}` : 'Deliverables by type'}
-                action={groupControls(
-                  groupAssetMix,
-                  () => setDashboardPrefs({ groupAssetMix: !groupAssetMix }),
-                  rawAssetGroups.length > 0,
-                  'asset',
-                )}
+                action={
+                  <div className="flex items-center gap-1.5">
+                    {groupControls(
+                      groupAssetMix,
+                      () => setDashboardPrefs({ groupAssetMix: !groupAssetMix }),
+                      rawAssetGroups.length > 0,
+                      'asset',
+                    )}
+                    <PanelInfo panel="assetMix" />
+                  </div>
+                }
               />
               <MixChart
                 data={assetMix}
@@ -908,12 +926,17 @@ export function Dashboard() {
               <CardHeader
                 title="Work type mix"
                 subtitle={compare ? `Tasks by work type — ${activeYear} over ${srcYear}` : 'Tasks by work type'}
-                action={groupControls(
-                  groupWorkTypeMix,
-                  () => setDashboardPrefs({ groupWorkTypeMix: !groupWorkTypeMix }),
-                  rawTypeGroups.length > 0,
-                  'type',
-                )}
+                action={
+                  <div className="flex items-center gap-1.5">
+                    {groupControls(
+                      groupWorkTypeMix,
+                      () => setDashboardPrefs({ groupWorkTypeMix: !groupWorkTypeMix }),
+                      rawTypeGroups.length > 0,
+                      'type',
+                    )}
+                    <PanelInfo panel="workTypeMix" />
+                  </div>
+                }
               />
               <MixChart
                 data={workTypeMix}
@@ -930,7 +953,10 @@ export function Dashboard() {
             </Card>
             {showTasksByPerson && (
               <Card className="flex flex-col">
-                <CardHeader title="Tasks by person" subtitle="Tasks assigned per team member" />
+                <CardHeader
+                  title="Tasks by person"
+                  subtitle="Tasks assigned per team member"
+                />
                 <div className="relative min-h-[180px] flex-1">
                   <div className="absolute inset-0">
                     <HBarChart
@@ -981,6 +1007,7 @@ export function Dashboard() {
                     demandHasGroups,
                     demandDim,
                   )}
+                  <PanelInfo panel="demand" />
                 </div>
               }
             />

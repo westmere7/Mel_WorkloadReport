@@ -1,4 +1,5 @@
 import { Card, CardHeader } from './ui/Card'
+import { PanelInfo } from './PanelInfo'
 import { Badge } from './ui/Badge'
 import { AnimatedNumber } from './ui/AnimatedNumber'
 import { TrendDelta } from './ui/TrendDelta'
@@ -84,6 +85,7 @@ export function VolumeCompactCard({
             ? `${cmp.activeYear} over ${cmp.srcYear}${cmp.ytd ? ` — to ${cmp.todayDM}` : ''}`
             : 'What was produced, counted'
         }
+        action={<PanelInfo panel="volume" />}
       />
       <div className="flex flex-1 items-center gap-4">
         {stat(assets, srcAssets, 'assets')}
@@ -109,7 +111,7 @@ export function VolumeCompactCard({
 }
 
 /** How many of the leading asset types to list before collapsing the rest. */
-const TOP_TYPES = 4
+const TOP_TYPES = 3
 
 /**
  * One task-size distribution bar. `fmt` renders a segment's value for the tooltip.
@@ -299,17 +301,22 @@ export function EffortSummaryCard({
         </div>
       </div>
 
-      {/* Where the hours actually go, by deliverable type. The task-size split
-          lives on the Volume panel; this is the view only effort can give — a type
-          can be a sliver of the output and a big slice of the work. */}
+      {/* The heaviest deliverable types by hours. The task-size split lives on the
+          Volume panel; this is the view only effort can give — a type can be a
+          sliver of the output and a big slice of the work. */}
       {byType.length > 0 && (
         <div className="space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-faint">Where the hours go</span>
-          <ul className="space-y-1">
-            {byType.slice(0, TOP_TYPES).map((d) => (
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-faint">
+            Top {Math.min(TOP_TYPES, byType.length)} time consumers
+          </span>
+          <ol className="space-y-1">
+            {byType.slice(0, TOP_TYPES).map((d, i) => (
               <li key={d.name} className="flex items-center gap-2" title={`${d.name}: ${formatHours(d.value)}`}>
-                <span className="w-24 shrink-0 truncate text-[11px] font-medium text-ink">{d.name}</span>
-                <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-subtle">
+                <span className="w-3 shrink-0 text-[10px] font-bold text-faint">{i + 1}</span>
+                {/* Asset-type names run long ("Brochure (under 8 Pages)"), so give
+                    the label the room and let the bar take what's left. */}
+                <span className="w-36 shrink-0 truncate text-[11px] font-medium text-ink">{d.name}</span>
+                <span className="h-1.5 min-w-[2.5rem] flex-1 overflow-hidden rounded-full bg-subtle">
                   <span
                     className="block h-full rounded-full bg-accent-plum"
                     style={{ width: `${(d.value / byType[0].value) * 100}%`, minWidth: '2px' }}
@@ -320,7 +327,7 @@ export function EffortSummaryCard({
                 </span>
               </li>
             ))}
-          </ul>
+          </ol>
           {byType.length > TOP_TYPES && (
             <p className="text-[10px] text-faint">
               + {byType.length - TOP_TYPES} more type{byType.length - TOP_TYPES === 1 ? '' : 's'} ·{' '}
