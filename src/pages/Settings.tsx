@@ -28,7 +28,6 @@ import {
   COMMON_CAMPAIGNS,
   setDashboardPrefs,
   useDashboardPrefs,
-  type DemandDim,
 } from '../lib/dashboardPrefs'
 import { buildFindings } from '../lib/advisor/findings'
 import { buildAdvisorInput } from '../lib/advisor/scope'
@@ -36,6 +35,7 @@ import { narrate, type Narration } from '../lib/advisor/narrate'
 import { ChartGroupsModal } from '../components/ChartGroupsModal'
 import { AssetRatesModal } from '../components/AssetRatesModal'
 import { useScrollFade } from '../lib/useScrollFade'
+import type { LucideIcon } from 'lucide-react'
 import type { AppSettings, FunctionConfig, Size } from '../types'
 
 type ListKey = keyof Pick<AppSettings, 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes'>
@@ -74,6 +74,20 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Advisor — first, and visually set apart: it's the newest capability and the
+          one people are looking for. Still closed by default, because editing the
+          brief carries real risk of a worse briefing. */}
+      <CollapsibleSection
+        title="Advisor"
+        subtitle="How the generated analysis is written. The findings themselves are computed from every task on record."
+        storageKey="mwr.settings.advisorOpen"
+        defaultOpen={false}
+        icon={Sparkles}
+        highlight
+      >
+        <AdvisorCard />
+      </CollapsibleSection>
+
       {/* Dashboard display preferences (collapsible) — includes chart groups,
           deep-linked from the dashboard panels' gear icons (#chart-groups). */}
       <DashboardPrefsCard />
@@ -150,18 +164,6 @@ export function SettingsPage() {
             onMondayId={setPersonMondayId}
           />
         </div>
-      </CollapsibleSection>
-
-      {/* Advisor — the voice brief for the generated analysis (findings are code).
-          Closed by default: most people never need it, and editing it carries real
-          risk of a worse briefing. */}
-      <CollapsibleSection
-        title="Advisor"
-        subtitle="How the generated analysis is written. The findings themselves are computed from every task on record."
-        storageKey="mwr.settings.advisorOpen"
-        defaultOpen={false}
-      >
-        <AdvisorCard />
       </CollapsibleSection>
 
       {/* monday.com boards (lookup builds only) + year snapshots — side by side */}
@@ -986,10 +988,7 @@ function AdvisorCard() {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-line bg-card/40 p-3">
-        <h4 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-          <Sparkles className="h-3.5 w-3.5 shrink-0 text-accent-plum" />
-          What this changes
-        </h4>
+        <h4 className="text-sm font-semibold text-ink">What this changes</h4>
         <p className="mt-1 text-xs leading-relaxed text-muted">
           The Advisor reads <strong className="text-ink">every task on record</strong> — all years, all
           functions — and works out the findings itself. It doesn&rsquo;t follow the year, function or
@@ -1167,32 +1166,6 @@ function DashboardPrefsCard() {
     >
       <div className="space-y-2">
         <PrefRow
-          title="Demand by stakeholders — dimension"
-          description="Split the demand chart by asset type or work type."
-        >
-          <div className="flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
-            {(
-              [
-                ['asset', 'Asset type'],
-                ['type', 'Work type'],
-              ] as [DemandDim, string][]
-            ).map(([d, label]) => (
-              <button
-                key={d}
-                onClick={() => setDashboardPrefs({ demandDim: d })}
-                className={cx(
-                  'rounded-md px-2.5 py-1 text-xs font-semibold transition',
-                  prefs.demandDim === d
-                    ? 'bg-rmit-navy text-white dark:bg-navy-300'
-                    : 'text-muted hover:text-ink',
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </PrefRow>
-        <PrefRow
           title={`Hide ${COMMON_CAMPAIGNS.join(' / ')} campaigns`}
           description="Leaves the ongoing and catch-all campaigns out of “Tasks by campaign” and “Asset count by campaign”."
         >
@@ -1249,6 +1222,8 @@ function CollapsibleSection({
   children,
   initialOpenHash,
   defaultOpen = true,
+  icon: Icon,
+  highlight = false,
 }: {
   title: string
   subtitle?: string
@@ -1258,6 +1233,10 @@ function CollapsibleSection({
   initialOpenHash?: string
   /** Starting state before the user has ever toggled it. Most sections start open. */
   defaultOpen?: boolean
+  /** Optional glyph beside the title — marks a section out from the plain ones. */
+  icon?: LucideIcon
+  /** Tint the card so the section reads as distinct rather than one more list. */
+  highlight?: boolean
 }) {
   const [open, setOpen] = useState<boolean>(() => {
     try {
@@ -1282,16 +1261,33 @@ function CollapsibleSection({
     })
 
   return (
-    <Card>
+    <Card
+      className={cx(
+        highlight &&
+          'border-accent-plum/40 bg-gradient-to-br from-accent-plum/[0.07] to-transparent dark:border-accent-plum/30 dark:from-accent-plum/[0.12]',
+      )}
+    >
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
         className={cx('flex w-full items-start justify-between gap-3 text-left', open && 'mb-4')}
       >
-        <div className="min-w-0">
-          <h3 className="text-sm font-bold text-ink">{title}</h3>
-          {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
+        <div className="flex min-w-0 items-start gap-2">
+          {Icon && (
+            <span
+              className={cx(
+                'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
+                highlight ? 'bg-accent-plum/15 text-accent-plum' : 'text-muted',
+              )}
+            >
+              <Icon className="h-4 w-4" />
+            </span>
+          )}
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-ink">{title}</h3>
+            {subtitle && <p className="mt-0.5 text-xs text-muted">{subtitle}</p>}
+          </div>
         </div>
         <ChevronDown
           className={cx('mt-0.5 h-5 w-5 shrink-0 text-muted transition-transform', !open && '-rotate-90')}
