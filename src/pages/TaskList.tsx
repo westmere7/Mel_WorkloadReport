@@ -22,7 +22,6 @@ import { Badge, toneForLabel } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { MultiSelect } from '../components/ui/MultiSelect'
 import { SpanFilter } from '../components/SpanFilter'
-import { FunctionFilter } from '../components/FunctionFilter'
 import { ImportBackupModal } from '../components/ImportBackupModal'
 import { TaskForm } from '../components/TaskForm'
 import { TaskDetails } from '../components/TaskDetails'
@@ -236,8 +235,6 @@ export function TaskList() {
             hideHalf
           />
 
-          <FunctionFilter functions={settings.functions} selected={fnFilter} onChange={setFnFilter} />
-
           <button
             type="button"
             onClick={() => setDraftsOnly((v) => !v)}
@@ -272,7 +269,16 @@ export function TaskList() {
         </div>
 
         <div className="flex items-start gap-2">
-          <div className="grid flex-1 gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid flex-1 gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+            {/* Functions first: it re-scopes what every other filter is counting,
+                since a shared task contributes only the selected functions' slice. */}
+            <MultiSelect
+              options={settings.functions.map((f) => f.name)}
+              value={fnFilter}
+              onChange={setFnFilter}
+              placeholder="All functions"
+              overflowCollapse
+            />
             <MultiSelect options={withFallback(settings.squads)} value={squads} onChange={setSquads} placeholder="All squads" overflowCollapse />
             <MultiSelect
               options={settings.campaigns}

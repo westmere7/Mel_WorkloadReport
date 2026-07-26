@@ -696,7 +696,6 @@ export function Dashboard() {
               srcAssets={srcSummary.totalAssets}
               byType={effortByType}
               cmp={cmpCtx}
-              onExplain={() => setEffortInfoOpen(true)}
             />
           </>
         ) : (

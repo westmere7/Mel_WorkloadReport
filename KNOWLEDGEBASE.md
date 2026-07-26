@@ -944,3 +944,115 @@ LATER phase; the data is already captured for it.
   read it in a separate eval.
 - The Browser-pane console buffer persists across reloads AND dev-server restarts —
   old HMR errors linger; verify with a live `window.__errCount` probe instead.
+
+## 20. Asset output rates & Effort mode ⚠️ v0.8.0–0.9.0
+
+### The problem it solves
+
+Counting assets flatters whoever makes the quickest ones: 300 photo edits and 10
+banners read as a 30:1 difference in output even when the banners took longer.
+Effort re-weights every deliverable by how long its **asset type** takes.
+
+### Data model
+
+- `AssetRate = { qty, every, per: 'hour'|'day'|'week' }` — "qty assets per `every`
+  `per`", e.g. `{qty:1, every:2, per:'week'}` = 1 per 2 weeks.
+- `AppSettings.assetRates: Record<assetTypeName, AssetRate>` — **name-keyed**, so
+  renames rewrite keys and removals drop them (`store.tsx` rename/remove paths,
+  mirroring `chartGroups` / `peopleMondayIds`).
+- **An unset rate is an ABSENT key, never a stored 0.** `normalizeAssetRates()`
+  drops non-positive/non-finite entries, so "not specified" has one representation.
+- Column: `settings.asset_rates jsonb default '{}'` + an
+  `isMissingAssetRatesColumn` retry guard in `supabaseRepository`, following the
+  established pre-migration strip-and-retry pattern.
+
+### Effort is DERIVED, never stored ⚠️
+
+`src/lib/effort.ts` computes at render time — `taskEffortHours`,
+`effortByAssetType`, `unratedTypesWithVolume`, `formatHours`. No task field,
+stored total, CSV column or snapshot is affected, so editing a rate **re-reads**
+history rather than rewriting it. Unrated types contribute **0** and are reported,
+never guessed. `FALLBACK_ITEM` ("Others") is deliberately excluded from the
+unrated warning — it's a mixed bag by definition, so a rate for it is meaningless.
+
+### The measurement switch
+
+- `dashboardPrefs.workloadUnit: 'assets'|'effort'` — **per browser**, so one
+  person's view never changes a colleague's. Only offered when ≥1 rate exists.
+- Lives in the header **left slot beside the function filter** (both re-scope the
+  whole dashboard). Active `Assets` = navy; active `Effort` = **RMIT red**, so the
+  fill doubles as an "off the default measure" signal.
+- ⚠️ **The header slot is pushed via `setHeaderSlots` in a `useEffect`** — any state
+  the slot renders MUST be in that effect's dep array (`workloadUnit`,
+  `ratesConfigured`, `effortOn`, `unratedInScope.length`). Omitting them leaves a
+  stale closure: clicks update the pref and the body re-renders, but the buttons
+  never do, so the switch looks broken.
+- ⚠️ `Layout` renders the left slot **twice** (desktop `hidden sm:flex`, mobile
+  `sm:hidden`), so there are always 2× the buttons in the DOM. Filter on
+  `offsetParent !== null` when testing.
+
+### What Effort changes
+
+1. **Workload chart** → weighted hours. `AreaTrendChart` gained `taskValue` (the
+   scatter dots share the line's y-axis, so they must be valued the same way) and
+   `hideYLabels` (hours are modelled, so the shape is the story, not the height).
+   `analytics.valueByMonth(tasks, value)` / `valueBySize(tasks, value)` are the
+   parameterized versions; `assetsByMonth` / `countBySize` are thin wrappers, so
+   Assets mode is provably the same code path as before.
+2. **Hero cards** → `VolumeCompactCard` + `EffortSummaryCard` (`EffortStats.tsx`).
+   Volume keeps the counts (demoted, side by side, with an assets-by-task-size
+   bar); Effort leads with total hours, hours per asset, and a **Top 3 time
+   consumers** list. Grid becomes `2xl:grid-cols-[1.4fr_1.05fr_1fr_1fr]`.
+3. Everything else — by-squad, mixes, demand, campaign, exports — still counts
+   each asset as 1.
+
+### Layout gotchas learned here ⚠️
+
+- **`container-type: size` implies `contain: size`** — the card then ignores its
+  own content when sizing, so a short grid row **clips** the content instead of
+  growing. Use `inline-size` and width-based `cqw` only.
+- `clamp()`'s **maximum** silently caps container-query sizing — figures looked
+  small because of a 6rem cap, not the `cqw` factor.
+- cq units resolve against the **content box**, and a side-by-side figure only
+  gets half of it → ~17cqw is the ceiling for a 5-glyph number.
+- Aligning figures across two cards needs a **fixed** header box, not `min-h`: the
+  narrower card's subtitle wraps to 2 lines and pushes everything below it down.
+  `HEADER_BOX = 'h-[3.75rem] [&>div>p]:line-clamp-2'`.
+- ⚠️ That clamp was originally `[&_p]` — a **descendant** selector, which also
+  clamped the paragraphs of the `PanelInfo` modal, because `PanelInfo` renders its
+  dialog **inside** the card header (as part of `action`). Scope to `[&>div>p]`.
+- `flex-1` on a list without a `max-h` lets it grow to full content height. Panels
+  align via grid stretch + `flex-1` **and** `max-h-[34rem]` together.
+
+## 21. Per-panel help & the Help guide ⚠️ v0.8.0–0.9.0
+
+- **`components/PanelInfo.tsx`** — a `?` in a card header opening a dialog with
+  **What this shows / What it means for the team / For example / Keep in mind**.
+  All copy lives in one `PANEL_INFO` registry so the 9 panels stay consistent;
+  a panel needs one line: `action={<PanelInfo panel="assetMix" />}`.
+  Section bodies accept a string, or labelled `{lead, text}` bullets for the long
+  ones (workload, effort) so they scan instead of walling up.
+- **`components/EffortInfoModal.tsx`** — a *separate*, richer dialog for the
+  **switch** (Assets vs Effort side by side, the to-scale rate comparison, and an
+  "Edit output rates" button). The Effort **panel** uses the standard `PanelInfo`;
+  the header **switch** uses this one. Don't conflate them.
+- **`pages/Help.tsx`** (`/help`, public, sidebar above Showcase, `BookOpen` icon) —
+  the full manual, laid out as docs: 3 part **tabs**, a sticky **scroll-spy** TOC
+  (`[data-toc]` + `IntersectionObserver`), anchored subsections, and inline
+  **cross-links** that switch tabs then scroll (`ANCHOR_PART` maps anchor → part).
+  `#hash` deep links open the right tab on mount.
+- **Screenshots**: `public/help/*.png`, generated by **`scripts/capture-help.mjs`**
+  (Playwright, headless, drives the *running* dev server, signs in via a seeded
+  `mwr.session` localStorage entry). Element crops at 2× DPR, not viewport grabs.
+  Re-run after a visual redesign: `node scripts/capture-help.mjs`.
+  `data-help="…"` attributes in `TaskForm`/`Dashboard` are **stable capture
+  anchors** — don't remove them.
+
+## 22. Removed: "Tasks by person" ⚠️ v0.9.0
+
+The dashboard panel, its `showTasksByPerson` pref, the Settings toggle and the
+now-orphaned `HBarChart` (+ its `AXIS_STRONG` const) are **gone**. Per-person data
+is still tracked: `people` on tasks, the task-list person filter and `?person=`
+deep links, the CSV `People` column, and `analytics.assetsByPerson()` which still
+feeds the Showcase's **"Busiest people"** stat. A stale
+`showTasksByPerson: true` in localStorage is inert.

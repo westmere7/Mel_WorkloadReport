@@ -120,7 +120,7 @@ const TOP_TYPES = 3
 // enough for two subtitle lines, clamped so it can never be three) followed by a
 // fixed-height figure row that bottom-aligns the glyphs. Captions below keep their
 // own natural spacing.
-const HEADER_BOX = 'h-[3.75rem] [&_p]:line-clamp-2'
+const HEADER_BOX = 'h-[3.75rem] [&>div>p]:line-clamp-2'
 const FIGURE_ROW = 'flex h-[5.5rem] items-end'
 
 /**
@@ -248,7 +248,6 @@ export function EffortSummaryCard({
   srcAssets,
   byType,
   cmp,
-  onExplain,
 }: {
   hours: number
   srcHours: number
@@ -258,8 +257,6 @@ export function EffortSummaryCard({
   /** Hours per asset type, biggest first (see effortByAssetType). */
   byType: NamedCount[]
   cmp: CompareCtx
-  /** Opens the "what is effort" explainer. */
-  onExplain?: () => void
 }) {
   // Hours per asset — the figure that actually separates effort from volume: it
   // says whether the month's mix was heavy or light, which a count can't.
@@ -282,19 +279,7 @@ export function EffortSummaryCard({
             : 'How much work that actually was, weighted by output rate'
         }
         className={HEADER_BOX}
-        action={
-          onExplain && (
-            <button
-              type="button"
-              onClick={onExplain}
-              title="What does Effort mean?"
-              aria-label="What does Effort mean?"
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-line text-[10px] font-bold text-muted transition hover:border-faint hover:text-ink"
-            >
-              ?
-            </button>
-          )
-        }
+        action={<PanelInfo panel="effort" />}
       />
 
       {/* The hours total is the headline, so it gets the card's whole width; the

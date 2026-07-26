@@ -39,10 +39,35 @@ export const PANEL_INFO: Record<string, PanelExplainer> = {
   },
   effort: {
     title: 'Effort',
-    what: 'Every asset multiplied by how long its type takes to make, using the output rates set in Settings → Timing & effort. Also shows hours per asset, and the three asset types consuming the most hours.',
-    meaning: 'This is the number to use when comparing teams or months fairly. Volume flatters whoever produces the quickest assets; effort re-weights it so a team making a few slow deliverables is not read as unproductive.',
-    example: 'Production ships 300 photo edits a day and Design ships 1 guide every 2 weeks. By volume Production looks 4,000× more productive. Priced at 0.1 h and 80 h per unit, the day of photo edits is 30 h and the guide is 80 h — the comparison inverts.',
-    caveat: 'Rates are hand-set estimates, so treat effort as a rough comparison between periods, not a timesheet. Asset types with no rate count as zero.',
+    what: [
+      'Three things, from the top down:',
+      {
+        lead: 'The big number.',
+        text: 'Total hours of work in view. Each asset counts for however long one of its type takes to make — those times are the output rates in Settings → Timing & effort — and they are all added up.',
+      },
+      {
+        lead: 'Hours per asset.',
+        text: 'What one deliverable cost on average. A high number means the period was full of heavy work; a low one means it was mostly quick jobs.',
+      },
+      {
+        lead: 'Top 3 time consumers.',
+        text: 'Which asset types ate the most of those hours, and what share each took.',
+      },
+    ],
+    meaning: [
+      {
+        lead: 'It answers a different question.',
+        text: 'Volume tells you how many things the team made. Effort tells you how much work that was. The two can point opposite ways, and this is the one to bring to a resourcing conversation.',
+      },
+      {
+        lead: 'It compares teams fairly.',
+        text: 'Counting assets rewards whoever makes the quickest ones. Weighing by time means a team producing a few slow deliverables no longer looks unproductive.',
+      },
+    ],
+    example:
+      'Production makes 300 photo edits in a day. Design makes 1 guide in 2 weeks. By count, Production did 300 times more. By time, the photo edits came to about 30 hours and the guide about 80 — so the guide was the bigger job.',
+    caveat:
+      'The times are estimates someone typed in, not tracked hours. Use this to compare one period against another, not to bill. Asset types with no rate set count as zero.',
   },
   tasksBySquad: {
     title: 'Tasks by squad',
