@@ -15,7 +15,7 @@ import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
 import { TrendDelta } from '../components/ui/TrendDelta'
 import { AnimatedNumber } from '../components/ui/AnimatedNumber'
-import { AreaTrendChart, HBarChart, MixChart, RankedBars, StackedBarChart, StackedLegend, useSquadColor, VBarChart } from '../components/charts'
+import { AreaTrendChart, MixChart, RankedBars, StackedBarChart, StackedLegend, useSquadColor, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
 import {
   assetsByCampaign,
@@ -88,7 +88,7 @@ export function Dashboard() {
     return `${parts[0]} ${parts[1]}` // e.g. "2 Jul"
   }, [today])
   // Chart display preferences — edited in Settings → Dashboard.
-  const { demandDim, hideCommonCampaigns, showTasksByPerson, groupAssetMix, groupWorkTypeMix, groupDemand, workloadUnit } =
+  const { demandDim, hideCommonCampaigns, groupAssetMix, groupWorkTypeMix, groupDemand, workloadUnit } =
     useDashboardPrefs()
   // ── Effort weighting ──────────────────────────────────────────────────────
   // While on, it re-values the across-the-year chart and swaps the two hero stat
@@ -178,7 +178,6 @@ export function Dashboard() {
       ),
     [filtered, settings.types, settings.assetTypes, demandDim, demandGroups],
   )
-  const byPerson = useMemo(() => countByMulti(filtered, 'people'), [filtered])
   // Ranked high→low so the biggest slices/segments lead (donut legend + stacked bar).
   const byValueDesc = (a: { value: number }, b: { value: number }) => b.value - a.value
   const assetMix = useMemo(
@@ -892,7 +891,7 @@ export function Dashboard() {
 
         {/* RIGHT column */}
         <div className="flex min-h-0 flex-col gap-4">
-          <div className={cx('grid gap-4', showTasksByPerson ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
+          <div className="grid gap-4 sm:grid-cols-2">
             <Card>
               <CardHeader
                 title="Asset mix"
@@ -951,23 +950,6 @@ export function Dashboard() {
                 sourceLabel={String(srcYear)}
               />
             </Card>
-            {showTasksByPerson && (
-              <Card className="flex flex-col">
-                <CardHeader
-                  title="Tasks by person"
-                  subtitle="Tasks assigned per team member"
-                />
-                <div className="relative min-h-[180px] flex-1">
-                  <div className="absolute inset-0">
-                    <HBarChart
-                      data={byPerson}
-                      height="100%"
-                      emptyMessage={fnEmpty ?? 'Assign people to at least 2 tasks.'}
-                    />
-                  </div>
-                </div>
-              </Card>
-            )}
           </div>
           <Card className="flex min-h-0 flex-1 flex-col">
             <CardHeader

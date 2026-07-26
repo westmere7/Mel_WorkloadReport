@@ -26,8 +26,6 @@ export interface DashboardPrefs {
   workloadUnit: WorkloadUnit
   /** Exclude the ongoing/catch-all campaigns from the campaign charts. */
   hideCommonCampaigns: boolean
-  /** Show the "Tasks by person" chart (hidden by default). */
-  showTasksByPerson: boolean
   /** Apply chart display groups PER PANEL (local-only view toggles). Off = that
    *  panel shows every item individually, without deleting the configured groups. */
   groupAssetMix: boolean
@@ -42,7 +40,6 @@ export const DEFAULT_DASHBOARD_PREFS: DashboardPrefs = {
   demandDim: 'asset',
   workloadUnit: 'assets',
   hideCommonCampaigns: true,
-  showTasksByPerson: false,
   groupAssetMix: true,
   groupWorkTypeMix: true,
   groupDemand: true,

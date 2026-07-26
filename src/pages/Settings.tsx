@@ -917,16 +917,6 @@ function DashboardPrefsCard() {
           />
         </PrefRow>
         <PrefRow
-          title="Show “Tasks by person”"
-          description="Adds the per-person chart to the dashboard. Hidden by default; hiding it gives “Workload across the year” more width."
-        >
-          <Switch
-            checked={prefs.showTasksByPerson}
-            onChange={(v) => setDashboardPrefs({ showTasksByPerson: v })}
-            label="Show Tasks by person"
-          />
-        </PrefRow>
-        <PrefRow
           title="Chart groups"
           description="Bundle asset / work types into named, coloured groups so the mix & demand charts stay readable. Also reachable from the gear on those panels."
         >

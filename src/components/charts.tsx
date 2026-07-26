@@ -91,7 +91,6 @@ const tooltipItemStyle = { color: 'var(--ink)' }
 const tooltipLabelStyle = { color: 'var(--ink)', fontWeight: 600 }
 
 const AXIS = { fontSize: 12, fill: 'var(--chart-axis)' }
-const AXIS_STRONG = { fontSize: 12, fill: 'var(--chart-axis-strong)' }
 const CURSOR = { fill: 'var(--chart-cursor)' }
 /** The target-year workload line colour (RMIT red) — its peak matches it. */
 const WORKLOAD_LINE = '#E61E2A'
@@ -408,51 +407,6 @@ export function MixChart(props: MixProps) {
   // Donut needs ~180 (ring) + gap + a readable legend; below that the bar wins.
   const narrow = width > 0 && width < 380
   return <div ref={ref}>{narrow ? <StackedShareBar {...props} /> : <DonutChart {...props} />}</div>
-}
-
-/** Horizontal bar chart — good for ranked categories (people, squads). */
-export function HBarChart({
-  data,
-  height = 260,
-  minPoints = 2,
-  emptyMessage,
-}: {
-  data: NamedCount[]
-  height?: number | string
-  minPoints?: number
-  emptyMessage?: string
-}) {
-  const colors = useChartColors()
-  if (data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
-  // Size the label gutter to the longest name so it hugs short names but never clips long ones.
-  const longest = data.reduce((m, d) => Math.max(m, d.name.length), 0)
-  const yWidth = Math.min(140, Math.max(36, longest * 7 + 12))
-  return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
-        <XAxis type="number" allowDecimals={false} tick={AXIS} axisLine={false} tickLine={false} />
-        <YAxis
-          type="category"
-          dataKey="name"
-          width={yWidth}
-          tick={AXIS_STRONG}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip
-          cursor={CURSOR}
-          contentStyle={tooltipStyle}
-          itemStyle={tooltipItemStyle}
-          labelStyle={tooltipLabelStyle}
-        />
-        <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={18}>
-          {data.map((_, i) => (
-            <Cell key={i} fill={colors[i % colors.length]} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  )
 }
 
 /**
