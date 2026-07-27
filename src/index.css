@@ -229,10 +229,12 @@
     @apply block min-w-0 overflow-hidden whitespace-nowrap;
   }
   /* RIGHT EDGE ONLY, at rest and while scrolling. A matching left fade would look
-     tidier mid-scroll but it eats the first character, which matters more. */
+     tidier mid-scroll but it eats the first character, which matters more.
+     The fade starts late (93%) so it's a soft edge on the last ~18px rather than
+     a wide wash that hides readable text before anything has scrolled. */
   .name-marquee.is-clipped {
-    -webkit-mask-image: linear-gradient(to right, #000 86%, transparent);
-    mask-image: linear-gradient(to right, #000 86%, transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 93%, transparent);
+    mask-image: linear-gradient(to right, #000 93%, transparent);
   }
   .name-marquee > span {
     @apply inline-block whitespace-nowrap;
