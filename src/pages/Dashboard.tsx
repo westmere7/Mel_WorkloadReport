@@ -848,11 +848,13 @@ export function Dashboard() {
                   : 'Assets per month · hover or click a dot for task details · Shift + scroll to cycle overlapping dots'
               }
               action={
+                // The "?" comes LAST and never shrinks, so it stays pinned to the
+                // right edge; the hover readout grows into the space on its left
+                // instead of shoving it about as tasks change.
                 <div className="flex items-start gap-2">
-                  <PanelInfo panel="workload" />
                   {/* Fixed height so the header (and card) doesn't resize as the
                       hover readout swaps in and out. */}
-                  <div className="flex h-10 flex-col items-end justify-start gap-1">
+                  <div className="flex h-10 min-w-0 flex-col items-end justify-start gap-1">
                   {hoverTask ? (
                     <>
                       <span className="inline-block max-w-[24rem] truncate rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-ink">
@@ -880,6 +882,7 @@ export function Dashboard() {
                     </>
                   ) : null}
                   </div>
+                  <PanelInfo panel="workload" />
                 </div>
               }
             />

@@ -74,20 +74,6 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Advisor — first, and visually set apart: it's the newest capability and the
-          one people are looking for. Still closed by default, because editing the
-          brief carries real risk of a worse briefing. */}
-      <CollapsibleSection
-        title="Advisor"
-        subtitle="Reads every task on record and writes a plain-English briefing — where the team's effort actually goes, what has shifted year on year, and when the peaks land."
-        storageKey="mwr.settings.advisorOpen"
-        defaultOpen={false}
-        icon={Sparkles}
-        highlight
-      >
-        <AdvisorCard />
-      </CollapsibleSection>
-
       {/* Dashboard display preferences (collapsible) — includes chart groups,
           deep-linked from the dashboard panels' gear icons (#chart-groups). */}
       <DashboardPrefsCard />
@@ -175,6 +161,21 @@ export function SettingsPage() {
       ) : (
         <SnapshotsCard />
       )}
+
+      {/* Advisor — last before the version. It's set apart and still closed by
+          default: editing the brief carries real risk of a worse briefing, so it
+          shouldn't be the first thing in reach on a page people open to manage
+          squads and campaigns. */}
+      <CollapsibleSection
+        title="Advisor"
+        subtitle="Reads every task on record and writes a plain-English briefing — where the team's effort actually goes, what has shifted year on year, and when the peaks land."
+        storageKey="mwr.settings.advisorOpen"
+        defaultOpen={false}
+        icon={Sparkles}
+        highlight
+      >
+        <AdvisorCard />
+      </CollapsibleSection>
 
       {/* Version & changelog */}
       <VersionCard />
@@ -1169,6 +1170,9 @@ function DashboardPrefsCard() {
       title="Dashboard"
       subtitle="How the dashboard charts are displayed"
       storageKey="mwr.settings.dashboardOpen"
+      // Closed on a first visit: these are two occasional display toggles, and
+      // open they pushed the reference lists below the fold.
+      defaultOpen={false}
     >
       <div className="space-y-2">
         <PrefRow
