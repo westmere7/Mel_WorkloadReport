@@ -419,3 +419,28 @@
     animation: none;
   }
 }
+
+/* Advisor "under development" placeholder. An indeterminate bar that sweeps and
+   restarts — the panel should read as work-in-progress, not as broken or stalled,
+   so it deliberately never settles at a percentage it can't honestly claim. */
+@keyframes wip-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(310%);
+  }
+}
+.animate-wip-progress {
+  animation: wip-progress 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+/* The dots are shared with other loading states, so the guard is scoped to this
+   card rather than disabling dotFade app-wide. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-wip-progress,
+  .wip-card .dot-1,
+  .wip-card .dot-2,
+  .wip-card .dot-3 {
+    animation: none;
+  }
+}

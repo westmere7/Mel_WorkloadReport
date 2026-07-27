@@ -8,7 +8,7 @@ import {
   List,
   Plus,
   Settings,
-  Sparkles,
+  Telescope,
   type LucideIcon,
 } from 'lucide-react'
 import { cx } from '../lib/format'
@@ -25,7 +25,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/tasks', label: 'Task List', icon: List },
   { to: '/help', label: 'Help', icon: BookOpen },
-  { to: '/advisor', label: 'Advisor', icon: Sparkles },
+  { to: '/advisor', label: 'Advisor', icon: Telescope },
   { to: '/showcase', label: 'Showcase', icon: Clapperboard },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]

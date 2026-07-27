@@ -1,4 +1,15 @@
-import { AlertTriangle, Bot, Loader2, PenLine, RefreshCw } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bot,
+  FileText,
+  Layers,
+  Loader2,
+  PenLine,
+  RefreshCw,
+  Telescope,
+  TrendingUp,
+  type LucideIcon,
+} from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EvidenceChart } from '../components/advisor/EvidenceChart'
@@ -239,7 +250,96 @@ function BriefingCard({ advisor }: { advisor: AdvisorState }) {
   )
 }
 
+/**
+ * Under-construction placeholder — this is what `/advisor` renders for now.
+ * The finished report below is complete and still compiles; swap the two
+ * exports back when it's ready to show.
+ */
+/** The teaser list — what the finished Advisor will actually do, in priority order. */
+const COMING: { icon: LucideIcon; label: string; detail: string }[] = [
+  {
+    icon: Layers,
+    label: 'Reads the whole record',
+    detail: 'Every task, every year — not just whatever the dashboard is filtered to today.',
+  },
+  {
+    icon: TrendingUp,
+    label: 'Finds what actually moved',
+    detail:
+      'Where effort and output pull apart, which formats eat the hours, when the peaks land, which squads drive the demand.',
+  },
+  {
+    icon: FileText,
+    label: 'Writes the briefing',
+    detail:
+      'One plain-English read Alex can take straight into a resourcing conversation — every figure sitting next to the chart that proves it.',
+  },
+]
+
 export function AdvisorPage() {
+  return (
+    <Card className="wip-card border-dashed">
+      <div className="mx-auto max-w-xl px-2 py-10">
+        {/* Header — icon, status, name, one-line pitch. */}
+        <div className="flex flex-col items-center text-center">
+          <span className="relative flex h-14 w-14 items-center justify-center">
+            <span className="absolute inset-0 animate-pulse rounded-full bg-rmit-red/10" />
+            <Telescope className="relative h-7 w-7 animate-gentle-bob text-rmit-red" />
+          </span>
+          <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-faint">
+            In development
+            <span className="dot-1">.</span>
+            <span className="dot-2">.</span>
+            <span className="dot-3">.</span>
+          </p>
+          <h2 className="mt-1.5 text-xl font-bold text-ink">The Advisor</h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            It reads the full task record and tells you what the years actually show — the patterns
+            no single chart on the dashboard can hold on its own.
+          </p>
+        </div>
+
+        {/* The teaser — hierarchy: label, then one row per capability. */}
+        <div className="mt-8 border-t border-line pt-6">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-faint">
+            What it'll do
+          </p>
+          <ul className="mt-4 space-y-4">
+            {COMING.map(({ icon: Icon, label, detail }) => (
+              <li key={label} className="flex gap-3">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-subtle">
+                  <Icon className="h-3.5 w-3.5 text-muted" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-ink">{label}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted">{detail}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Footer — the joke, then an indeterminate bar. No percentage: it would be a
+            number the page can't back up, which is rather the opposite of the point. */}
+        <div className="mt-8 flex flex-col items-center gap-3 border-t border-line pt-6 text-center">
+          <p className="text-xs text-faint">
+            Danh is behind this panel right now, arguing with a chart. The chart is winning.
+          </p>
+          <div
+            className="h-1 w-40 overflow-hidden rounded-full bg-subtle"
+            role="progressbar"
+            aria-label="Advisor development in progress"
+          >
+            <div className="h-full w-1/4 animate-wip-progress rounded-full bg-rmit-red/70" />
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/** The finished report — hidden from the router while the panel is under works. */
+export function AdvisorReport() {
   const advisor = useAdvisor()
   const { findings, scopeLabel } = advisor
   const totals = findings.find((f) => f.id === 'scope-totals')
