@@ -17,7 +17,7 @@ import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { DEFAULT_SETTINGS, FALLBACK_ITEM, legacyOwnerName } from '../constants'
 import { generateSampleTasks } from '../lib/sampleData'
 import { diffTask } from '../lib/taskLog'
-import { appendRateLog, diffRates } from '../lib/rateLog'
+import { appendRateLog, removeRateLine, renameRateLine } from '../lib/rateLog'
 import { toMessage } from '../lib/format'
 import { useAuth } from '../lib/auth'
 import {
@@ -492,15 +492,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (rates[oldValue] !== undefined) {
             if (!dupe) rates[trimmed] = rates[oldValue]
             delete rates[oldValue]
-            // Logged like a manual edit: a rename moves a rate between keys, and a
-            // merge silently discards one — both change what Effort reads.
-            const changes = diffRates(prev.assetRates ?? {}, rates)
+            // ONE line, not a diff: a rename moves a rate between keys without
+            // changing it, so a cleared/set pair would read as two edits that
+            // never happened. A merge does lose a rate, and says so.
             nextSettings = {
               ...nextSettings,
               assetRates: rates,
               assetRatesLog: appendRateLog(
                 prev.assetRatesLog,
-                changes.length ? [`Asset type renamed: ${oldValue} → ${trimmed}`, ...changes] : [],
+                [
+                  renameRateLine(
+                    oldValue,
+                    trimmed,
+                    (prev.assetRates ?? {})[oldValue],
+                    (prev.assetRates ?? {})[trimmed],
+                    Boolean(dupe),
+                  ),
+                ],
                 user ?? null,
               ),
             }
@@ -575,7 +583,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             assetRates: rates,
             assetRatesLog: appendRateLog(
               prev.assetRatesLog,
-              [`Asset type removed: ${value}`, ...diffRates(prev.assetRates ?? {}, rates)],
+              [removeRateLine(value, (prev.assetRates ?? {})[value])],
               user ?? null,
             ),
           }

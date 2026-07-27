@@ -57,6 +57,35 @@ export function diffRates(prev: AssetRates, next: AssetRates): string[] {
 }
 
 /**
+ * ONE line for a rate that moved because its asset type was renamed.
+ *
+ * Not a `diffRates` result: by key that reads as "cleared here, set there", three
+ * lines describing a rate that never actually changed. A rename carries the rate
+ * intact; only a merge into an existing type really loses one, so that case says so.
+ */
+export function renameRateLine(
+  oldName: string,
+  newName: string,
+  moved: AssetRate | undefined,
+  target: AssetRate | undefined,
+  merged: boolean,
+): string {
+  // The callers only log when a rate existed, but don't write "(rate — carried
+  // over)" if that ever changes.
+  if (!merged) {
+    const carried = moved ? ` (rate ${formatRate(moved)} carried over)` : ''
+    return `Asset type renamed: ${oldName} → ${newName}${carried}`
+  }
+  const kept = target ? `${newName} keeps ${formatRate(target)}` : `${newName} has no rate`
+  return `Asset type merged into ${newName}: ${oldName}’s rate ${formatRate(moved)} dropped, ${kept}`
+}
+
+/** ONE line for a rate that disappeared because its asset type was removed. */
+export function removeRateLine(name: string, rate: AssetRate | undefined): string {
+  return rate ? `Asset type removed: ${name} (rate ${formatRate(rate)} dropped)` : `Asset type removed: ${name}`
+}
+
+/**
  * Append an entry, or return the log untouched when nothing actually changed.
  * Trims from the FRONT once past `RATE_LOG_LIMIT`, so the newest survive.
  */

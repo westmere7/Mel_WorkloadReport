@@ -115,8 +115,10 @@ function RateHistoryModal({
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                 <span className="font-semibold text-ink">{fmtWhen(e.at)}</span>
                 {e.by && <span className="text-muted">by {e.by}</span>}
+                {/* "changes", not "rates" — one line can describe a rename rather
+                    than a rate, so counting them as rates overstated the edit. */}
                 <span className="text-faint">
-                  · {e.changes.length} rate{e.changes.length === 1 ? '' : 's'}
+                  · {e.changes.length} change{e.changes.length === 1 ? '' : 's'}
                 </span>
               </div>
               <ul className="mt-1.5 space-y-0.5 pl-1 text-xs leading-relaxed text-muted">
