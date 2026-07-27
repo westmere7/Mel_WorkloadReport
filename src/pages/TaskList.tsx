@@ -31,6 +31,7 @@ import { useStore } from '../data/store'
 import { useAuth } from '../lib/auth'
 import { SIZES, SIZE_ORDER, SIZE_TONE, withFallback } from '../constants'
 import { cx, formatDate } from '../lib/format'
+import { useNameMarquee } from '../lib/useNameMarquee'
 import { sliceTasksByFunctions } from '../lib/functionData'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
 import { addedOrderMap } from '../lib/analytics'
@@ -44,6 +45,9 @@ const PAGE_SIZE = 50
 export function TaskList() {
   const { tasks, settings, updateTask, deleteTask } = useStore()
   const { canEdit } = useAuth()
+
+  // Long task names are clipped in their column and auto-scroll on row hover.
+  const marqueeRef = useNameMarquee<HTMLDivElement>()
 
   // Filters seed from the URL query so dashboard charts can deep-link here
   // (e.g. /tasks?squad=DOM&asset=Image). Keys may repeat for multi-value filters.
@@ -343,7 +347,7 @@ export function TaskList() {
             {canEdit ? 'Click any row to edit' : 'Click any row to view · sign in to edit'}
           </span>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" ref={marqueeRef}>
           <table className="w-full min-w-[1080px] border-collapse text-sm">
             <thead>
               <tr className="border-y border-line bg-subtle/60 text-left text-xs uppercase tracking-wide text-muted">
@@ -367,7 +371,7 @@ export function TaskList() {
                 <tr
                   key={t.id}
                   className={cx(
-                    'group cursor-pointer transition-colors hover:bg-subtle',
+                    'group marquee-host cursor-pointer transition-colors hover:bg-subtle',
                     // Drafts sit faded in the list — visible, but clearly not "real" yet.
                     t.draft && 'opacity-45 hover:opacity-90',
                   )}
@@ -381,8 +385,8 @@ export function TaskList() {
                       {t.starred && (
                         <Star className="h-3 w-3 shrink-0 fill-current text-amber-400" strokeWidth={1.5} aria-label="Starred" />
                       )}
-                      <span className="truncate" title={t.name}>
-                        {t.name}
+                      <span className="name-marquee" title={t.name}>
+                        <span>{t.name}</span>
                       </span>
                       {t.draft && (
                         <span className="shrink-0 rounded border border-dashed border-faint px-1 text-[9px] font-bold uppercase tracking-wide text-faint">

@@ -26,6 +26,25 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.9.1',
+    date: '2026-07-27',
+    title: 'Effort by default',
+    notes: [
+      {
+        kind: 'improved',
+        text: 'The dashboard now opens in Effort mode. “Workload across the year” reads in hours from the start, rather than counting a banner and a video as the same job — the Assets / Effort switch still flips it back at any time, and the choice is remembered per browser. Nothing stored or exported changed: those still count every asset as one.',
+      },
+      {
+        kind: 'improved',
+        text: 'Long task names no longer just get cut off. In the task list they fade out at the tail and gently scroll to reveal the rest when you hover the row, then glide back when you move away. The edit-log title does the same — and it no longer runs past the edge of the window.',
+      },
+      {
+        kind: 'new',
+        text: 'Advisor — a new page in the sidebar, currently a preview of what’s coming. It will read the whole task record at once and write up what the years actually show: where effort and output pull apart, which formats eat the hours, when the peaks land.',
+      },
+    ],
+  },
+  {
     version: '0.9.0',
     date: '2026-07-26',
     title: 'Effort goes live',

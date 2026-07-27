@@ -34,9 +34,11 @@ export function Modal({ open, onClose, title, children, footer, wide, widthClass
         className={`card my-auto w-full ${widthClass ?? (wide ? 'max-w-3xl lg:max-w-[88rem]' : 'max-w-lg')} p-0`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="text-base font-bold text-ink">{title}</h2>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-muted hover:bg-subtle hover:text-ink">
+        {/* min-w-0 on the heading (and shrink-0 on the close button) so a long
+            title can clip or scroll inside the header instead of pushing past it. */}
+        <div className="flex items-center justify-between gap-2 border-b border-line px-5 py-4">
+          <h2 className="min-w-0 text-base font-bold text-ink">{title}</h2>
+          <button onClick={onClose} className="shrink-0 rounded-lg p-1.5 text-muted hover:bg-subtle hover:text-ink">
             <X className="h-5 w-5" />
           </button>
         </div>

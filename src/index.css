@@ -218,6 +218,41 @@
     animation: tab-marquee-scroll var(--marquee-dur, 4s) ease-in-out infinite alternate;
   }
 
+  /* Long names (task-list rows, modal titles) — CLIPPED rather than ellipsised so
+     they can auto-scroll to reveal the tail on hover. `is-clipped` (added by
+     useNameMarquee when the text genuinely overflows) gates the fade and the
+     scroll together, so a name that already fits is left completely alone.
+
+     Put `marquee-host` on whatever should trigger the scroll — the whole table
+     row, a modal header — or hover the name itself. */
+  .name-marquee {
+    @apply block min-w-0 overflow-hidden whitespace-nowrap;
+  }
+  /* RIGHT EDGE ONLY, at rest and while scrolling. A matching left fade would look
+     tidier mid-scroll but it eats the first character, which matters more. */
+  .name-marquee.is-clipped {
+    -webkit-mask-image: linear-gradient(to right, #000 86%, transparent);
+    mask-image: linear-gradient(to right, #000 86%, transparent);
+  }
+  .name-marquee > span {
+    @apply inline-block whitespace-nowrap;
+    transition: transform 0.35s ease-out; /* glide back when the pointer leaves */
+  }
+  /* Shares the function tabs' ping-pong keyframes — same dwell, same easing. */
+  .marquee-host:hover .name-marquee.is-clipped > span,
+  .name-marquee.is-clipped:hover > span {
+    animation: tab-marquee-scroll var(--marquee-dur, 4s) ease-in-out infinite alternate;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .name-marquee > span {
+      transition: none;
+    }
+    .marquee-host:hover .name-marquee.is-clipped > span,
+    .name-marquee.is-clipped:hover > span {
+      animation: none;
+    }
+  }
+
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm
            font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-1

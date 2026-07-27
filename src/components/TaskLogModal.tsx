@@ -1,6 +1,7 @@
 import { History } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import { cx } from '../lib/format'
+import { useNameMarquee } from '../lib/useNameMarquee'
 import type { Task, TaskLogEntry } from '../types'
 
 /**
@@ -25,15 +26,21 @@ function fmtWhen(iso: string): string {
 export function TaskLogModal({ task, open, onClose }: { task: Task | null; open: boolean; onClose: () => void }) {
   // Newest first for reading; entries are stored oldest→newest.
   const entries = [...(task?.log ?? [])].reverse()
+  const heading = `Edit log — ${task?.name || task?.code || 'task'}`
+  const titleRef = useNameMarquee<HTMLSpanElement>()
 
   return (
     <Modal
       open={open && !!task}
       onClose={onClose}
       title={
-        <span className="flex min-w-0 items-center gap-2">
+        // Task names run long, so the title clips with a right fade and scrolls
+        // to reveal its tail when the header is hovered.
+        <span ref={titleRef} className="marquee-host flex min-w-0 items-center gap-2">
           <History className="h-4 w-4 shrink-0 text-muted" />
-          <span className="truncate">Edit log — {task?.name || task?.code || 'task'}</span>
+          <span className="name-marquee" title={heading}>
+            <span>{heading}</span>
+          </span>
         </span>
       }
       footer={
