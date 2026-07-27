@@ -26,13 +26,25 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
-    version: '0.9.1',
+    version: '0.10.0',
     date: '2026-07-27',
     title: 'Effort by default',
     notes: [
       {
         kind: 'improved',
         text: 'The dashboard now opens in Effort mode. “Workload across the year” reads in hours from the start, rather than counting a banner and a video as the same job — the Assets / Effort switch still flips it back at any time, and the choice is remembered per browser. Nothing stored or exported changed: those still count every asset as one.',
+      },
+      {
+        kind: 'improved',
+        text: 'Output rates now sit at the top of Settings → Timing & effort in their own panel with a red “Edit rates” button — they’re what Effort mode reads, so they’re the setting worth filling in. Turnaround per task size moves below.',
+      },
+      {
+        kind: 'fixed',
+        text: 'Settings list rows (squads, campaigns, work and asset types, people, functions, snapshots) were meant to sit on a faint tint but were rendering completely see-through, so they read as bare outlines — and hovering one faded it further, as if it had been disabled. Rows now carry that tint, and hovering lifts them instead.',
+      },
+      {
+        kind: 'improved',
+        text: 'Asset mix and Work type mix keep their full-size donut. Long category names were quietly squeezing the ring; the legend is now capped at half the panel, and a name too long for it fades at the tail and scrolls when you hover its row.',
       },
       {
         kind: 'improved',

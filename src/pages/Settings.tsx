@@ -114,8 +114,8 @@ export function SettingsPage() {
             own max height — so the bottoms line up AND a scrollable list's fade
             still lands on the card's real bottom edge. */}
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {/* Turnaround per task size + the asset output rates — first panel in
-              the grid, since both are about how long work takes. */}
+          {/* Asset output rates + turnaround per task size — first panel in the
+              grid, since both are about how long work takes. */}
           <TimingEffortCard />
           <ListEditor
             title="Squads"
@@ -249,7 +249,9 @@ function MondayBoardsCard() {
         {boards.map((id) => (
           <li
             key={id}
-            className="flex items-center gap-2 rounded-lg border border-line bg-card/40 px-3 py-2 transition-all duration-200 hover:bg-card/80"
+            // This card is the plain bg-card surface, so the row is a faint DARK
+            // wash instead — a white lift would be invisible on white.
+            className="flex items-center gap-2 rounded-lg border border-line bg-black/[0.025] px-3 py-2 transition-all duration-200 hover:bg-black/[0.05] dark:bg-white/[0.04] dark:hover:bg-white/[0.09]"
           >
             <img src="/monday.svg" alt="" className="h-4 w-4 shrink-0" />
             <BoardNameInput value={names[id] ?? ''} onCommit={(v) => setName(id, v)} />
@@ -523,7 +525,7 @@ function SnapshotsCard() {
           {snapshots.map((s) => (
             <li
               key={s.id}
-              className="flex flex-col gap-3 rounded-xl border border-line p-3 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 rounded-xl border border-line bg-black/[0.025] p-3 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -791,10 +793,37 @@ function TimingEffortCard() {
     <Card className="flex h-full flex-col bg-subtle">
       <CardHeader
         title="Timing & effort"
-        subtitle="How long work takes — turnaround per task size, and how much effort one of each asset type is"
+        subtitle="How long work takes — how much effort one of each asset type is, and turnaround per task size"
       />
       <div>
-        <div>
+        {/* Output rates — how many of each asset type we finish in how long. Feeds
+            the dashboard's Effort view; every stored total still counts each asset
+            as 1 (see AssetRatesModal). Keyed by asset type, but it belongs with the
+            other "how long does work take" settings rather than the asset-type LIST.
+
+            Highlighted and placed FIRST: it's the setting behind Effort mode — now
+            the dashboard's default reading — so it's the one worth setting up, while
+            turnaround days below are a set-once auto-fill convenience. */}
+        {/* Raised on the card's own surface rather than a colour: the panel sits on
+            `bg-card` against the card's `bg-subtle`, so it reads as a distinct block
+            in both themes without a red fill dominating the page. The red only
+            appears on the icon, which is what flags the section. */}
+        <div className="rounded-xl border border-line bg-card p-3.5">
+          <h4 className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
+            <Timer className="h-3.5 w-3.5 shrink-0 text-rmit-red" />
+            Output rates
+          </h4>
+          <p className="mt-1 text-xs leading-relaxed text-muted">
+            Roughly how many of each asset type we finish, and in how long — so a banner isn&rsquo;t counted as
+            the same amount of work as a photo edit. Powers the <strong className="text-ink">Effort</strong>{' '}
+            view on the dashboard&rsquo;s workload chart; no stored total changes.
+          </p>
+          <button type="button" onClick={() => setRatesOpen(true)} className="btn-primary mt-3 h-8 px-3 text-xs">
+            {rateCount > 0 ? `Edit rates · ${rateCount}/${settings.assetTypes.length}` : 'Set rates'}
+          </button>
+        </div>
+
+        <div className="mt-4 border-t border-line pt-4">
           <h4 className="text-sm font-semibold text-ink">Task sizes</h4>
           <p className="mb-3 mt-1 text-xs leading-relaxed text-muted">
             Days added to the start date when auto-filling the end date. Only affects new tasks and
@@ -804,7 +833,7 @@ function TimingEffortCard() {
         {SIZES.map((s) => (
           <li
             key={s}
-            className="flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2"
+            className="flex items-center justify-between gap-2 rounded-lg border border-line bg-white/60 px-3 py-2 dark:bg-white/[0.04]"
           >
             <span className="flex min-w-0 items-center gap-2">
               <Badge tone={SIZE_TONE[s]}>{s}</Badge>
@@ -854,29 +883,6 @@ function TimingEffortCard() {
               {saving ? 'Saving…' : 'Save'}
             </button>
           </div>
-        </div>
-
-        {/* Output rates — how many of each asset type we finish in how long. Feeds
-            the dashboard's Effort view; every stored total still counts each asset
-            as 1 (see AssetRatesModal). Keyed by asset type, but it belongs with the
-            other "how long does work take" settings rather than the asset-type LIST. */}
-        <div className="mt-4 border-t border-line pt-3">
-          <h4 className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-ink">
-            <Timer className="h-3.5 w-3.5 shrink-0 text-accent-plum" />
-            Output rates
-          </h4>
-          <p className="mt-1 text-xs leading-relaxed text-muted">
-            Roughly how many of each asset type we finish, and in how long — so a banner isn&rsquo;t counted as
-            the same amount of work as a photo edit. Powers the <strong className="text-ink">Effort</strong>{' '}
-            view on the dashboard&rsquo;s workload chart; no stored total changes.
-          </p>
-          <button
-            type="button"
-            onClick={() => setRatesOpen(true)}
-            className="btn-outline mt-3 h-8 px-3 text-xs"
-          >
-            {rateCount > 0 ? `Edit rates · ${rateCount}/${settings.assetTypes.length}` : 'Set rates'}
-          </button>
         </div>
       </div>
       <AssetRatesModal open={ratesOpen} onClose={() => setRatesOpen(false)} />
@@ -1604,7 +1610,10 @@ function FunctionsCard() {
           const isOpen = expanded === f.name
           const isEditing = editing === f.name
           return (
-            <li key={f.name} className="rounded-lg border border-line bg-card/40 transition-all duration-200 hover:bg-card/80">
+            <li
+              key={f.name}
+              className="rounded-lg border border-line bg-white/60 transition-all duration-200 hover:bg-white dark:bg-white/[0.04] dark:hover:bg-white/[0.09]"
+            >
               <div className="flex items-center gap-2 px-3 py-2">
                 {isEditing ? (
                   <>
@@ -2129,8 +2138,15 @@ function ListEditor({
               tabIndex={isLocked ? undefined : 0}
               title={isLocked ? undefined : `Click to rename “${item}” or merge its tasks into another ${singular}`}
               className={cx(
-                'flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 bg-card/40 transition-all duration-200',
-                !isLocked && 'cursor-pointer hover:border-navy-300 hover:bg-card dark:hover:border-navy-400',
+                // A faint white lift off the card's bg-subtle surface, so rows read
+                // as objects rather than bare outlines. NB: literal white, not
+                // `bg-card/50` — the semantic tokens are `var()` colours and
+                // Tailwind's opacity modifier renders them fully transparent.
+                // Hover strengthens the same lift; fading a row back toward the card
+                // colour would read as "disabled".
+                'flex items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 bg-white/60 dark:bg-white/[0.04] transition-all duration-200',
+                !isLocked &&
+                  'cursor-pointer hover:border-navy-300 hover:bg-white dark:hover:bg-white/[0.09] dark:hover:border-navy-400',
               )}
             >
               {isLocked ? (

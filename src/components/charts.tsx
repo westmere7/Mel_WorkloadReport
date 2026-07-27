@@ -25,6 +25,7 @@ import { CHART_COLORS_DARK, CHART_COLORS_LIGHT } from '../constants'
 import { useTheme } from '../lib/theme'
 import { TrendDelta } from './ui/TrendDelta'
 import { cx } from '../lib/format'
+import { useNameMarquee } from '../lib/useNameMarquee'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
 /** True on narrow (mobile) viewports — Tailwind's `sm` breakpoint is 640px. */
@@ -165,6 +166,7 @@ function MixLegend({
   compare,
   sourceLabel,
   showShare,
+  className,
 }: {
   data: NamedCount[]
   colors: string[]
@@ -177,11 +179,16 @@ function MixLegend({
   compare?: NamedCount[]
   sourceLabel?: string
   showShare?: boolean
+  /** Extra classes on the list — e.g. a width cap beside a donut. */
+  className?: string
 }) {
   const prevByName = compare ? new Map(compare.map((d) => [d.name, d.value])) : null
   const clickable = Boolean(onSelect)
+  // Category names that outgrow their half of the panel fade at the tail and
+  // scroll on row hover, rather than truncating or widening the legend.
+  const marqueeRef = useNameMarquee<HTMLUListElement>()
   return (
-    <ul className="w-full space-y-1.5 sm:flex-1">
+    <ul ref={marqueeRef} className={cx('w-full min-w-0 space-y-1.5 sm:flex-1', className)}>
       {data.map((d, i) => {
         const n = taskCounts?.[d.name]
         const p = prevTaskCounts?.[d.name]
@@ -194,7 +201,7 @@ function MixLegend({
           <li key={d.name}>
             <div
               className={cx(
-                'flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 text-sm transition-colors',
+                'marquee-host flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 text-sm transition-colors',
                 clickable && 'cursor-pointer',
                 active === i && 'bg-subtle',
               )}
@@ -220,7 +227,9 @@ function MixLegend({
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ background: d.color ?? colors[i % colors.length] }}
                 />
-                <span className="truncate text-muted">{d.name}</span>
+                <span className="name-marquee text-muted">
+                  <span>{d.name}</span>
+                </span>
                 {d.isGroup && (
                   <span
                     className="shrink-0 text-faint"
@@ -272,7 +281,11 @@ export function DonutChart({
 
   return (
     <div className="flex flex-col items-center gap-4 sm:flex-row">
-      <div className="relative" style={{ width: 180, height }}>
+      {/* The ring is shrink-0 inside a flexible, centring column: long category
+          names used to squeeze the donut, because the legend's intrinsic width
+          won and the ring was the only thing that could give. */}
+      <div className="flex w-full justify-center sm:w-auto sm:flex-1">
+        <div className="relative shrink-0" style={{ width: 180, height }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -313,9 +326,10 @@ export function DonutChart({
             />
           </PieChart>
         </ResponsiveContainer>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-2xl font-bold text-ink">{total}</span>
-          <span className="text-[11px] uppercase tracking-wide text-muted">total</span>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-2xl font-bold text-ink">{total}</span>
+            <span className="text-[11px] uppercase tracking-wide text-muted">total</span>
+          </div>
         </div>
       </div>
       <MixLegend
@@ -329,6 +343,8 @@ export function DonutChart({
         prevTaskCounts={prevTaskCounts}
         compare={compare}
         sourceLabel={sourceLabel}
+        // Half the panel at most — beyond that the names are eating the chart.
+        className="sm:max-w-[50%]"
       />
     </div>
   )
