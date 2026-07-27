@@ -12,7 +12,7 @@ import { cx } from '../lib/format'
 const TITLES: Record<string, { title: string; subtitle: string }> = {
   '/': { title: 'Dashboard', subtitle: '' },
   '/tasks': { title: 'Task List', subtitle: 'All registered tasks' },
-  '/advisor': { title: 'Advisor', subtitle: 'Under construction — back soon' },
+  '/advisor': { title: 'Advisor', subtitle: 'In development — a look at what’s coming' },
   '/showcase': { title: 'Showcase', subtitle: 'Build a shareable animated year-in-review' },
   '/settings': { title: 'Settings', subtitle: 'Manage campaigns, work types and people' },
 }

@@ -288,9 +288,12 @@ export function AdvisorPage() {
           </span>
           <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-faint">
             In development
-            <span className="dot-1">.</span>
-            <span className="dot-2">.</span>
-            <span className="dot-3">.</span>
+            {/* tracking-normal so the dots read as an ellipsis, not as spaced capitals. */}
+            <span className="tracking-normal">
+              <span className="dot-1">.</span>
+              <span className="dot-2">.</span>
+              <span className="dot-3">.</span>
+            </span>
           </p>
           <h2 className="mt-1.5 text-xl font-bold text-ink">The Advisor</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
