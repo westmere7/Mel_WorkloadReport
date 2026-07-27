@@ -1,4 +1,4 @@
-import type { Squad, Size, AppSettings, AssetRate, AssetRates, FunctionConfig, FunctionData, FunctionEntry, ChartGroup, ChartGroups, RatePer } from './types'
+import type { Squad, Size, AppSettings, AssetRate, AssetRates, FunctionConfig, FunctionData, FunctionEntry, ChartGroup, ChartGroups, RateLogEntry, RatePer } from './types'
 
 /**
  * Default squads (stakeholders). Editable in Settings like the other lists — this
@@ -123,6 +123,27 @@ export function normalizeAssetRates(raw: unknown): AssetRates {
     if (!Number.isFinite(every) || every <= 0) continue
     const per = RATE_UNITS.includes(rec.per as RatePer) ? (rec.per as RatePer) : 'day'
     out[name] = { qty, every, per }
+  }
+  return out
+}
+
+/**
+ * Coerce a stored output-rates log into clean entries (see `AppSettings.assetRatesLog`).
+ * Junk-tolerant like the other normalizers: anything without a timestamp or with no
+ * usable change lines is dropped, so the history view never renders an empty row.
+ */
+export function normalizeRateLog(raw: unknown): RateLogEntry[] {
+  if (!Array.isArray(raw)) return []
+  const out: RateLogEntry[] = []
+  for (const v of raw) {
+    if (!v || typeof v !== 'object') continue
+    const rec = v as Partial<RateLogEntry>
+    if (typeof rec.at !== 'string' || !rec.at.trim()) continue
+    const changes = Array.isArray(rec.changes)
+      ? rec.changes.filter((c): c is string => typeof c === 'string' && c.trim() !== '')
+      : []
+    if (!changes.length) continue
+    out.push({ at: rec.at, by: typeof rec.by === 'string' ? rec.by : null, changes })
   }
   return out
 }
@@ -480,6 +501,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   assetTypes: DEFAULT_ASSET_TYPES,
   // No rates out of the box — every asset type starts "not specified".
   assetRates: {},
+  assetRatesLog: [],
   functions: DEFAULT_FUNCTIONS.map((f) => ({
     ...f,
     workTypes: [...f.workTypes],

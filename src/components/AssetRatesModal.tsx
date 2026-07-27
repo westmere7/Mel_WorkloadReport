@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpDown, Timer, X } from 'lucide-react'
+import { ArrowUpDown, History, Timer, X } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import { useStore } from '../data/store'
+import { useAuth } from '../lib/auth'
 import { cx } from '../lib/format'
+import { appendRateLog, diffRates, RATE_LOG_LIMIT } from '../lib/rateLog'
 import { useScrollFade } from '../lib/useScrollFade'
 import {
   sortAlpha,
@@ -14,7 +16,7 @@ import {
   HOURS_PER_WORKING_DAY,
   WORKING_DAYS_PER_WEEK,
 } from '../constants'
-import type { AssetRate, AssetRates, RatePer } from '../types'
+import type { AssetRate, AssetRates, RateLogEntry, RatePer } from '../types'
 
 /** One row's in-progress values — kept as strings so a half-typed number survives. */
 type RateDraft = { qty: string; every: string; per: RatePer }
@@ -63,6 +65,81 @@ function RateNumberInput({
   )
 }
 
+/** Human date + time for a log entry, e.g. "27 Jul 2026, 2:05 pm". */
+function fmtWhen(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+}
+
+/**
+ * Every recorded change to the rates, newest first — the only place the previous
+ * numbers survive, so an Effort total that moved can be traced to the rate that
+ * moved it. Entries are stored oldest→newest (see lib/rateLog.ts).
+ */
+function RateHistoryModal({
+  log,
+  open,
+  onClose,
+}: {
+  log: RateLogEntry[]
+  open: boolean
+  onClose: () => void
+}) {
+  const entries = [...log].reverse()
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      widthClass="max-w-2xl"
+      title={
+        <span className="flex items-center gap-2">
+          <History className="h-4 w-4 text-accent-plum" />
+          Rate history
+        </span>
+      }
+      footer={
+        <button className="btn-outline" type="button" onClick={onClose}>
+          Close
+        </button>
+      }
+    >
+      {entries.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-line px-3 py-4 text-center text-sm text-muted">
+          No changes recorded yet — the log starts with the first save made after logging was introduced.
+        </p>
+      ) : (
+        <ol className="max-h-[26rem] space-y-2.5 overflow-y-auto pr-1">
+          {entries.map((e, i) => (
+            <li key={`${e.at}-${i}`} className="rounded-xl border border-line bg-subtle/40 p-3">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                <span className="font-semibold text-ink">{fmtWhen(e.at)}</span>
+                {e.by && <span className="text-muted">by {e.by}</span>}
+                <span className="text-faint">
+                  · {e.changes.length} rate{e.changes.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <ul className="mt-1.5 space-y-0.5 pl-1 text-xs leading-relaxed text-muted">
+                {e.changes.map((c, j) => (
+                  <li key={j} className="flex items-start gap-1.5">
+                    <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-faint" />
+                    <span className="min-w-0">{c}</span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ol>
+      )}
+      {entries.length >= RATE_LOG_LIMIT && (
+        <p className="mt-3 border-t border-line pt-3 text-[11px] text-faint">
+          Showing the most recent {RATE_LOG_LIMIT} changes — older entries are dropped as new ones arrive.
+        </p>
+      )}
+    </Modal>
+  )
+}
+
 /**
  * Output rates per asset type — "how many assets in how long" (e.g. 300 images
  * per day, or 1 publication per 3 days).
@@ -74,8 +151,11 @@ function RateNumberInput({
  */
 export function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings, saveSettings } = useStore()
+  const { user } = useAuth()
   const assetTypes = useMemo(() => sortAlpha(settings.assetTypes), [settings.assetTypes])
   const stored = settings.assetRates ?? {}
+  const rateLog = settings.assetRatesLog ?? []
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const toDraft = (): Record<string, RateDraft> =>
     Object.fromEntries(
@@ -179,7 +259,15 @@ export function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () 
     if (!dirty) return
     setSaving(true)
     try {
-      await saveSettings({ ...settings, assetRates: next })
+      // Record what changed BEFORE the write — `stored` is the only copy of the
+      // old rates, and once this save lands the previous numbers are gone from
+      // everywhere else in the app.
+      const changes = diffRates(stored, next)
+      await saveSettings({
+        ...settings,
+        assetRates: next,
+        assetRatesLog: appendRateLog(settings.assetRatesLog, changes, user),
+      })
       onClose()
     } finally {
       setSaving(false)
@@ -199,6 +287,17 @@ export function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () 
       }
       footer={
         <>
+          {/* mr-auto: the history sits apart from Cancel/Save — it's a read, not a
+              step in the save flow. */}
+          <button
+            className="btn-ghost mr-auto"
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            title="Every recorded change to these rates"
+          >
+            <History className="h-4 w-4" />
+            History{rateLog.length ? ` · ${rateLog.length}` : ''}
+          </button>
           <button className="btn-outline" type="button" onClick={onClose}>
             Cancel
           </button>
@@ -213,6 +312,10 @@ export function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () 
         </>
       }
     >
+      {/* Its own pop-up over this one — the history is a read you dip into, not a
+          section of the editor, and inlining it pushed the rate rows down. */}
+      <RateHistoryModal log={rateLog} open={historyOpen} onClose={() => setHistoryOpen(false)} />
+
       {/* Explanation on the left, the rates themselves on the right — the asset
           type list is long, so it gets the room and its own scroll. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">

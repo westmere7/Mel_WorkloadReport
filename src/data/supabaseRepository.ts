@@ -13,6 +13,7 @@ import {
   normalizeMondayBoards,
   normalizeChartGroups,
   normalizeAssetRates,
+  normalizeRateLog,
   normalizeSizeDurations,
 } from '../constants'
 import {
@@ -190,6 +191,12 @@ function isMissingChartGroupsColumn(err: unknown): boolean {
 function isMissingAdvisorPromptColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
   return msg.includes('advisor_prompt') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
+/** True if a Supabase error is complaining about a missing `asset_rates_log` column (pre-migration). */
+function isMissingRateLogColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('asset_rates_log') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
 /** True if a Supabase error is complaining about a missing `asset_rates` column (pre-migration). */
@@ -630,6 +637,7 @@ export class SupabaseRepository implements Repository {
       people: data.people ?? DEFAULT_SETTINGS.people,
       assetTypes: data.asset_types ?? DEFAULT_SETTINGS.assetTypes,
       assetRates: normalizeAssetRates(data.asset_rates),
+      assetRatesLog: normalizeRateLog(data.asset_rates_log),
       sizeDurations: normalizeSizeDurations(data.size_durations),
       allowRemoveUsed: data.allow_remove_used ?? DEFAULT_SETTINGS.allowRemoveUsed,
       peopleMondayIds: data.people_monday ?? DEFAULT_SETTINGS.peopleMondayIds,
@@ -672,6 +680,7 @@ export class SupabaseRepository implements Repository {
       campaign_keywords: settings.campaignKeywords,
       chart_groups: settings.chartGroups,
       asset_rates: settings.assetRates,
+      asset_rates_log: settings.assetRatesLog ?? [],
       advisor_prompt: settings.advisorPrompt,
     }
     let { data, error } = await upsert(payload)
@@ -687,6 +696,10 @@ export class SupabaseRepository implements Repository {
     }
     if (error && isMissingChartGroupsColumn(error)) {
       delete payload.chart_groups
+      ;({ data, error } = await upsert(payload))
+    }
+    if (error && isMissingRateLogColumn(error)) {
+      delete payload.asset_rates_log
       ;({ data, error } = await upsert(payload))
     }
     if (error && isMissingAssetRatesColumn(error)) {

@@ -17,6 +17,7 @@ import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { DEFAULT_SETTINGS, FALLBACK_ITEM, legacyOwnerName } from '../constants'
 import { generateSampleTasks } from '../lib/sampleData'
 import { diffTask } from '../lib/taskLog'
+import { appendRateLog, diffRates } from '../lib/rateLog'
 import { toMessage } from '../lib/format'
 import { useAuth } from '../lib/auth'
 import {
@@ -491,7 +492,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (rates[oldValue] !== undefined) {
             if (!dupe) rates[trimmed] = rates[oldValue]
             delete rates[oldValue]
-            nextSettings = { ...nextSettings, assetRates: rates }
+            // Logged like a manual edit: a rename moves a rate between keys, and a
+            // merge silently discards one — both change what Effort reads.
+            const changes = diffRates(prev.assetRates ?? {}, rates)
+            nextSettings = {
+              ...nextSettings,
+              assetRates: rates,
+              assetRatesLog: appendRateLog(
+                prev.assetRatesLog,
+                changes.length ? [`Asset type renamed: ${oldValue} → ${trimmed}`, ...changes] : [],
+                user ?? null,
+              ),
+            }
           }
         }
         void repo.saveSettings(nextSettings)
@@ -553,11 +565,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             },
           }
         }
-        // Drop the removed asset type's recorded output rate.
+        // Drop the removed asset type's recorded output rate — and record it, since
+        // this is the last moment that rate exists anywhere.
         if (key === 'assetTypes' && (prev.assetRates ?? {})[value] !== undefined) {
           const rates = { ...prev.assetRates }
           delete rates[value]
-          nextSettings = { ...nextSettings, assetRates: rates }
+          nextSettings = {
+            ...nextSettings,
+            assetRates: rates,
+            assetRatesLog: appendRateLog(
+              prev.assetRatesLog,
+              [`Asset type removed: ${value}`, ...diffRates(prev.assetRates ?? {}, rates)],
+              user ?? null,
+            ),
+          }
         }
         void repo.saveSettings(nextSettings)
         return nextSettings

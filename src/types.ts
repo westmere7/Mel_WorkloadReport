@@ -44,6 +44,16 @@ export interface AssetRate {
  */
 export type AssetRates = Record<string, AssetRate>
 
+/** One recorded change to the output rates (see `AppSettings.assetRatesLog`). */
+export interface RateLogEntry {
+  /** ISO timestamp of the save. */
+  at: string
+  /** Username that made the change; null when unknown. */
+  by?: string | null
+  /** Human-readable per-asset-type summaries — always at least one. */
+  changes: string[]
+}
+
 /**
  * One GCMC function's slice of a task (Vietnam Design / Melbourne Design /
  * Production / Contents…). Work types, asset counts and an optional timeline are
@@ -205,6 +215,13 @@ export interface AppSettings {
    * only offered once at least one rate exists.
    */
   assetRates: AssetRates
+  /**
+   * Edit log for `assetRates`, oldest first, capped at the most recent
+   * `RATE_LOG_LIMIT`. Rates silently re-scale every hours figure on the dashboard,
+   * so each save records who changed which rate and what it was before (see
+   * lib/rateLog.ts). Absent on settings saved before this existed.
+   */
+  assetRatesLog?: RateLogEntry[]
   /** GCMC functions that record workload (task-form tabs). Order = tab order. */
   functions: FunctionConfig[]
   /** Days each task size adds to the start date when auto-filling the end date. */

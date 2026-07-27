@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
+
+/**
+ * Currently-open modals, oldest first. Escape closes only the TOP one — without
+ * this, a modal opened from inside another (e.g. the rate history over the rates
+ * editor) would take its parent down with it on a single keypress.
+ */
+const openModals: object[] = []
 
 interface ModalProps {
   open: boolean
@@ -16,12 +23,27 @@ interface ModalProps {
 }
 
 export function Modal({ open, onClose, title, children, footer, wide, widthClass, closeOnBackdrop = true }: ModalProps) {
+  // Through a ref so the effect depends on `open` alone: re-running it on a new
+  // onClose identity would re-push this modal and steal "topmost" from a child.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    const token = {}
+    openModals.push(token)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (openModals[openModals.length - 1] !== token) return
+      onCloseRef.current()
+    }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      const i = openModals.indexOf(token)
+      if (i !== -1) openModals.splice(i, 1)
+    }
+  }, [open])
 
   if (!open) return null
 

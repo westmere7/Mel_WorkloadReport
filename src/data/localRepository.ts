@@ -14,6 +14,7 @@ import {
   normalizeChartGroups,
   normalizeSizeDurations,
   normalizeAssetRates,
+  normalizeRateLog,
 } from '../constants'
 import {
   renameAssetTypeInFunctionData,
@@ -224,6 +225,7 @@ export class LocalRepository implements Repository {
       campaignKeywords: normalizeKeywordMap(stored.campaignKeywords),
       chartGroups: normalizeChartGroups(stored.chartGroups),
       assetRates: normalizeAssetRates(stored.assetRates),
+      assetRatesLog: normalizeRateLog(stored.assetRatesLog),
     }
   }
 

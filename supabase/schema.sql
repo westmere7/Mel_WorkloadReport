@@ -152,6 +152,15 @@ alter table public.settings
 alter table public.settings
   add column if not exists asset_rates jsonb not null default '{}'::jsonb;
 
+-- Edit log for the rates above: [{ at, by, changes[] }], oldest first. A rate is a
+-- multiplier on every Effort figure the dashboard shows, so changing one silently
+-- restates the past — this is the only place the OLD value survives, which is what
+-- lets a shifted total be explained rather than just noticed. Append-only in the
+-- app, capped at the most recent 100 entries (RATE_LOG_LIMIT in lib/rateLog.ts) so
+-- the settings row can't grow without limit — every save reads and writes it.
+alter table public.settings
+  add column if not exists asset_rates_log jsonb not null default '[]'::jsonb;
+
 -- Advisor voice brief: free text controlling HOW the generated analysis reads
 -- (length, tone, what to lead with). Empty string = follow the app's built-in
 -- default, so later improvements to it reach teams that never customised theirs.

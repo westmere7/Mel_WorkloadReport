@@ -39,6 +39,10 @@ export const CHANGELOG: Release[] = [
         text: 'Output rates now sit at the top of Settings → Timing & effort in their own panel with a red “Edit rates” button — they’re what Effort mode reads, so they’re the setting worth filling in. Turnaround per task size moves below.',
       },
       {
+        kind: 'new',
+        text: 'Output rates now keep an edit log. Every save records who changed which rate and what it was before — “Statics: 12 per 1 day → 8 per 1 day” — and so do the two indirect routes: renaming an asset type carries its rate to the new name, and removing one drops the rate entirely. Open it with “History” at the bottom of the rates window; the most recent 100 changes are kept. Because a rate re-scales every hours figure on the dashboard, this is the only place the old numbers survive, which is what lets a total that moved be explained.',
+      },
+      {
         kind: 'fixed',
         text: 'Settings list rows (squads, campaigns, work and asset types, people, functions, snapshots) were meant to sit on a faint tint but were rendering completely see-through, so they read as bare outlines — and hovering one faded it further, as if it had been disabled. Rows now carry that tint, and hovering lifts them instead.',
       },
