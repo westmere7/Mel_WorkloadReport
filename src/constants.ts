@@ -483,7 +483,7 @@ WHAT TO SAY:
 
 HOW TO WRITE IT:
 - Plain professional English, British spelling. Short verbs beat abstract nouns.
-- Say "Videos took 63% of the team's hours". Do NOT say "Videos represents a 63% share of overall effort".
+- Phrasing pattern only — X is a placeholder and must never appear in your output, nor may the figure it stands for be invented: say "Videos took X% of the team's hours", do NOT say "Videos represents an X% share of overall effort".
 - Banned as padding: "represents", "presents", "constitutes", "in terms of", "share of overall", "resource" as a noun, "centralized", "utilise", "leverage", "key driver", "capacity challenge", "operational pressure", "remains the primary".
 - Don't lean on one framing word. If you have written "share" once, find another way the next time.
 - Vary sentence length. Never one sentence per fact; that reads like a form letter.

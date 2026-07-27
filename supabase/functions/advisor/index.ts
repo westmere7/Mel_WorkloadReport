@@ -1,16 +1,28 @@
 // Supabase Edge Function: advisor
 // ─────────────────────────────────────────────────────────────────────────────
-// Narrates the dashboard's Advisor findings with Google Gemini. Holds the API key
-// as a SECRET (never shipped to the browser) and does nothing else of substance:
+// Narrates the dashboard's Advisor findings with a hosted model (Groq or Google
+// Gemini). Holds the API key as a SECRET (never shipped to the browser) and does
+// nothing else of substance:
 // the findings themselves are computed client-side in src/lib/advisor/findings.ts,
 // and this function may only turn them into prose.
 //
 // This is a Deno function — NOT part of the app's `tsc --noEmit`. Deploy separately
 // (see setup notes at the bottom).
 //
-// Secrets / env (set with `supabase secrets set …`):
-//   GEMINI_API_KEY        Google AI Studio key (required)
+// Two providers are supported. They are interchangeable here because the job is
+// only phrasing: the findings are computed client-side, and the client AUDITS the
+// returned prose (see lib/advisor/narrate.ts) and falls back to the app-written
+// briefing if a figure or a person's name is wrong. A weaker model can't ship a
+// wrong number — worst case its draft is rejected.
+//
+// Secrets / env (Dashboard → Edge Functions → advisor → Secrets, or the CLI's
+// `supabase secrets set …`):
+//   ADVISOR_PROVIDER      'gemini' | 'groq' (optional; inferred from whichever key
+//                         is present, preferring Gemini when both are)
+//   GEMINI_API_KEY        Google AI Studio key
 //   GEMINI_MODEL          model id or alias (optional; default gemini-flash-latest)
+//   GROQ_API_KEY          Groq key — https://console.groq.com/keys
+//   GROQ_MODEL            model id (optional; default llama-3.3-70b-versatile)
 //   ADVISOR_ALLOW_ORIGIN  CORS allow-origin (optional; default '*')
 //
 // Request  (POST JSON): { findings: Finding[], scopeLabel: string, effortOn: boolean,
@@ -35,6 +47,30 @@
 // Pinning a version means the advisor silently dies whenever that happens. Override
 // per-project with the GEMINI_MODEL secret.
 const DEFAULT_MODEL = 'gemini-flash-latest'
+
+/**
+ * Groq default. A plain instruct model on purpose: the GPT-OSS models on Groq are
+ * reasoning-style and can spend this budget thinking (the same trap `thinkingConfig`
+ * exists to dodge on Gemini), and we want phrasing, not reasoning. Override with
+ * GROQ_MODEL to try `openai/gpt-oss-120b` or another production model.
+ */
+const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile'
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+
+/**
+ * Groq's version of the thinking ladder below — same problem, different spelling.
+ * Reasoning models here would otherwise spend the answer budget thinking, and Groq
+ * splits the off-switch by family: GPT-OSS takes `include_reasoning`, Qwen/MiniMax
+ * take `reasoning_format`, the two are mutually exclusive, and a plain instruct
+ * model (the default) accepts neither. Walk the ladder on 400; the last rung — an
+ * empty variant — always validates.
+ */
+const GROQ_REASONING_VARIANTS: Array<Record<string, unknown>> = [
+  { include_reasoning: false, reasoning_effort: 'low' }, // GPT-OSS 20B / 120B
+  { reasoning_format: 'hidden' }, // Qwen, MiniMax
+  {}, // llama-3.3-70b-versatile and other plain instruct models
+]
+
 const MAX_FINDINGS = 14
 /**
  * Output budget. Generous on purpose — see `thinkingConfig` below: on a thinking
@@ -98,7 +134,7 @@ WHAT TO SAY:
 
 HOW TO WRITE IT:
 - Plain professional English, British spelling. Short verbs beat abstract nouns.
-- Say "Videos took 63% of the team's hours". Do NOT say "Videos represents a 63% share of overall effort".
+- Phrasing pattern only — X is a placeholder and must never appear in your output, nor may the figure it stands for be invented: say "Videos took X% of the team's hours", do NOT say "Videos represents an X% share of overall effort".
 - Banned as padding: "represents", "presents", "constitutes", "in terms of", "share of overall", "resource" as a noun, "centralized", "utilise", "leverage", "key driver", "capacity challenge", "operational pressure", "remains the primary".
 - Don't lean on one framing word. If you have written "share" once, find another way the next time.
 - Vary sentence length. Never one sentence per fact; that reads like a form letter.
@@ -151,8 +187,32 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors() })
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405)
 
-  const key = Deno.env.get('GEMINI_API_KEY')
-  if (!key) return json({ configured: false })
+  // Provider is explicit when set, otherwise inferred from whichever key exists —
+  // so a Groq-only project needs one secret and no provider flag, and an existing
+  // Gemini project keeps working with no change at all.
+  //
+  // Trimmed as well as lowercased: these are typed into a dashboard field, and a
+  // trailing space is invisible there but would otherwise fail to match.
+  const geminiKey = Deno.env.get('GEMINI_API_KEY')?.trim()
+  const groqKey = Deno.env.get('GROQ_API_KEY')?.trim()
+  const declared = (Deno.env.get('ADVISOR_PROVIDER') ?? '').trim().toLowerCase()
+  const provider = declared || (geminiKey ? 'gemini' : groqKey ? 'groq' : '')
+
+  // Say WHICH of the three ways this is misconfigured. Returning a bare
+  // `configured: false` for all of them sends you looking for a missing key when
+  // the real problem is a typo'd provider name.
+  if (declared && declared !== 'gemini' && declared !== 'groq') {
+    return json(
+      { configured: true, error: `ADVISOR_PROVIDER is "${declared}" — expected "gemini" or "groq".` },
+      500,
+    )
+  }
+  const key = provider === 'groq' ? groqKey : geminiKey
+  if (!provider) return json({ configured: false })
+  if (!key) {
+    const missing = provider === 'groq' ? 'GROQ_API_KEY' : 'GEMINI_API_KEY'
+    return json({ configured: true, error: `ADVISOR_PROVIDER is "${provider}" but ${missing} is not set.` }, 500)
+  }
 
   let body: Record<string, unknown>
   try {
@@ -166,7 +226,10 @@ Deno.serve(async (req) => {
     return json({ configured: true, error: 'Payload rejected: findings must be aggregate facts.' }, 400)
   }
 
-  const model = Deno.env.get('GEMINI_MODEL') ?? DEFAULT_MODEL
+  const model =
+    provider === 'groq'
+      ? (Deno.env.get('GROQ_MODEL') ?? DEFAULT_GROQ_MODEL)
+      : (Deno.env.get('GEMINI_MODEL') ?? DEFAULT_MODEL)
   const system = systemInstruction(body.prompt)
   const scopeLabel = typeof body.scopeLabel === 'string' ? body.scopeLabel : 'the current period'
   const measure = body.effortOn ? 'effort-weighted hours' : 'asset counts'
@@ -179,6 +242,69 @@ Deno.serve(async (req) => {
     '',
     'Write the briefing now.',
   ].join('\n')
+
+  // ── Groq (OpenAI-compatible chat completions) ──────────────────────────────
+  // Short path by design: one request, no thinking-field ladder to walk, and the
+  // same {text, model} contract the client already handles.
+  if (provider === 'groq') {
+    const groqCall = (reasoningVariant: Record<string, unknown>) =>
+      fetch(GROQ_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          // Same rationale as the Gemini call: the numeric audit downstream is what
+          // keeps this honest, so temperature buys phrasing at no cost to accuracy.
+          temperature: 0.9,
+          top_p: 0.95,
+          max_completion_tokens: MAX_OUTPUT_TOKENS,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: userPrompt },
+          ],
+          ...reasoningVariant,
+        }),
+      })
+
+    let res: Response
+    try {
+      res = await groqCall(GROQ_REASONING_VARIANTS[0])
+      // Only a 400 means "I don't accept that field" — any other status is about
+      // the request's substance, so stop walking and report it below.
+      for (let i = 1; i < GROQ_REASONING_VARIANTS.length && res.status === 400; i++) {
+        res = await groqCall(GROQ_REASONING_VARIANTS[i])
+      }
+    } catch (e) {
+      return json({ configured: true, error: `Groq unreachable: ${String(e)}` }, 502)
+    }
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '')
+      const status = res.status === 429 ? 429 : 502
+      return json({ configured: true, error: `Groq ${res.status}: ${detail.slice(0, 900)}` }, status)
+    }
+
+    const data = await res.json().catch(() => null)
+    const choice = data?.choices?.[0]
+    // Belt and braces: if the ladder fell through to the empty variant on a model
+    // that reasons inline anyway, its scratchpad arrives wrapped in <think> tags.
+    // Never prose, always safe to drop.
+    const text = (choice?.message?.content ?? '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+    if (!text.trim()) {
+      return json({ configured: true, error: `Groq returned no text (${choice?.finish_reason ?? 'empty response'}).` }, 502)
+    }
+    // Same reasoning as Gemini's finishReason check: a briefing cut off mid-figure
+    // is worse than none, and the audit would reject it anyway.
+    if (choice?.finish_reason && choice.finish_reason !== 'stop') {
+      const usage = JSON.stringify(data?.usage ?? {})
+      return json(
+        { configured: true, error: `Groq stopped early (${choice.finish_reason}). usage=${usage}` },
+        502,
+      )
+    }
+
+    return json({ configured: true, text: text.trim(), model })
+  }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
 
@@ -259,9 +385,27 @@ Deno.serve(async (req) => {
 })
 
 // ── Setup / deploy ───────────────────────────────────────────────────────────
-// 1) Get a key at https://aistudio.google.com/apikey (free tier).
-// 2) supabase secrets set GEMINI_API_KEY=... [GEMINI_MODEL=gemini-flash-latest]
-// 3) supabase functions deploy advisor
+// 1) Get a key — Groq: https://console.groq.com/keys (free tier, no card)
+//                Gemini: https://aistudio.google.com/apikey (free tier)
+//
+// 2) Add it as a secret. Dashboard route (no CLI needed):
+//      Edge Functions → advisor → Secrets → Add new secret
+//        GROQ_API_KEY = ...            [optional: GROQ_MODEL]
+//      …or GEMINI_API_KEY = ...        [optional: GEMINI_MODEL]
+//    CLI route: supabase secrets set GROQ_API_KEY=...
+//
+//    ⚠ If BOTH keys exist, Gemini wins — the tie is deliberate so an existing
+//      deploy can't switch provider by surprise. To run Groq alongside a Gemini
+//      key still in the project, add ADVISOR_PROVIDER = groq (or delete the
+//      Gemini secret).
+//
+// 3) Deploy. Dashboard route: Edge Functions → advisor → paste this file into the
+//    editor → Deploy.   CLI route: supabase functions deploy advisor
 //    (Default JWT verification is fine — supabase-js `functions.invoke` sends the
 //     anon key, which is a valid JWT.)
+//
 // 4) In the app build, set VITE_ADVISOR=1 to enable the client path.
+//
+// 5) Check it: the Advisor page's briefing footer names the model that wrote it.
+//    In dev, `window.__advisor.narrate()` in the console returns the raw result
+//    including any upstream error string.

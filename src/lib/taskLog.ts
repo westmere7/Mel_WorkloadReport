@@ -1,4 +1,4 @@
-import type { Task, TaskInput, TaskLogEntry } from '../types'
+import type { AssetBreakdown, FunctionEntry, Task, TaskInput, TaskLogEntry } from '../types'
 
 /**
  * Per-task edit log helpers. The log is a `TaskLogEntry[]` stored ON the task
@@ -11,6 +11,64 @@ import type { Task, TaskInput, TaskLogEntry } from '../types'
 const show = (v: unknown): string => {
   const s = v === null || v === undefined ? '' : String(v).trim()
   return s === '' ? '—' : s
+}
+
+/**
+ * One line per asset type whose count moved: "Slides: 3 → 6". A 0 on either side
+ * is shown as a number rather than "added"/"removed", so a column of these reads
+ * consistently and the direction is obvious at a glance.
+ */
+function breakdownDelta(prefix: string, prev?: AssetBreakdown, next?: AssetBreakdown): string[] {
+  const names = [...new Set([...Object.keys(prev ?? {}), ...Object.keys(next ?? {})])].sort((a, b) =>
+    a.localeCompare(b),
+  )
+  const out: string[] = []
+  for (const name of names) {
+    const a = Number(prev?.[name]) || 0
+    const b = Number(next?.[name]) || 0
+    if (a !== b) out.push(`${prefix}${name}: ${a} → ${b}`)
+  }
+  return out
+}
+
+/**
+ * What changed inside ONE function's slice — its asset counts type by type, its
+ * work types, and its own timeline. Named per line so a multi-function task's log
+ * says which team's numbers moved, not merely that some did.
+ */
+function functionDelta(
+  name: string,
+  prev: FunctionEntry | undefined,
+  next: FunctionEntry | undefined,
+  /** The task-level asset change, so this slice doesn't restate it. */
+  taskTotals: { from: number; to: number },
+): string[] {
+  const out: string[] = []
+  const p = `${name} · `
+  if (!prev && next) out.push(`${name}: switched on`)
+  else if (prev && !next) out.push(`${name}: switched off`)
+
+  const prevTotal = prev?.assetTotal || 0
+  const nextTotal = next?.assetTotal || 0
+  const perType = breakdownDelta(p, prev?.assetBreakdown, next?.assetBreakdown)
+  // The subtotal earns its line only when it says something the lines around it
+  // don't: it's noise when it merely repeats the task total (single-function
+  // task), or when one asset type moved and so IS the subtotal.
+  const restatesTask = prevTotal === taskTotals.from && nextTotal === taskTotals.to
+  if (prevTotal !== nextTotal && perType.length > 1 && !restatesTask)
+    out.push(`${p}assets: ${prevTotal} → ${nextTotal}`)
+  out.push(...perType)
+
+  const types = listDelta(`${p}work types`, prev?.types ?? [], next?.types ?? [])
+  if (types) out.push(types)
+
+  if ((prev?.timelineOn ?? false) !== (next?.timelineOn ?? false))
+    out.push(`${p}own timeline: ${next?.timelineOn ? 'on' : 'off'}`)
+  if (show(prev?.startDate) !== show(next?.startDate))
+    out.push(`${p}start date: ${show(prev?.startDate)} → ${show(next?.startDate)}`)
+  if (show(prev?.endDate) !== show(next?.endDate))
+    out.push(`${p}end date: ${show(prev?.endDate)} → ${show(next?.endDate)}`)
+  return out
 }
 
 /** "+ added · − removed" delta for a multi-value field, or null when unchanged. */
@@ -43,11 +101,30 @@ export function diffTask(prev: Task, next: TaskInput): string[] {
   scalar('End date', prev.endDate, next.endDate)
   scalar('Note', prev.note, next.note)
 
+  // Per-function slices carry the same asset counts as the combined breakdown, so
+  // detail them in ONE place: per function when the task records them that way,
+  // otherwise against the combined breakdown (legacy tasks predate functions).
   const prevTotal = prev.assetTotal || 0
   const nextTotal = next.assetTotal || 0
+
+  const fnPrev = prev.functionData ?? null
+  const fnNext = next.functionData ?? null
+  const fnLines: string[] = []
+  if (JSON.stringify(fnPrev) !== JSON.stringify(fnNext)) {
+    const names = [...new Set([...Object.keys(fnPrev ?? {}), ...Object.keys(fnNext ?? {})])].sort((a, b) =>
+      a.localeCompare(b),
+    )
+    for (const name of names) {
+      if (JSON.stringify(fnPrev?.[name]) === JSON.stringify(fnNext?.[name])) continue
+      fnLines.push(
+        ...functionDelta(name, fnPrev?.[name], fnNext?.[name], { from: prevTotal, to: nextTotal }),
+      )
+    }
+  }
+
   if (prevTotal !== nextTotal) out.push(`Assets: ${prevTotal} → ${nextTotal}`)
-  else if (JSON.stringify(prev.assetBreakdown ?? {}) !== JSON.stringify(next.assetBreakdown ?? {}))
-    out.push('Asset breakdown updated')
+  if (fnLines.length) out.push(...fnLines)
+  else out.push(...breakdownDelta('Assets · ', prev.assetBreakdown, next.assetBreakdown))
 
   const types = listDelta('Work types', prev.types ?? [], next.types ?? [])
   if (types) out.push(types)
@@ -68,15 +145,7 @@ export function diffTask(prev: Task, next: TaskInput): string[] {
   if (show(prev.mondayUrl) !== show(next.mondayUrl))
     out.push(next.mondayUrl ? 'monday.com link updated' : 'monday.com link removed')
 
-  // Per-function slices: name just the functions whose slice changed.
-  const fdPrev = prev.functionData ?? null
-  const fdNext = next.functionData ?? null
-  if (JSON.stringify(fdPrev) !== JSON.stringify(fdNext)) {
-    const names = new Set([...(fdPrev ? Object.keys(fdPrev) : []), ...(fdNext ? Object.keys(fdNext) : [])])
-    const changed = [...names].filter((n) => JSON.stringify(fdPrev?.[n]) !== JSON.stringify(fdNext?.[n]))
-    out.push(changed.length ? `Function workload: ${changed.join(', ')}` : 'Function workload updated')
-  }
-
+  // (Per-function slices are detailed alongside the asset totals above.)
   return out
 }
 

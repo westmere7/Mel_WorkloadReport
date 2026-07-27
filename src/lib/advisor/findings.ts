@@ -129,6 +129,9 @@ const signedPct = (now: number, before: number) => {
   return `${d >= 0 ? '+' : '−'}${mag}%`
 }
 const round1 = (n: number) => String(Math.round(n * 10) / 10)
+/** A month/bucket value in whichever unit the scope is measured in. */
+const amount = (n: number, useEffort: boolean) =>
+  useEffort ? formatHours(n) : `${Math.round(n).toLocaleString()} assets`
 /** Same rounding signedPct applies, as a number — keeps chart labels equal to facts. */
 const roundLikePct = (n: number) => (Math.abs(n) < 10 ? Math.round(n * 10) / 10 : Math.round(n))
 const sum = (rows: { value: number }[]) => rows.reduce((a, r) => a + r.value, 0)
@@ -233,20 +236,36 @@ function peakConcentration({ tasks, rates, useEffort, coverage }: AdvisorInput):
 function rampSteepness({ tasks, rates, useEffort }: AdvisorInput): Finding | null {
   const value = useEffort ? (t: Task) => taskEffortHours(t, rates) : (t: Task) => t.assetTotal || 0
   const months = valueByMonth(tasks, value)
-  let best = { from: '', to: '', mult: 0 }
+  let best = { from: '', to: '', mult: 0, fromValue: 0, toValue: 0 }
   for (let i = 1; i < months.length; i++) {
     const a = months[i - 1].value
     const b = months[i].value
     if (a <= 0 || b <= a) continue
     const mult = b / a
-    if (mult > best.mult) best = { from: months[i - 1].name, to: months[i].name, mult }
+    if (mult > best.mult)
+      best = { from: months[i - 1].name, to: months[i].name, mult, fromValue: a, toValue: b }
   }
   if (best.mult < 2) return null
+  // The multiple alone says "steep" without saying "steep from what to what", which
+  // left the narrator padding around a single number. Give it both ends of the
+  // climb, the peak's weight in the year, and the trough to contrast against.
+  const total = sum(months)
+  const live = months.filter((d) => d.value > 0)
+  const quietest = live.reduce((m, d) => (d.value < m.value ? d : m), live[0])
   return {
     id: 'ramp-steepness',
     severity: 3,
-    claim: `Workload climbs sharply from ${best.from} into ${best.to}.`,
-    facts: { rampFrom: best.from, rampTo: best.to, rampMultiple: `${round1(best.mult)}×` },
+    claim: `Workload climbs sharply from ${best.from} into ${best.to} — a ${round1(best.mult)}× step in a single month.`,
+    facts: {
+      rampFrom: best.from,
+      rampTo: best.to,
+      rampMultiple: `${round1(best.mult)}×`,
+      rampFromValue: amount(best.fromValue, useEffort),
+      rampToValue: amount(best.toValue, useEffort),
+      rampToShare: pct(best.toValue, total),
+      quietestMonth: quietest?.name ?? '—',
+      quietestValue: amount(quietest?.value ?? 0, useEffort),
+    },
     evidence: {
       kind: 'months',
       unit: useEffort ? 'hours' : 'assets',
@@ -305,15 +324,34 @@ function heavyAssetType({ tasks, rates, assetTypes }: AdvisorInput): Finding | n
   const vol = assetsByType(tasks, assetTypes)
   const vTotal = sum(vol)
   const topVol = vol.find((d) => d.name === top.name)?.value ?? 0
+  const gapPoints = Math.abs(
+    Math.round((top.value / eTotal) * 100) - Math.round((topVol / Math.max(1, vTotal)) * 100),
+  )
   return {
     id: 'heavy-asset-type',
     severity: 4,
-    claim: `${top.name} consumes far more of the team's time than its share of output suggests.`,
+    // The gate only asks whether this type is a BIG share of hours, not whether
+    // that share outruns its share of output — so on a proportional type the old
+    // wording ("far more … than its share of output suggests") was simply false,
+    // and the narrator repeated it as "25% of time against 25% of output". Say
+    // whichever of the two things is actually true.
+    claim:
+      gapPoints >= 8
+        ? `${top.name} consumes far more of the team's time than its share of output suggests — ${pct(top.value, eTotal)} of hours from ${pct(topVol, vTotal)} of output.`
+        : `${top.name} is the single largest draw on the team's time, at ${pct(top.value, eTotal)} of all hours.`,
     facts: {
       typeName: top.name,
       typeEffortShare: pct(top.value, eTotal),
       typeVolumeShare: pct(topVol, vTotal),
       typeHours: formatHours(top.value),
+      typeAssets: topVol.toLocaleString(),
+      // The gap between the two shares IS the finding — state it rather than
+      // making the narrator subtract two percentages (which the audit would then
+      // reject as an invented number).
+      typeShareGap: `${gapPoints} points`,
+      ...(byEff[1]
+        ? { runnerUpType: byEff[1].name, runnerUpEffortShare: pct(byEff[1].value, eTotal) }
+        : {}),
     },
     evidence: {
       kind: 'pairs',
@@ -342,16 +380,29 @@ function squadConcentration({ tasks }: AdvisorInput): Finding | null {
   const others = byTasks.filter((d) => d.name !== top.name)
   const otherAssets = aTotal - top.value
   const otherTasks = sum(others)
+  const tTotal = sum(byTasks)
+  const perTop = topTasks > 0 ? top.value / topTasks : 0
+  const perOthers = otherTasks > 0 ? otherAssets / otherTasks : 0
+  const runnerUp = byAssets[1]
+  // The share of OUTPUT alone reads as "big team". Pairing it with the share of
+  // BRIEFS is what makes it a finding: the same demand arriving as fewer, larger
+  // jobs is a different planning problem from many small ones.
   return {
     id: 'squad-concentration',
     severity: 3,
-    claim: `${top.name} drives most of the output in this scope.`,
+    claim: `${top.name} drives most of the output — ${pct(top.value, aTotal)} of assets from ${pct(topTasks, tTotal)} of the briefs.`,
     facts: {
       squadName: top.name,
       squadAssetShare: pct(top.value, aTotal),
       squadAssets: top.value.toLocaleString(),
-      squadPerBrief: topTasks > 0 ? round1(top.value / topTasks) : '0',
-      othersPerBrief: otherTasks > 0 ? round1(otherAssets / otherTasks) : '0',
+      squadTasks: String(topTasks),
+      squadTaskShare: pct(topTasks, tTotal),
+      squadPerBrief: topTasks > 0 ? round1(perTop) : '0',
+      othersPerBrief: otherTasks > 0 ? round1(perOthers) : '0',
+      briefSizeRatio: perOthers > 0 ? `${round1(perTop / perOthers)}×` : '—',
+      ...(runnerUp
+        ? { runnerUpSquad: runnerUp.name, runnerUpShare: pct(runnerUp.value, aTotal) }
+        : {}),
     },
     evidence: {
       kind: 'bars',

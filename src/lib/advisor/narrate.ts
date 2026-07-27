@@ -76,12 +76,20 @@ function normalise(token: string): string {
 export function auditNumbers(text: string, findings: Finding[]): string[] {
   const allowed = new Set<string>()
   for (const raw of allowedTokens(findings)) {
-    const v = normalise(raw)
-    allowed.add(v)
-    // A fact may be quoted without its unit ("12,379 h" → "12,379") or without a
-    // trailing zero ("−2.0%" → "−2%"); both are faithful, so accept them.
-    allowed.add(v.replace(/\s*(?:%|h|×|points?|hours?|days?|weeks?)$/i, '').trim())
-    allowed.add(v.replace(/\.0(?=\D|$)/g, ''))
+    // A fact may be quoted without its unit ("12,379 h" → "12,379"), without a
+    // trailing zero ("−2.0%" → "−2%"), or — for a signed change — without the
+    // leading plus ("+70%" → "70%"). All three are faithful quotations, and the
+    // last is what ordinary prose does: "output grew 70%", never "grew +70%".
+    // compose.ts writes it that way too, so without this the audit rejects the
+    // app's own house style.
+    const base = normalise(raw)
+    for (const signed of [base, base.replace(/^\+/, '')]) {
+      for (const z of [signed, signed.replace(/\.0(?=\D|$)/g, '')]) {
+        if (!z) continue
+        allowed.add(z)
+        allowed.add(z.replace(/\s*(?:%|h|×|points?|hours?|days?|weeks?)$/i, '').trim())
+      }
+    }
   }
   const bad: string[] = []
   for (const m of text.matchAll(TOKEN_RE)) {
@@ -223,7 +231,9 @@ export async function narrate({
       continue
     }
 
-    if (data?.configured === false) return fallback(['GEMINI_API_KEY not set on the function'], attempt)
+    // Provider-neutral: the function accepts either a Gemini or a Groq key.
+    if (data?.configured === false)
+      return fallback(['No model key set on the advisor function (GEMINI_API_KEY or GROQ_API_KEY)'], attempt)
     if (data?.error) {
       rejected.push(`attempt ${attempt}: ${data.error}`)
       continue
