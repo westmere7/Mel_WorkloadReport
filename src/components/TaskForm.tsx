@@ -267,6 +267,56 @@ function evalMath(input: string): number | null {
 const PICKER_MAX_H = 260
 
 /**
+ * "Hide unused" switch for a function tab's Work-type / Asset-type lists. Purely a
+ * view filter: it narrows the pills down to the ones this task actually uses and
+ * never changes the selection, nor what the function offers in Settings.
+ */
+function HideUnusedSwitch({
+  on,
+  onToggle,
+  accent,
+  noun,
+}: {
+  on: boolean
+  onToggle: () => void
+  /** Function colour, so the switch matches its panel when on. */
+  accent: string
+  /** Plural noun for the tooltip, e.g. "work types". */
+  noun: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onToggle}
+      title={
+        on
+          ? `Showing only the ${noun} this task uses — switch off to see all of them`
+          : `Show only the ${noun} this task uses`
+      }
+      className={cx(
+        'ml-auto inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold transition-colors',
+        on ? 'text-ink' : 'text-muted hover:text-ink',
+      )}
+    >
+      <span
+        className={cx('relative h-3.5 w-6 shrink-0 rounded-full transition-colors', !on && 'bg-line')}
+        style={on ? { backgroundColor: accent } : undefined}
+      >
+        <span
+          className={cx(
+            'absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white shadow transition-all',
+            on ? 'left-3' : 'left-0.5',
+          )}
+        />
+      </span>
+      Hide unused
+    </button>
+  )
+}
+
+/**
  * Inline "+ Add" control for a function tab's Work-type / Asset-type lists. Opens
  * a small combobox to either PICK a master type this tab doesn't offer yet, or
  * CREATE a brand-new one. Both add the type to the tab (and persist to Settings —
@@ -411,14 +461,21 @@ function AssetInput({
   value,
   onChange,
   accent,
+  focusOnMount,
+  onSettle,
 }: {
   label: string
   value: number
   onChange: (v: number) => void
   /** Active (count > 0) outline colour — the function's colour. */
   accent?: string
+  /** Take focus as soon as this renders — used for a just-added asset type. */
+  focusOnMount?: boolean
+  /** Fired after a blur commits, with the value that was committed. */
+  onSettle?: (value: number) => void
 }) {
   const boxRef = useRef<HTMLLabelElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState<string | null>(null) // null → show the committed value
   const stateRef = useRef({ value, onChange })
   stateRef.current = { value, onChange }
@@ -436,11 +493,18 @@ function AssetInput({
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  const commit = () => {
-    if (draft === null) return
+  useEffect(() => {
+    if (focusOnMount) inputRef.current?.focus() // onFocus selects, so typing replaces the 0
+  }, [focusOnMount])
+
+  /** Applies the in-progress draft and returns the value now in effect. */
+  const commit = (): number => {
+    if (draft === null) return value
     const result = evalMath(draft)
-    if (result !== null) onChange(Math.max(0, Math.round(result)))
+    const next = result !== null ? Math.max(0, Math.round(result)) : value
+    if (result !== null) onChange(next)
     setDraft(null) // revert to the committed value (discards an invalid expression)
+    return next
   }
 
   // Stepper / wheel bump: adjust the committed value and drop any in-progress draft.
@@ -471,6 +535,7 @@ function AssetInput({
     >
       {!editingMath && <span className="min-w-0 flex-1 truncate text-xs font-medium">{label}</span>}
       <input
+        ref={inputRef}
         type="text"
         title="Type a number or basic math, e.g. 3+2"
         className={cx(
@@ -480,7 +545,7 @@ function AssetInput({
         value={draft ?? String(value)}
         onChange={(e) => setDraft(e.target.value)}
         onFocus={(e) => e.currentTarget.select()}
-        onBlur={commit}
+        onBlur={() => onSettle?.(commit())}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault()
@@ -1288,6 +1353,19 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const [imgError, setImgError] = useState<string | null>(null)
   const [imagesOpen, setImagesOpen] = useState(false) // show the Demo (images) sub-panel
   const [logOpen, setLogOpen] = useState(false) // per-task edit-log panel (existing tasks)
+  // "Hide unused" — narrow each per-function picker to what this task actually
+  // uses (selected work types / assets with a count), rather than every option
+  // the function offers in Settings. Off when registering, because everything has
+  // to be pickable; on when editing, where the task's own selection is the point
+  // and the full catalogue is noise. Both are view-only — nothing is deselected.
+  const [hideUnusedTypes, setHideUnusedTypes] = useState(Boolean(initial))
+  const [hideUnusedAssets, setHideUnusedAssets] = useState(Boolean(initial))
+  // An asset type just added via "+ Add" is pinned past the "hide unused" filter
+  // so it can be typed into — it's still on 0, which the filter would otherwise
+  // hide the instant it appeared. The pin is released on blur; if nothing (or 0)
+  // was entered the row simply drops back out of view. Nothing is un-added: the
+  // type stays on the function in Settings either way.
+  const [pinnedAsset, setPinnedAsset] = useState<string | null>(null)
   const [lightbox, setLightbox] = useState<string | null>(null) // enlarged image URL
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
@@ -2221,7 +2299,15 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               fc.name === f.name && !fc.assetTypes.includes(type) ? { ...fc, assetTypes: [...fc.assetTypes, type] } : fc,
             )
             void saveSettings({ ...settings, assetTypes: nextAssets, functions: nextFns })
+            setPinnedAsset(type) // keep it on screen (and focused) on 0
           }
+          // "Hide unused" is a per-tab view filter over this function's own
+          // offering — the pills stay defined in Settings → Functions, they're
+          // just not drawn. Assets count as used at any non-zero value.
+          const shownTypes = hideUnusedTypes ? tabTypes.filter((t) => d.types.includes(t)) : tabTypes
+          const shownAssets = hideUnusedAssets
+            ? tabAssets.filter((a) => (d.breakdown[a] || 0) !== 0 || a === pinnedAsset)
+            : tabAssets
           // Just switched on → play the one-shot reveal (sweep + staggered blocks).
           const reveal = justEnabledFn === f.name
           return (
@@ -2260,9 +2346,23 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                   className={cx(reveal && 'animate-fn-rise')}
                   style={reveal ? ({ '--fn-delay': '60ms' } as React.CSSProperties) : undefined}
                 >
-                  <label className={cx('label', d.types.length > 0 && 'is-filled')}>Work type(s)</label>
+                  <div className="mb-2 flex items-center gap-2">
+                    <label className={cx('label !mb-0', d.types.length > 0 && 'is-filled')}>Work type(s)</label>
+                    <HideUnusedSwitch
+                      on={hideUnusedTypes}
+                      onToggle={() => setHideUnusedTypes((v) => !v)}
+                      accent={col.hex}
+                      noun="work types"
+                    />
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {tabTypes.map((t) => {
+                    {hideUnusedTypes && shownTypes.length === 0 && (
+                      <p className="py-1 text-xs text-faint">
+                        None selected — switch off <strong className="font-semibold text-muted">Hide unused</strong> to
+                        pick one.
+                      </p>
+                    )}
+                    {shownTypes.map((t) => {
                       const active = d.types.includes(t)
                       return (
                         <button
@@ -2294,23 +2394,45 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                 </div>
 
                 <div
-                  className={cx(reveal && 'animate-fn-rise')}
-                  style={reveal ? ({ '--fn-delay': '150ms' } as React.CSSProperties) : undefined}
+                  // Hairline in the function's own colour rather than border-line —
+                  // inside a colour-outlined panel a neutral grey rule reads as a
+                  // seam between two panels instead of a division within one.
+                  className={cx('border-t pt-4', reveal && 'animate-fn-rise')}
+                  style={{
+                    borderTopColor: `${col.hex}2e`,
+                    ...(reveal ? ({ '--fn-delay': '150ms' } as React.CSSProperties) : {}),
+                  }}
                 >
                   <div className="mb-2 flex items-center gap-2">
                     <label className={cx('label !mb-0', tabTotal > 0 && 'is-filled')}>Assets</label>
                     <span className="rounded-full border border-line bg-card px-2.5 py-0.5 text-xs font-semibold text-ink">
                       {tabTotal} total
                     </span>
+                    <HideUnusedSwitch
+                      on={hideUnusedAssets}
+                      onToggle={() => setHideUnusedAssets((v) => !v)}
+                      accent={col.hex}
+                      noun="asset types"
+                    />
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {tabAssets.map((assetName) => (
+                    {hideUnusedAssets && shownAssets.length === 0 && (
+                      <p className="py-1 text-xs text-faint">
+                        Nothing counted yet — switch off{' '}
+                        <strong className="font-semibold text-muted">Hide unused</strong> to enter a number.
+                      </p>
+                    )}
+                    {shownAssets.map((assetName) => (
                       <AssetInput
                         key={assetName}
                         label={assetName}
                         value={d.breakdown[assetName] || 0}
                         onChange={(v) => setDraftBreakdown(f.name, assetName, v)}
                         accent={col.hex}
+                        focusOnMount={assetName === pinnedAsset}
+                        // Release the pin once they leave the field. A real number
+                        // keeps the row on merit; 0 lets the filter take it back.
+                        onSettle={() => assetName === pinnedAsset && setPinnedAsset(null)}
                       />
                     ))}
                     <AddTypeInline

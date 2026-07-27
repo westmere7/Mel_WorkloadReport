@@ -40,6 +40,14 @@ export const CHANGELOG: Release[] = [
       },
       {
         kind: 'new',
+        text: '“Hide unused” switches on each function’s Work type(s) and Assets lists, so editing a task shows just the work types it uses and the assets with a number against them instead of the whole catalogue. They start on when you open an existing task and off when you register a new one, where everything still needs to be pickable. Purely a view: nothing is deselected, and what each function offers is still set in Settings → Functions.',
+      },
+      {
+        kind: 'new',
+        text: 'The task list has quick column switches — Code, Types, People and Half can each be turned off from the top of the table, and everything you switch off becomes room for the task name. The choice is remembered in your browser only, so it never changes anyone else’s view. The Actions column is gone too: the edit log and Delete both live inside a task’s edit window, and the width reads better spent on the name.',
+      },
+      {
+        kind: 'new',
         text: 'Advisor — a new page in the sidebar, currently a preview of what’s coming. It will read the whole task record at once and write up what the years actually show: where effort and output pull apart, which formats eat the hours, when the peaks land.',
       },
     ],

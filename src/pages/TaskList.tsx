@@ -8,13 +8,13 @@ import {
   ChevronRight,
   ChevronUp,
   DatabaseBackup,
+  Eye,
+  EyeOff,
   FilePen,
-  History,
   Images,
   Search,
   Star,
   StickyNote,
-  Trash2,
   X,
 } from 'lucide-react'
 import { Card } from '../components/ui/Card'
@@ -26,7 +26,6 @@ import { ImportBackupModal } from '../components/ImportBackupModal'
 import { TaskForm } from '../components/TaskForm'
 import { TaskDetails } from '../components/TaskDetails'
 import { TaskStar } from '../components/TaskStar'
-import { TaskLogModal } from '../components/TaskLogModal'
 import { useStore } from '../data/store'
 import { useAuth } from '../lib/auth'
 import { SIZES, SIZE_ORDER, SIZE_TONE, withFallback } from '../constants'
@@ -42,12 +41,79 @@ type SortKey = 'no' | 'code' | 'name' | 'squad' | 'campaign' | 'assetTotal' | 's
 /** Rows per page in the task list. */
 const PAGE_SIZE = 50
 
+// ── Optional columns ────────────────────────────────────────────────────────
+// Columns that can be switched off from the table header. `width` is that
+// column's measured width at a typical desktop size — it's what the table's
+// min-width gives back when the column is hidden, so the remaining columns
+// (the name most of all) don't have to fight for room.
+
+type OptionalCol = 'code' | 'types' | 'people' | 'half'
+type ColVisibility = Record<OptionalCol, boolean>
+
+const OPTIONAL_COLS: { key: OptionalCol; label: string; width: number }[] = [
+  { key: 'code', label: 'Code', width: 72 },
+  { key: 'types', label: 'Types', width: 320 },
+  { key: 'people', label: 'People', width: 188 },
+  { key: 'half', label: 'Half', width: 65 },
+]
+
+/** Table min-width with every optional column shown (Actions column removed). */
+const BASE_TABLE_MIN = 1000
+
+/** Name-cell cap with every optional column shown, and the width the removed
+ *  Actions column hands straight to it. NAME_MAX_WIDTH is the ceiling once
+ *  columns start switching off — set above the longest name currently in the data
+ *  (~615px) so hiding columns is never what truncates a name, while still stopping
+ *  the column from crowding out whatever is left switched on. */
+const NAME_BASE_WIDTH = 260
+const ACTIONS_RECLAIMED = 84
+const NAME_MAX_WIDTH = 780
+
+/** localStorage only — a per-browser VIEW preference. It is deliberately not part
+ *  of AppSettings, so switching a column off never touches anyone else's screen. */
+const COLS_KEY = 'mwr.taskCols'
+
+function loadCols(): ColVisibility {
+  const all: ColVisibility = { code: true, types: true, people: true, half: true }
+  try {
+    const raw = localStorage.getItem(COLS_KEY)
+    if (raw) return { ...all, ...(JSON.parse(raw) as Partial<ColVisibility>) }
+  } catch {
+    /* fall through to showing everything */
+  }
+  return all
+}
+
 export function TaskList() {
   const { tasks, settings, updateTask, deleteTask } = useStore()
   const { canEdit } = useAuth()
 
   // Long task names are clipped in their column and auto-scroll on row hover.
   const marqueeRef = useNameMarquee<HTMLDivElement>()
+
+  // Quick column visibility (per-browser). The name column is `w-full`, so it
+  // soaks up whatever these give back; the table's min-width drops to match so
+  // hiding a column also buys back horizontal scroll on narrow screens.
+  const [cols, setCols] = useState<ColVisibility>(loadCols)
+  const toggleCol = (key: OptionalCol) => {
+    setCols((prev) => {
+      const next = { ...prev, [key]: !prev[key] }
+      try {
+        localStorage.setItem(COLS_KEY, JSON.stringify(next))
+      } catch {
+        /* preference just won't persist */
+      }
+      return next
+    })
+  }
+  const hiddenWidth = OPTIONAL_COLS.reduce((sum, c) => (cols[c.key] ? sum : sum + c.width), 0)
+  const tableMinWidth = Math.max(640, BASE_TABLE_MIN - hiddenWidth)
+  // What actually gives the name its space. Starts at the old 260 plus the width
+  // the removed Actions column freed, then grows by each hidden column's width.
+  // Capped in turn so the name can't crowd out everything still switched on.
+  const nameMaxWidth = Math.min(NAME_MAX_WIDTH, NAME_BASE_WIDTH + ACTIONS_RECLAIMED + hiddenWidth)
+  // No. · name · squad · campaign · assets · start · end · size = 8 always-on.
+  const colCount = 8 + OPTIONAL_COLS.filter((c) => cols[c.key]).length
 
   // Filters seed from the URL query so dashboard charts can deep-link here
   // (e.g. /tasks?squad=DOM&asset=Image). Keys may repeat for multi-value filters.
@@ -76,7 +142,6 @@ export function TaskList() {
 
   const [editing, setEditing] = useState<Task | null>(null)
   const [deleting, setDeleting] = useState<Task | null>(null)
-  const [logTask, setLogTask] = useState<Task | null>(null)
   const [ioOpen, setIoOpen] = useState(false)
   const [page, setPage] = useState(1)
 
@@ -343,27 +408,59 @@ export function TaskList() {
               </>
             )}
           </span>
-          <span className="hidden sm:inline">
-            {canEdit ? 'Click any row to edit' : 'Click any row to view · sign in to edit'}
+          {/* Quick column visibility. Everything switched off here is width the
+              task-name column takes back (see nameColSpace). */}
+          <span className="hidden items-center gap-1.5 sm:inline-flex">
+            <span className="text-faint">Columns</span>
+            {OPTIONAL_COLS.map(({ key, label }) => {
+              const on = cols[key]
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleCol(key)}
+                  aria-pressed={on}
+                  title={on ? `Hide the ${label} column` : `Show the ${label} column`}
+                  className={cx(
+                    'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition',
+                    on
+                      ? 'border-line bg-subtle text-ink hover:border-faint'
+                      : 'border-dashed border-line text-faint hover:text-muted',
+                  )}
+                >
+                  {on ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                  {label}
+                </button>
+              )
+            })}
           </span>
         </div>
         <div className="overflow-x-auto" ref={marqueeRef}>
-          <table className="w-full min-w-[1080px] border-collapse text-sm">
+          <table className="w-full border-collapse text-sm" style={{ minWidth: tableMinWidth }}>
             <thead>
               <tr className="border-y border-line bg-subtle/60 text-left text-xs uppercase tracking-wide text-muted">
-                <Th label="No." k="no" sort={sort} onSort={toggleSort} />
-                <Th label="Code" k="code" sort={sort} onSort={toggleSort} />
+                <Th
+                  label="No."
+                  k="no"
+                  sort={sort}
+                  onSort={toggleSort}
+                  hint="Edit order, not a fixed ID — tasks are numbered by when they were last changed, so editing one moves its number and shifts the others. Use Code to refer to a specific task."
+                />
+                {cols.code && <Th label="Code" k="code" sort={sort} onSort={toggleSort} />}
+                {/* No w-full here: making this the slack-absorbing column pools all
+                    the table's spare width behind the name's cap, which reads as a
+                    dead gap before Squad. Spare width spreads across every column as
+                    usual; nameMaxWidth is what actually grows the name. */}
                 <Th label="Task name" k="name" sort={sort} onSort={toggleSort} />
                 <Th label="Squad" k="squad" sort={sort} onSort={toggleSort} />
                 <Th label="Campaign" k="campaign" sort={sort} onSort={toggleSort} />
-                <th className="px-3 py-2.5 font-semibold">Types</th>
-                <th className="px-3 py-2.5 font-semibold">People</th>
+                {cols.types && <th className="px-3 py-2.5 font-semibold">Types</th>}
+                {cols.people && <th className="px-3 py-2.5 font-semibold">People</th>}
                 <Th label="Assets" k="assetTotal" sort={sort} onSort={toggleSort} align="right" />
                 <Th label="Start" k="startDate" sort={sort} onSort={toggleSort} />
                 <th className="px-3 py-2.5 font-semibold">End</th>
-                <Th label="Half" k="half" sort={sort} onSort={toggleSort} />
+                {cols.half && <Th label="Half" k="half" sort={sort} onSort={toggleSort} />}
                 <Th label="Size" k="size" sort={sort} onSort={toggleSort} />
-                {canEdit && <th className="px-3 py-2.5 text-right font-semibold">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -379,9 +476,9 @@ export function TaskList() {
                   title={t.draft ? 'Draft — required fields missing (not counted anywhere). Click to complete.' : canEdit ? 'Click to edit' : 'Click to view'}
                 >
                   <td className="whitespace-nowrap px-3 py-3 text-xs tabular-nums text-faint">{taskNo(t)}</td>
-                  <CodeCell code={t.code} />
+                  {cols.code && <CodeCell code={t.code} />}
                   <td className="px-3 py-3 font-medium text-ink">
-                    <div className="flex max-w-[260px] items-center gap-1.5">
+                    <div className="flex items-center gap-1.5" style={{ maxWidth: nameMaxWidth }}>
                       {t.starred && (
                         <Star className="h-3 w-3 shrink-0 fill-current text-amber-400" strokeWidth={1.5} aria-label="Starred" />
                       )}
@@ -404,22 +501,26 @@ export function TaskList() {
                     <Badge tone={toneForLabel(t.squad)}>{t.squad}</Badge>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-muted">{t.campaign}</td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-nowrap items-center gap-1">
-                      {t.types.slice(0, 2).map((ty) => (
-                        <Badge key={ty} tone="gray" className="whitespace-nowrap">{ty}</Badge>
-                      ))}
-                      {t.types.length > 2 && <Badge tone="gray">+{t.types.length - 2}</Badge>}
-                    </div>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-nowrap items-center gap-1">
-                      {t.people.slice(0, 2).map((p) => (
-                        <Badge key={p} tone="navy" className="whitespace-nowrap">{p}</Badge>
-                      ))}
-                      {t.people.length > 2 && <Badge tone="navy">+{t.people.length - 2}</Badge>}
-                    </div>
-                  </td>
+                  {cols.types && (
+                    <td className="px-3 py-3">
+                      <div className="flex flex-nowrap items-center gap-1">
+                        {t.types.slice(0, 2).map((ty) => (
+                          <Badge key={ty} tone="gray" className="whitespace-nowrap">{ty}</Badge>
+                        ))}
+                        {t.types.length > 2 && <Badge tone="gray">+{t.types.length - 2}</Badge>}
+                      </div>
+                    </td>
+                  )}
+                  {cols.people && (
+                    <td className="px-3 py-3">
+                      <div className="flex flex-nowrap items-center gap-1">
+                        {t.people.slice(0, 2).map((p) => (
+                          <Badge key={p} tone="navy" className="whitespace-nowrap">{p}</Badge>
+                        ))}
+                        {t.people.length > 2 && <Badge tone="navy">+{t.people.length - 2}</Badge>}
+                      </div>
+                    </td>
+                  )}
                   <td className="px-3 py-3">
                     <div className="flex items-center justify-end gap-1.5">
                       {t.images?.length ? (
@@ -436,52 +537,30 @@ export function TaskList() {
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-muted">{formatDate(t.startDate)}</td>
                   <td className="whitespace-nowrap px-3 py-3 text-muted">{formatDate(t.endDate)}</td>
-                  <td className="px-3 py-3">
-                    <span
-                      className={cx(
-                        'chip',
-                        t.half === 'H1'
-                          ? 'bg-navy-50 text-navy-600 dark:bg-white/10 dark:text-navy-100'
-                          : 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300',
-                      )}
-                    >
-                      {t.half}
-                    </span>
-                  </td>
+                  {cols.half && (
+                    <td className="px-3 py-3">
+                      <span
+                        className={cx(
+                          'chip',
+                          t.half === 'H1'
+                            ? 'bg-navy-50 text-navy-600 dark:bg-white/10 dark:text-navy-100'
+                            : 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300',
+                        )}
+                      >
+                        {t.half}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-3 py-3">
                     <Badge tone={SIZE_TONE[t.size]}>{t.size}</Badge>
                   </td>
-                  {canEdit && (
-                  <td className="px-3 py-3">
-                    <div className="flex justify-end gap-1 opacity-60 transition group-hover:opacity-100">
-                      <button
-                        className="rounded-lg p-1.5 text-muted hover:bg-navy-50 hover:text-rmit-navy dark:hover:bg-white/10 dark:hover:text-white"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setLogTask(t)
-                        }}
-                        title="Edit log"
-                      >
-                        <History className="h-4 w-4" />
-                      </button>
-                      <button
-                        className="rounded-lg p-1.5 text-muted hover:bg-brand-50 hover:text-rmit-red dark:hover:bg-brand-500/15 dark:hover:text-brand-300"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDeleting(t)
-                        }}
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                  )}
+                  {/* No Actions column — the edit log and Delete both live inside the
+                      row's edit modal, and the width is better spent on the name. */}
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={canEdit ? 13 : 12} className="px-3 py-12 text-center text-sm text-muted">
+                  <td colSpan={colCount} className="px-3 py-12 text-center text-sm text-muted">
                     No tasks match your filters.
                   </td>
                 </tr>
@@ -547,9 +626,6 @@ export function TaskList() {
         </p>
       </Modal>
 
-      {/* Per-task edit log */}
-      <TaskLogModal task={logTask} open={Boolean(logTask)} onClose={() => setLogTask(null)} />
-
       {/* Import & backup */}
       <ImportBackupModal open={ioOpen} onClose={() => setIoOpen(false)} />
     </div>
@@ -610,19 +686,26 @@ function Th({
   sort,
   onSort,
   align = 'left',
+  className,
+  hint,
 }: {
   label: string
   k: SortKey
   sort: { key: SortKey; dir: 'asc' | 'desc' }
   onSort: (k: SortKey) => void
   align?: 'left' | 'right'
+  /** Extra classes on the <th> — e.g. `w-full` to make a column absorb slack. */
+  className?: string
+  /** Hover explanation for a column whose meaning isn't obvious from its label. */
+  hint?: string
 }) {
   const active = sort.key === k
   return (
-    <th className={cx('px-3 py-2.5 font-semibold', align === 'right' && 'text-right')}>
+    <th className={cx('px-3 py-2.5 font-semibold', align === 'right' && 'text-right', className)}>
       <button
         className={cx('inline-flex items-center gap-1 hover:text-ink', active && 'text-ink')}
         onClick={() => onSort(k)}
+        title={hint}
       >
         {label}
         {active ? (
