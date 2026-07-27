@@ -450,7 +450,9 @@ export function RankedBars({
     ) || 1
   const clickable = Boolean(onSelect)
   return (
-    <div className="flex flex-col gap-2">
+    // gap-1 rather than gap-2: with each row's own py-0.5 the bars still sit 8px
+    // apart, but a full squad list reads as one block instead of a sparse column.
+    <div className="flex flex-col gap-1">
       {data.map((d, i) => {
         const color = colors[i % colors.length]
         const prev = prevByName?.get(d.name) ?? 0
