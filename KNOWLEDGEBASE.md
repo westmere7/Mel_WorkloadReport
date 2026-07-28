@@ -185,7 +185,16 @@ happens** (see §6).
   pages and the `<Pagination>` footer shows only when `filtered.length > 50`. `page` resets
   to 1 on any filter/search/sort change (an effect keyed to those, NOT to `tasks`, so a live
   task update doesn't yank your page); `currentPage` is clamped to the page count so a
-  shrinking result set never strands an empty page. Header reads "Showing X–Y of N".
+  shrinking result set never strands an empty page. Header reads "Showing X–Y of N",
+  followed by two **filter-set roll-up pills** from a single `summary` memo over `filtered`
+  (NOT `paged` — they must not move when you page): total **assets** (bold, tabular-nums)
+  and the **date span** `earliest start → latest end` with a `CalendarRange` icon. The
+  assets figure sums the same `t.assetTotal` the Assets column prints, so it always
+  reconciles with the rows on screen and inherits the function-slice narrowing for free
+  (`filtered` descends from `fnTasks`). Dates compare as ISO strings (yyyy-mm-dd = date
+  order); null start/end are skipped, and the span pill is dropped entirely when the whole
+  set has neither. Both pills sit inside the "no tasks" `else` branch, so an empty result
+  shows just "No tasks".
   Signed out, rows still open — but as a **read-only `TaskDetails`** view
   (`src/components/TaskDetails.tsx`, modal titled "Task details"), not the editable form;
   the Actions column and Import & Backup are hidden. `TaskDetails` is a clean scannable
@@ -860,6 +869,21 @@ LATER phase; the data is already captured for it.
   excluded); a name that already exists shows "Already on this tab" instead of a create option.
   Needs `saveSettings` from the store (added to TaskForm's `useStore`). Existing tasks are
   never touched — this only grows the offered lists.
+- **"+ Add" also surfaces what "Hide unused" is hiding** ⚠️ — otherwise a type the tab
+  DOES offer is invisible in both places at once (filtered out of the pills, and excluded
+  from the candidates because the tab already has it), so a user can't tell "hidden" from
+  "doesn't exist" and re-creates a duplicate. `AddTypeInline` takes a second list,
+  `hiddenOnTab` = `tabTypes/tabAssets` minus `shownTypes/shownAssets`, rendered FIRST under
+  a "Hidden on this tab" header with an `EyeOff` icon, then a hairline, then the ordinary
+  master candidates. Enter picks from the hidden group first (`firstHit`). Because the
+  hidden list is derived by subtracting the *shown* list, it collapses to `[]` when the
+  switch is OFF — the picker is then exactly the old master-minus-tab list, no special
+  casing. Picking a hidden entry writes NOTHING to Settings (the tab already offers it);
+  both add handlers now compare `nextTypes`/`nextFns` by identity and skip `saveSettings`
+  when nothing changed. Un-hiding happens through the existing mechanisms: a work type is
+  toggled onto the draft (so it counts as used), an asset gets `pinnedAsset` (shown +
+  focused at 0, released on blur). Note the fallback "Others" can itself be hidden, and is
+  listed here — otherwise it becomes unreachable while the switch is on.
 - **Master-timeline envelope**: the Start/End inputs display
   `effectiveStart/effectiveEnd` = the entered dates extended by any enabled function
   timeline that reaches outside them; extended inputs get an amber ring + "Extended to

@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  EyeOff,
   History,
   ImagePlus,
   Loader2,
@@ -322,10 +323,17 @@ function HideUnusedSwitch({
  * CREATE a brand-new one. Both add the type to the tab (and persist to Settings —
  * new types join the master list, the type is opted into this function). Lets
  * users extend a tab without leaving the task form.
+ *
+ * With "Hide unused" on, the tab's own hidden types are listed too (`hiddenOnTab`,
+ * in their own group): otherwise they're invisible in BOTH places at once, and a
+ * user has no way to tell an asset type they can't see from one that doesn't
+ * exist — they'd re-create a duplicate. Picking one just un-hides it (selects the
+ * work type / focuses the asset counter); nothing is added to Settings.
  */
 function AddTypeInline({
   noun,
   candidates,
+  hiddenOnTab = [],
   masterAll,
   onAdd,
 }: {
@@ -333,6 +341,8 @@ function AddTypeInline({
   noun: string
   /** Master types NOT yet offered on this tab (pickable from the list). */
   candidates: string[]
+  /** Types this tab already offers but "Hide unused" is currently filtering out. */
+  hiddenOnTab?: string[]
   /** Every master type name (to detect an already-existing name → no "create"). */
   masterAll: string[]
   /** Add `type` to this tab; `isNew` = it isn't in the master list yet. */
@@ -369,7 +379,11 @@ function AddTypeInline({
   }
   const query = q.trim()
   const ql = query.toLowerCase()
+  const filteredHidden = hiddenOnTab.filter((c) => c.toLowerCase().includes(ql))
   const filtered = candidates.filter((c) => c.toLowerCase().includes(ql))
+  // Hidden-on-tab entries come first: they're the ones the user is most likely
+  // hunting for (they exist here already), and Enter should land on them.
+  const firstHit = filteredHidden[0] ?? filtered[0]
   const exactExists = masterAll.some((t) => t.toLowerCase() === ql)
   const canCreate = query.length > 0 && !exactExists && ql !== FALLBACK_ITEM.toLowerCase()
 
@@ -399,8 +413,8 @@ function AddTypeInline({
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
-                if (filtered.length) {
-                  onAdd(filtered[0], false)
+                if (firstHit) {
+                  onAdd(firstHit, false)
                   close()
                 } else if (canCreate) {
                   onAdd(query, true)
@@ -410,6 +424,29 @@ function AddTypeInline({
             }}
           />
           <ul className="max-h-52 overflow-y-auto">
+            {filteredHidden.length > 0 && (
+              <li className="px-2.5 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-faint">
+                Hidden on this tab
+              </li>
+            )}
+            {filteredHidden.map((c) => (
+              <li key={`hidden-${c}`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAdd(c, false)
+                    close()
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-ink transition hover:bg-card"
+                >
+                  <EyeOff className="h-3 w-3 shrink-0 text-faint" />
+                  {c}
+                </button>
+              </li>
+            ))}
+            {filteredHidden.length > 0 && filtered.length > 0 && (
+              <li className="mx-2.5 my-1 border-t border-line" aria-hidden />
+            )}
             {filtered.map((c) => (
               <li key={c}>
                 <button
@@ -439,7 +476,7 @@ function AddTypeInline({
                 </button>
               </li>
             )}
-            {filtered.length === 0 && !canCreate && (
+            {firstHit === undefined && !canCreate && (
               <li className="px-2.5 py-1.5 text-xs text-faint">
                 {query && exactExists ? 'Already on this tab.' : `No other ${noun}s.`}
               </li>
@@ -2284,12 +2321,16 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           // Adding a type opts THIS function into it (persisted) and, if brand-new,
           // appends it to the master list too — so it propagates to Settings. Work
           // types are also selected on the draft; assets just gain a counter.
+          // Picking a merely-hidden type changes nothing in Settings (the tab
+          // already offers it), so skip the write in that case — it only needs
+          // un-hiding on the draft.
           const addWorkType = (type: string, isNew: boolean) => {
             const nextTypes = isNew && !settings.types.includes(type) ? [...settings.types, type] : settings.types
             const nextFns = settings.functions.map((fc) =>
               fc.name === f.name && !fc.workTypes.includes(type) ? { ...fc, workTypes: [...fc.workTypes, type] } : fc,
             )
-            void saveSettings({ ...settings, types: nextTypes, functions: nextFns })
+            if (nextTypes !== settings.types || nextFns.some((fc, i) => fc !== settings.functions[i]))
+              void saveSettings({ ...settings, types: nextTypes, functions: nextFns })
             if (!d.types.includes(type)) toggleDraftType(f.name, type)
           }
           const addAssetType = (type: string, isNew: boolean) => {
@@ -2298,7 +2339,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             const nextFns = settings.functions.map((fc) =>
               fc.name === f.name && !fc.assetTypes.includes(type) ? { ...fc, assetTypes: [...fc.assetTypes, type] } : fc,
             )
-            void saveSettings({ ...settings, assetTypes: nextAssets, functions: nextFns })
+            if (nextAssets !== settings.assetTypes || nextFns.some((fc, i) => fc !== settings.functions[i]))
+              void saveSettings({ ...settings, assetTypes: nextAssets, functions: nextFns })
             setPinnedAsset(type) // keep it on screen (and focused) on 0
           }
           // "Hide unused" is a per-tab view filter over this function's own
@@ -2308,6 +2350,11 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           const shownAssets = hideUnusedAssets
             ? tabAssets.filter((a) => (d.breakdown[a] || 0) !== 0 || a === pinnedAsset)
             : tabAssets
+          // …and whatever that filter is swallowing goes into "+ Add", so the tab's
+          // own types stay reachable while hidden. Both collapse to [] with the
+          // switch off, which is exactly the old "only what's not on screen" list.
+          const hiddenTypes = tabTypes.filter((t) => !shownTypes.includes(t))
+          const hiddenAssets = tabAssets.filter((a) => !shownAssets.includes(a))
           // Just switched on → play the one-shot reveal (sweep + staggered blocks).
           const reveal = justEnabledFn === f.name
           return (
@@ -2387,6 +2434,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                     <AddTypeInline
                       noun="work type"
                       candidates={workCandidates}
+                      hiddenOnTab={hiddenTypes}
                       masterAll={settings.types}
                       onAdd={addWorkType}
                     />
@@ -2438,6 +2486,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
                     <AddTypeInline
                       noun="asset type"
                       candidates={assetCandidates}
+                      hiddenOnTab={hiddenAssets}
                       masterAll={settings.assetTypes}
                       onAdd={addAssetType}
                     />

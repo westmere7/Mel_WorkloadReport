@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ArrowDownUp,
+  CalendarRange,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -192,6 +193,26 @@ export function TaskList() {
       return String(av ?? '').localeCompare(String(bv ?? '')) * dir
     })
   }, [fnTasks, query, spanMode, activeYear, spanHalf, squads, campaigns, people, sizes, types, assetTypes, draftsOnly, starredOnly, sort, addedOrder])
+
+  // Roll-up for the current filter set, computed over EVERY filtered row rather
+  // than the visible page, so paging never moves these numbers.
+  //   · assets — the Assets column summed; same values as the column, so it
+  //     always reconciles with what's on screen (function slices included,
+  //     since `filtered` descends from fnTasks).
+  //   · span — the two extreme points: earliest start, latest end. Dates are
+  //     ISO (yyyy-mm-dd), so string compare is date order. Blanks are skipped —
+  //     end dates in particular are optional.
+  const summary = useMemo(() => {
+    let assets = 0
+    let start: string | null = null
+    let end: string | null = null
+    for (const t of filtered) {
+      assets += t.assetTotal
+      if (t.startDate && (!start || t.startDate < start)) start = t.startDate
+      if (t.endDate && (!end || t.endDate > end)) end = t.endDate
+    }
+    return { assets, start, end }
+  }, [filtered])
 
   // Pagination — filter/sort first, then slice into pages of PAGE_SIZE.
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -394,17 +415,37 @@ export function TaskList() {
       {/* Table */}
       <Card className="p-0">
         <div className="flex items-center justify-between px-5 py-3 text-xs text-muted">
-          <span>
+          <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
             {filtered.length === 0 ? (
               <>No tasks</>
             ) : (
               <>
-                Showing{' '}
-                <strong className="text-ink">
-                  {pageStart + 1}–{pageStart + paged.length}
-                </strong>{' '}
-                of <strong className="text-ink">{filtered.length}</strong>
-                {filtered.length !== tasks.length ? ` (filtered from ${tasks.length})` : ''} tasks
+                <span>
+                  Showing{' '}
+                  <strong className="text-ink">
+                    {pageStart + 1}–{pageStart + paged.length}
+                  </strong>{' '}
+                  of <strong className="text-ink">{filtered.length}</strong>
+                  {filtered.length !== tasks.length ? ` (filtered from ${tasks.length})` : ''} tasks
+                </span>
+                <span
+                  className="rounded-full border border-line bg-subtle px-2.5 py-1 text-xs font-bold tabular-nums text-ink dark:bg-card"
+                  title="Total assets across every task in this filter set (all pages)"
+                >
+                  {summary.assets.toLocaleString()}{' '}
+                  <span className="font-semibold text-muted">assets</span>
+                </span>
+                {(summary.start || summary.end) && (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full border border-line bg-subtle px-2.5 py-1 text-[11px] font-semibold text-muted dark:bg-card"
+                    title="Earliest start and latest end across every task in this filter set (all pages)"
+                  >
+                    <CalendarRange className="h-3.5 w-3.5 shrink-0 text-faint" strokeWidth={1.75} />
+                    <span className="text-ink">{formatDate(summary.start)}</span>
+                    <span className="text-faint">→</span>
+                    <span className="text-ink">{formatDate(summary.end)}</span>
+                  </span>
+                )}
               </>
             )}
           </span>
