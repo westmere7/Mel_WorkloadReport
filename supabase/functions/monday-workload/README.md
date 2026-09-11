@@ -1,7 +1,8 @@
 # Workload entry confirmation
 
-The task button **Mark workload entered** sets one configured Status column on
-the linked monday.com item. It does not mark the task itself complete or copy
+The compact task button **Mark entered** sets one configured Status column on
+the linked monday.com item. When entered, the same button becomes **Undo entry**
+and sets the column back to **TBC**. It does not mark the task itself complete or copy
 workload data to monday.com. The existing backend `MONDAY_TOKEN` is reused; users
 do not sign in to monday.com.
 
@@ -15,7 +16,7 @@ The handler defaults to the supplied column on **GCMC & Media Demand Tracker**:
 
 `Entered` means asset input is done; `TBC` means it has not yet been entered.
 `Media NA` is another existing label, not treated as entered. Only an explicit
-button click writes `Entered`; status reads never change any label. The separate
+button click writes `Entered` or resets it to `TBC`; status reads never change any label. The separate
 Project Status column (`status__1`) is never written. The archived 2025 board has
 no confirmed Report Assets column and is intentionally unmapped.
 
@@ -28,7 +29,7 @@ no confirmed Report Assets column and is intentionally unmapped.
 
    ```json
    {
-     "1967557512": { "columnId": "color_mm72eqm4", "label": "Entered" }
+     "1967557512": { "columnId": "color_mm72eqm4", "label": "Entered", "resetLabel": "TBC" }
    }
    ```
 
@@ -38,6 +39,12 @@ no confirmed Report Assets column and is intentionally unmapped.
 4. Deploy `monday-workload` with the same gateway JWT verification as the
    dashboard's existing Supabase calls. Do not disable gateway verification.
 5. Set `VITE_MONDAY_WORKLOAD=1` in the frontend build environment and rebuild.
+
+For future boards, add each board's entry to this same mapping. `resetLabel` is
+optional and defaults to `TBC`, so earlier configurations keep working. Use the
+exact existing label on each board; new labels are never created. The entered
+and reset labels must differ. Deploy the updated function and frontend to enable
+undo; the previous function only accepts confirmation requests.
 
 Missing token or an unmapped board returns `configured: false`.
 The UI remains disabled with **Setup pending**. Never put `MONDAY_TOKEN` in a
@@ -53,7 +60,7 @@ The UI remains disabled with **Setup pending**. Never put `MONDAY_TOKEN` in a
 - Takes only the saved task ID and expected last-update timestamp from the client.
   Resolves the item from the saved task, verifies board membership, and writes only
   the backend-configured column/label. New labels are never created.
-- Rechecks the task before writing, skips writes when already marked, reads back
+- Rechecks the task before either write, skips writes when already at the requested label, reads back
   after a write, and shows success only when the expected status is present.
 - Timeout/failure leads to a read-only retry before another confirmation attempt.
 

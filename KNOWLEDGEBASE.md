@@ -717,6 +717,10 @@ derives half). Manual, per-task — **no background sync**; every field stays ed
   board `1967557512`, column `color_mm72eqm4` (**Report Assets**), target label
   `Entered` (asset input done); `TBC` means not yet entered. `Media NA` is not
   considered entered. This is separate from `status__1` (**Project Status**).
+  The compact button toggles between **Mark entered** (`Entered`) and **Undo entry**
+  (`TBC`). Per-board `resetLabel` can override `TBC` for future boards; existing
+  configurations without that field still work. Both writes are verified by reading
+  monday.com back. Undo requires deploying the updated function and frontend.
   The archived board is not mapped. The button requires the deployed function
   and frontend `VITE_MONDAY_WORKLOAD=1`; until enabled it shows Setup pending.
   See `supabase/functions/monday-workload/README.md` for deployment and access model.

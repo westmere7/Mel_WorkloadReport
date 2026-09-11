@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { Check, Loader2, Undo2 } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { isMondayWorkloadEnabled, requestMondayWorkload, type MondayWorkloadStatus } from '../lib/mondayWorkload'
 import type { Task } from '../types'
@@ -9,7 +9,7 @@ export function MondayWorkloadButton({ task, blockedReason }: { task?: Task; blo
   const { canEdit } = useAuth()
   const descriptionId = useId()
   const [status, setStatus] = useState<MondayWorkloadStatus>({ configured: false })
-  const [busy, setBusy] = useState<'status' | 'confirm' | null>(null)
+  const [busy, setBusy] = useState<'status' | 'confirm' | 'unconfirm' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const inFlight = useRef(false)
   const generation = useRef(0)
@@ -47,11 +47,11 @@ export function MondayWorkloadButton({ task, blockedReason }: { task?: Task; blo
   const setupPending = !enabled || (!busy && !error && !status.configured)
   const entered = status.entered === true
   const description = reason || (setupPending ? 'Setup pending — the monday.com workload column hasn’t been connected yet.'
-    : entered ? `monday.com confirms ${status.columnTitle}: ${status.targetLabel}.`
-    : status.configured ? `Confirms workload is recorded in the Dashboard. Sets ${status.columnTitle} to “${status.targetLabel}” on monday.com.`
+    : entered ? `${status.columnTitle}: ${status.targetLabel}. Undo sets it to ${status.resetLabel ?? 'TBC'} on monday.com.`
+    : status.configured ? `${status.columnTitle}: ${status.currentLabel || 'Not entered'}. Mark as ${status.targetLabel} when workload is recorded.`
     : 'Checks the workload entry status on monday.com.')
 
-  async function run(action: 'status' | 'confirm') {
+  async function run(action: 'status' | 'confirm' | 'unconfirm') {
     if (inFlight.current || !taskId || !updatedAt || reason || !enabled) return
     const current = generation.current
     inFlight.current = true
@@ -71,26 +71,27 @@ export function MondayWorkloadButton({ task, blockedReason }: { task?: Task; blo
   }
 
   return (
-    <div className="rounded-xl border border-line bg-subtle p-3 sm:flex sm:items-center sm:justify-between sm:gap-4">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-line bg-subtle px-3 py-2">
       <div className="min-w-0">
-        <p className="flex items-center gap-2 text-sm font-semibold text-ink">
-          <img src="/monday.svg" alt="" className="h-4 w-4" /> Workload entry
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+          <img src="/monday.svg" alt="" className="h-3.5 w-3.5" /> Workload entry
         </p>
         <p id={descriptionId} className="mt-1 text-xs text-muted" role="status">{description}</p>
         {error && <p role="alert" className="mt-1 text-xs text-rmit-red dark:text-brand-300">{error}</p>}
       </div>
       <button
         type="button"
-        className="btn-outline mt-3 min-h-11 shrink-0 sm:mt-0"
+        className="btn-outline min-h-11 shrink-0 rounded-lg px-2.5 py-1.5 text-xs sm:min-h-9"
         aria-describedby={descriptionId}
         aria-busy={Boolean(busy)}
-        disabled={Boolean(reason) || Boolean(busy) || setupPending || entered}
-        onClick={() => void run(error ? 'status' : 'confirm')}
+        disabled={Boolean(reason) || Boolean(busy) || setupPending}
+        onClick={() => void run(error ? 'status' : entered ? 'unconfirm' : 'confirm')}
       >
         {busy ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />
-          : entered ? <CheckCircle2 aria-hidden="true" className="h-4 w-4" /> : null}
-        {busy === 'confirm' ? 'Updating monday.com…' : busy === 'status' ? 'Checking monday.com…'
-          : entered ? 'Workload entered' : error ? 'Retry status check' : 'Mark workload entered'}
+          : entered ? <Undo2 aria-hidden="true" className="h-3.5 w-3.5" />
+          : <Check aria-hidden="true" className="h-3.5 w-3.5" />}
+        {busy === 'confirm' || busy === 'unconfirm' ? 'Updating…' : busy === 'status' ? 'Checking…'
+          : error ? 'Retry status check' : entered ? 'Undo entry' : 'Mark entered'}
       </button>
     </div>
   )

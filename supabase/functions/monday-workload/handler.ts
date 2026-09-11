@@ -2,11 +2,11 @@ type Dependencies = {
   env: (name: string) => string | undefined
   fetch: typeof fetch
 }
-type Mapping = { columnId: string; label: string }
+type Mapping = { columnId: string; label: string; resetLabel?: string }
 // GCMC & Media Demand Tracker (board ID recorded in KNOWLEDGEBASE.md).
 // Report Assets is separate from Project Status; only this column is written.
 const DEFAULT_WORKLOAD_CONFIG: Record<string, Mapping> = {
-  '1967557512': { columnId: 'color_mm72eqm4', label: 'Entered' },
+  '1967557512': { columnId: 'color_mm72eqm4', label: 'Entered', resetLabel: 'TBC' },
 }
 type SavedTask = { id: string; monday_url: string | null; draft: boolean; updated_at: string }
 type MondayItem = { id: string; board: { id: string }; column_values: { id: string; text: string | null; type: string }[] }
@@ -32,7 +32,7 @@ export function createHandler({ env, fetch: fetcher }: Dependencies) {
 
     try {
       const body = await req.json().catch(() => { throw new RequestError('Invalid request.') })
-      if (!body || !['status', 'confirm'].includes(body.action) || typeof body.taskId !== 'string'
+      if (!body || !['status', 'confirm', 'unconfirm'].includes(body.action) || typeof body.taskId !== 'string'
         || !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(body.taskId)) {
         throw new RequestError('Choose a saved Dashboard task.')
       }
@@ -46,6 +46,8 @@ export function createHandler({ env, fetch: fetcher }: Dependencies) {
         for (const [board, mapping] of Object.entries(mappings)) {
           if (!/^\d+$/.test(board) || !mapping || typeof mapping.columnId !== 'string'
             || !mapping.columnId.trim() || typeof mapping.label !== 'string' || !mapping.label.trim()) throw new Error()
+          if (mapping.resetLabel !== undefined && (typeof mapping.resetLabel !== 'string' || !mapping.resetLabel.trim())) throw new Error()
+          if ((mapping.resetLabel ?? 'TBC') === mapping.label) throw new Error()
         }
       } catch { throw new RequestError('The monday.com workload column setup needs attention.', 503) }
 
@@ -101,6 +103,7 @@ export function createHandler({ env, fetch: fetcher }: Dependencies) {
       if (linkedBoard && linkedBoard !== boardId) throw new RequestError('The linked item has moved boards. Update its Dashboard link first.')
       const mapping = mappings[boardId]
       if (!mapping) return json({ configured: false })
+      const resetLabel = mapping.resetLabel ?? 'TBC'
       const column = item.column_values.find((column) => column.id === mapping.columnId)
       if (!column || column.type !== 'status') throw new RequestError('The configured workload column must be a monday.com Status column.', 409)
       const boardData = await monday<{ boards: { columns: { id: string; title: string }[] }[] }>(
@@ -110,7 +113,8 @@ export function createHandler({ env, fetch: fetcher }: Dependencies) {
       const columnTitle = boardData.boards?.[0]?.columns?.find((c) => c.id === mapping.columnId)?.title
       if (!columnTitle) throw new RequestError('The workload column is unavailable.', 409)
       let currentLabel = column.text ?? ''
-      if (body.action === 'confirm') {
+      if (body.action === 'confirm' || body.action === 'unconfirm') {
+        const desiredLabel = body.action === 'unconfirm' ? resetLabel : mapping.label
         const ensureSaved = (saved: SavedTask) => {
           if (saved.draft) throw new RequestError('Complete and save this draft first.', 409)
           if (typeof body.updatedAt !== 'string' || !Number.isFinite(Date.parse(body.updatedAt))
@@ -119,7 +123,7 @@ export function createHandler({ env, fetch: fetcher }: Dependencies) {
           }
         }
         ensureSaved(task)
-        if (currentLabel !== mapping.label) {
+        if (currentLabel !== desiredLabel) {
           // Recheck immediately before the external write; never mark unsaved/deleted/draft tasks.
           ensureSaved(await readTask())
           const result = await monday<{ change_multiple_column_values: { id: string } | null }>(
@@ -127,19 +131,19 @@ export function createHandler({ env, fetch: fetcher }: Dependencies) {
               change_multiple_column_values(board_id: $board, item_id: $item, column_values: $values,
                 create_labels_if_missing: false) { id }
             }`,
-            { board: boardId, item: itemId, values: JSON.stringify({ [mapping.columnId]: { label: mapping.label } }) },
+            { board: boardId, item: itemId, values: JSON.stringify({ [mapping.columnId]: { label: desiredLabel } }) },
           )
           if (String(result.change_multiple_column_values?.id) !== itemId) {
             throw new RequestError('monday.com didn’t confirm the update. Retry the status check.', 502)
           }
           const verified = await readItem()
           currentLabel = verified.column_values.find((c) => c.id === mapping.columnId)?.text ?? ''
-          if (String(verified.board.id) !== boardId || currentLabel !== mapping.label) {
+          if (String(verified.board.id) !== boardId || currentLabel !== desiredLabel) {
             throw new RequestError('The monday.com status didn’t change. Check the column and retry.', 502)
           }
         }
       }
-      return json({ configured: true, entered: currentLabel === mapping.label, columnTitle, targetLabel: mapping.label, currentLabel })
+      return json({ configured: true, entered: currentLabel === mapping.label, columnTitle, targetLabel: mapping.label, resetLabel, currentLabel })
     } catch (error) {
       return json({ error: error instanceof RequestError ? error.message : 'Couldn’t verify the monday.com update. Retry the status check.' },
         error instanceof RequestError ? error.status : 502)

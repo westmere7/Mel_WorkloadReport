@@ -35,7 +35,7 @@ function fixture(options = {}) {
       if (query.includes('mutation')) {
         writes.push(variables)
         if (options.apiError) return Response.json({ errors: [{ message: 'Secret upstream details' }] })
-        if (!options.noChange) currentLabel = 'Entered'
+        if (!options.noChange) currentLabel = Object.values(JSON.parse(variables.values))[0].label
         return Response.json({ data: { change_multiple_column_values: { id: '123' } } })
       }
       if (query.includes('WorkloadColumn')) return Response.json({ data: { boards: [{ columns: [{ id: options.columnId ?? 'workload', title: 'Dashboard input' }] }] } })
@@ -161,3 +161,43 @@ test('the archived board is not enabled by the default mapping', async () => {
   assert.deepEqual((await f.invoke()).body, { configured: false })
   assert.equal(f.writes.length, 0)
 })
+
+test('undo sets only the configured workload column to TBC', async () => {
+  const f = fixture({ currentLabel: 'Entered' })
+  const result = await f.invoke('unconfirm', { label: 'Media NA', resetLabel: 'Media NA' })
+  assert.equal(result.body.entered, false)
+  assert.equal(result.body.currentLabel, 'TBC')
+  assert.deepEqual(f.writes, [{ board: '42', item: '123', values: '{"workload":{"label":"TBC"}}' }])
+})
+
+test('repeated undo is idempotent and can be marked again', async () => {
+  const f = fixture({ currentLabel: 'TBC' })
+  assert.equal((await f.invoke('unconfirm')).body.currentLabel, 'TBC')
+  assert.equal(f.writes.length, 0)
+  assert.equal((await f.invoke('confirm')).body.entered, true)
+  assert.equal((await f.invoke('unconfirm')).body.currentLabel, 'TBC')
+  assert.equal(f.writes.length, 2)
+})
+
+test('future boards can configure a different reset label', async () => {
+  const f = fixture({ currentLabel: 'Entered', env: {
+    MONDAY_WORKLOAD_CONFIG: JSON.stringify({ 42: { columnId: 'workload', label: 'Entered', resetLabel: 'Pending' } }),
+  } })
+  const result = await f.invoke('unconfirm')
+  assert.equal(result.body.currentLabel, 'Pending')
+  assert.equal(result.body.resetLabel, 'Pending')
+})
+
+for (const [name, options] of [
+  ['GraphQL error', { apiError: true }], ['silent no-op', { noChange: true }],
+  ['stale task', { task: { updated_at: '2026-09-12T00:00:00Z' } }],
+  ['unlinked task', { task: { monday_url: null } }],
+]) {
+  test(`undo with ${name} never reports success`, async () => {
+    const f = fixture({ currentLabel: 'Entered', ...options })
+    const result = await f.invoke('unconfirm')
+    assert.ok(result.status >= 400)
+    assert.equal(result.body.entered, undefined)
+    if (options.task) assert.equal(f.writes.length, 0)
+  })
+}
