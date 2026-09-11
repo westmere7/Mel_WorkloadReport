@@ -713,6 +713,13 @@ derives half). Manual, per-task — **no background sync**; every field stays ed
   **no code column** — leave `MONDAY_COL_CODE` unset. (`GCMC & Media Demand Tracker`, board
   `1967557512`: `MONDAY_COL_TIMELINE=timeline__1`, `MONDAY_COL_SIZE=label_mkmfh8ew`, T-shirt labels
   are single letters `M`/etc.)
+- **Workload entry confirmation (Report Assets):** `monday-workload` defaults to
+  board `1967557512`, column `color_mm72eqm4` (**Report Assets**), target label
+  `Entered` (asset input done); `TBC` means not yet entered. `Media NA` is not
+  considered entered. This is separate from `status__1` (**Project Status**).
+  The archived board is not mapped. The button requires the deployed function
+  and frontend `VITE_MONDAY_WORKLOAD=1`; until enabled it shows Setup pending.
+  See `supabase/functions/monday-workload/README.md` for deployment and access model.
 - **"Persons in charge" auto-fill (person mapping).** The board's Project-team people column
   (`people7__1`, secret `MONDAY_COL_PEOPLE`) returns monday **user ids**; the function parses the
   column `value` (`personsAndTeams`, kind `person`) → `mondayPeopleIds`. Each app person is mapped

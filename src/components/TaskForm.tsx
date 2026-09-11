@@ -34,6 +34,7 @@ import { useStore } from '../data/store'
 import { MultiSelect } from './ui/MultiSelect'
 import { Modal } from './ui/Modal'
 import { TaskLogModal } from './TaskLogModal'
+import { MondayWorkloadButton } from './MondayWorkloadButton'
 import { ImageLightbox } from './ui/ImageLightbox'
 import { addDaysISO, cx, todayISO, toMessage } from '../lib/format'
 import { compressToWebP, ACCEPTED_IMAGE_TYPES } from '../lib/image'
@@ -2554,6 +2555,16 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       </Section>
       </div>
       </div>
+
+      {initial?.mondayUrl?.trim() && mondayUrl.trim() && (
+        <MondayWorkloadButton
+          key={initial?.id ?? 'new'}
+          task={initial}
+          blockedReason={submitting ? 'Wait for the task to finish saving.'
+            : !initial ? 'Save this task, then reopen it to confirm workload entry.'
+            : dirty ? 'Save your changes, then reopen this task to confirm workload entry.' : undefined}
+        />
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 pt-2">
         <div className="flex items-center gap-2">

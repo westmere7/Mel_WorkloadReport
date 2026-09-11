@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CalendarClock, Star } from 'lucide-react'
 import { Badge, toneForLabel } from './ui/Badge'
 import { ImageLightbox } from './ui/ImageLightbox'
+import { MondayWorkloadButton } from './MondayWorkloadButton'
 import { useStore } from '../data/store'
 import { SIZE_TONE, SIZE_DESCRIPTIONS, functionColor, legacyOwnerName, withFallback } from '../constants'
 import { cx, formatDate } from '../lib/format'
@@ -240,6 +241,8 @@ export function TaskDetails({
           </div>
         </Section>
       ) : null}
+
+      {task.mondayUrl && <MondayWorkloadButton key={task.id} task={task} />}
 
       {(onClose || onEdit) && (
         <div className="flex justify-end gap-2 border-t border-line pt-4">
