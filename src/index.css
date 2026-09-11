@@ -28,8 +28,8 @@
     --muted: #6b7280;
     --faint: #9ca3af;
 
-    /* Sidebar (dark navy in light theme for contrast against light content) */
-    --sidebar: #000054;
+    /* Sidebar follows the light panel surface. */
+    --sidebar: #ffffff;
 
     /* Chart tokens */
     --chart-axis: #6b7280;

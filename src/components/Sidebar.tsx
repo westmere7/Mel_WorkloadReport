@@ -65,7 +65,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         cx(
           'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
           collapsed ? 'justify-center' : 'justify-center md:justify-start',
-          isActive ? 'bg-white/10 text-white shadow-inner' : 'text-navy-100 hover:bg-white/5 hover:text-white',
+          isActive
+            ? 'bg-navy-50 text-rmit-navy dark:bg-white/10 dark:text-white'
+            : 'text-muted hover:bg-subtle hover:text-ink dark:text-navy-100 dark:hover:bg-white/5 dark:hover:text-white',
         )
       }
     >
@@ -97,10 +99,11 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               don't shift up; the logo + name show in the header instead. Still visible on
               the mobile rail (collapse is desktop-only). */}
           <div className={cx('mb-6 flex items-center gap-3 px-1 md:px-2', collapsed && 'md:invisible')}>
-            <img src="/RMIT_red.svg" alt="RMIT" className="h-5 w-auto shrink-0 md:h-7" />
+            <img src="/RMIT_full.svg" alt="RMIT" className="h-5 w-auto shrink-0 dark:hidden md:h-7" />
+            <img src="/RMIT_red.svg" alt="RMIT" className="hidden h-5 w-auto shrink-0 dark:block md:h-7" />
             <div className="hidden min-w-0 whitespace-nowrap md:block">
-              <p className="text-sm font-bold leading-tight text-white">GCMC</p>
-              <p className="text-[11px] leading-tight text-navy-100">Workload Report</p>
+              <p className="text-sm font-bold leading-tight text-ink dark:text-white">GCMC</p>
+              <p className="text-[11px] leading-tight text-muted dark:text-navy-100">Workload Report</p>
             </div>
           </div>
 
@@ -111,7 +114,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           {canEdit && (
             <>
               {/* Subtle separator + primary action */}
-              <div className="my-3 w-full border-t border-white/10" />
+              <div className="my-3 w-full border-t border-line dark:border-white/10" />
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -141,8 +144,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           )}
 
           <div className={cx('px-2 pb-1', collapsed ? 'hidden' : 'hidden md:block')}>
-            <p className="text-[11px] leading-relaxed text-navy-200">RMIT GCMC Team</p>
-            <p className="mt-0.5 text-[10px] leading-tight text-navy-300">v{__APP_VERSION__}</p>
+            <p className="text-[11px] leading-relaxed text-muted dark:text-navy-200">RMIT GCMC Team</p>
+            <p className="mt-0.5 text-[10px] leading-tight text-muted dark:text-navy-300">v{__APP_VERSION__}</p>
           </div>
         </div>
       </aside>
