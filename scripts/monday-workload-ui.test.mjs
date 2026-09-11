@@ -94,7 +94,15 @@ try {
   assert.equal(confirms, 2, 'Reload restores remote status without a write')
   await page.setViewportSize({ width: 375, height: 500 })
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
-  const screenshot = path.join(tmpdir(), 'monday-workload-mobile.png')
+  const enteredButton = page.getByRole('button', { name: 'Workload entered', exact: true })
+  const appearance = () => enteredButton.evaluate((button) => ({
+    background: getComputedStyle(button).backgroundColor,
+    opacity: getComputedStyle(button).opacity,
+  }))
+  assert.deepEqual(await appearance(), { background: 'rgb(176, 220, 81)', opacity: '1' })
+  await page.evaluate(() => document.documentElement.classList.add('dark'))
+  assert.deepEqual(await appearance(), { background: 'rgb(176, 220, 81)', opacity: '1' })
+  const screenshot = path.join(tmpdir(), 'monday-workload-green-dark.png')
   await page.screenshot({ path: screenshot })
   const viewer = await browser.newPage()
   await viewer.goto(url)

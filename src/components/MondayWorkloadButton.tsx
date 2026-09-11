@@ -81,7 +81,7 @@ export function MondayWorkloadButton({ task, blockedReason }: { task?: Task; blo
       </div>
       <button
         type="button"
-        className="btn-outline mt-3 min-h-11 shrink-0 sm:mt-0"
+        className={`${entered ? 'btn-workload-entered' : 'btn-outline'} mt-3 min-h-11 shrink-0 sm:mt-0`}
         aria-describedby={descriptionId}
         aria-busy={Boolean(busy)}
         disabled={Boolean(reason) || Boolean(busy) || setupPending || entered}

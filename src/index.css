@@ -275,6 +275,13 @@
   .btn-outline {
     @apply btn border border-line bg-card text-ink hover:bg-subtle;
   }
+  .btn-workload-entered {
+    @apply btn border disabled:opacity-100;
+    /* Match monday.com's Entered label, including while disabled. */
+    background-color: #b0dc51;
+    border-color: #b0dc51;
+    color: #24310e;
+  }
 
   .chip {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
