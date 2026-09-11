@@ -57,10 +57,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <HeaderSlotContext.Provider value={setHeaderSlots}>
       <div className="flex h-screen overflow-hidden bg-surface">
         <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className={cx('flex min-w-0 flex-1 flex-col', pathname === '/tasks' ? 'overflow-y-auto' : 'overflow-hidden')}>
           {/* Top bar — wraps to two rows on mobile (title/controls, then the page slots).
               sm:min-h keeps the height identical across pages regardless of subtitle. */}
-          <header className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-card px-3 py-3 sm:min-h-20 sm:gap-x-4 sm:py-4 sm:pl-8 sm:pr-6">
+          <header className="mx-6 mt-6 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-card px-3 py-3 sm:min-h-20 sm:gap-x-4 sm:px-5 sm:py-4">
             {/* Title / brand cluster */}
             <div className="order-1 flex min-w-0 items-center gap-3">
               {/* Brand mark on mobile, where the sidebar rail is hidden. */}
@@ -138,7 +138,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </header>
 
           {/* Extra bottom padding on mobile so content clears the fixed bottom nav. */}
-          <main className="flex-1 overflow-y-auto p-6 pb-24 md:pb-6">{children}</main>
+          <main className={cx('p-6 pb-24 pt-4 md:pb-6', pathname === '/tasks' ? 'flex-none' : 'flex-1 overflow-y-auto')}>{children}</main>
           {/* Bottom navigation — mobile only (the sidebar is hidden there). */}
           <MobileNav />
         </div>

@@ -726,7 +726,7 @@ export function Dashboard() {
           needs, so it stays on equal quarters until there's room. */}
       <div
         className={cx(
-          'grid items-stretch gap-3 lg:grid-cols-2 xl:grid-cols-4',
+          'grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-4',
           effortOn && '2xl:grid-cols-[1.4fr_1.05fr_1fr_1fr]',
         )}
       >
@@ -835,8 +835,8 @@ export function Dashboard() {
       {/* Left: workload (fills height) above the two campaign charts, side by side.
           Right: the mix donuts above the full-height squads-demand distribution. */}
       <div className="grid min-h-0 flex-1 items-stretch gap-4 lg:grid-cols-2">
-        {/* LEFT column — two equal-height rows so the workload and campaign cards match. */}
-        <div className="grid min-h-0 grid-rows-2 gap-4">
+        {/* Compact middle row; remaining space belongs to the campaign chart. */}
+        <div className="grid min-h-0 grid-rows-[320px_minmax(300px,1fr)] gap-4">
           <Card className="flex min-h-0 flex-1 flex-col">
             <CardHeader
               // The period lives in the title, so the chart doesn't need a pill
@@ -889,7 +889,7 @@ export function Dashboard() {
             {/* `relative` + `absolute inset-0` takes the chart out of flow so its
                 measured height can't feed back and grow the flex parent (recharts
                 ResponsiveContainer + flexbox growth loop). */}
-            <div className="relative min-h-[300px] flex-1">
+            <div className="relative min-h-[180px] flex-1">
               <div className="absolute inset-0">
                 <AreaTrendChart
                   data={byMonth}
@@ -946,9 +946,10 @@ export function Dashboard() {
         {/* RIGHT column */}
         <div className="flex min-h-0 flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Card>
+            <Card className="flex h-80 min-h-0 flex-col">
               <CardHeader
                 title="Asset mix"
+                className="shrink-0"
                 subtitle={compare ? `Deliverables by type — ${activeYear} over ${srcYear}` : 'Deliverables by type'}
                 action={
                   <div className="flex items-center gap-1.5">
@@ -964,6 +965,7 @@ export function Dashboard() {
               />
               <MixChart
                 data={assetMix}
+                scrollLegend
                 height={200}
                 emptyMessage={fnEmpty ?? 'Add tasks with asset counts to see the mix.'}
                 compare={compare ? srcAssetMix : undefined}
@@ -975,9 +977,10 @@ export function Dashboard() {
                 sourceLabel={String(srcYear)}
               />
             </Card>
-            <Card>
+            <Card className="flex h-80 min-h-0 flex-col">
               <CardHeader
                 title="Work type mix"
+                className="shrink-0"
                 subtitle={compare ? `Tasks by work type — ${activeYear} over ${srcYear}` : 'Tasks by work type'}
                 action={
                   <div className="flex items-center gap-1.5">
@@ -993,6 +996,7 @@ export function Dashboard() {
               />
               <MixChart
                 data={workTypeMix}
+                scrollLegend
                 height={200}
                 emptyMessage={fnEmpty ?? 'Tag tasks with work types to see the mix.'}
                 compare={compare ? srcWorkTypeMix : undefined}
@@ -1047,7 +1051,7 @@ export function Dashboard() {
                 </div>
               }
             />
-            <div className="relative min-h-[320px] flex-1">
+            <div className="relative min-h-[220px] flex-1">
               <div className="absolute inset-0">
                 <StackedBarChart
                   data={demand}

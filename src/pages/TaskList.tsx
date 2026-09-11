@@ -273,8 +273,9 @@ export function TaskList() {
     fnFilter.length
 
   return (
-    <div className="space-y-4">
-      {/* Toolbar */}
+    <div className="flex flex-col">
+      {/* The opaque surround covers the gaps and rounded corners as rows scroll behind it. */}
+      <div className="sticky top-0 z-20 -mx-6 -mt-4 bg-surface px-6 py-4">
       <Card className="flex flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-[260px] flex-1">
@@ -411,6 +412,7 @@ export function TaskList() {
           ) : null}
         </div>
       </Card>
+      </div>
 
       {/* Table */}
       <Card className="p-0">

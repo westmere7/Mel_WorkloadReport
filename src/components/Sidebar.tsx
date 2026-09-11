@@ -79,11 +79,11 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   )
 
   return (
-    <div className="relative hidden shrink-0 md:block">
+    <div className="relative z-30 my-6 ml-6 hidden shrink-0 md:block">
       <aside
         onClick={onToggle}
         className={cx(
-          'flex h-full cursor-pointer flex-col overflow-hidden bg-[var(--sidebar)] transition-[width] duration-200',
+          'flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl bg-[var(--sidebar)] transition-[width] duration-200',
           collapsed ? 'w-[68px]' : 'w-[68px] md:w-60',
         )}
       >

@@ -114,6 +114,8 @@ export function NotEnough({ message, height = 200 }: { message?: string; height?
 
 interface MixProps {
   data: NamedCount[]
+  /** Keep the chart visible while a long legend scrolls within its card. */
+  scrollLegend?: boolean
   height?: number
   minPoints?: number
   emptyMessage?: string
@@ -167,6 +169,7 @@ function MixLegend({
   sourceLabel,
   showShare,
   className,
+  scrollable,
 }: {
   data: NamedCount[]
   colors: string[]
@@ -181,6 +184,7 @@ function MixLegend({
   showShare?: boolean
   /** Extra classes on the list — e.g. a width cap beside a donut. */
   className?: string
+  scrollable?: boolean
 }) {
   const prevByName = compare ? new Map(compare.map((d) => [d.name, d.value])) : null
   const clickable = Boolean(onSelect)
@@ -188,7 +192,16 @@ function MixLegend({
   // scroll on row hover, rather than truncating or widening the legend.
   const marqueeRef = useNameMarquee<HTMLUListElement>()
   return (
-    <ul ref={marqueeRef} className={cx('w-full min-w-0 space-y-1.5 sm:flex-1', className)}>
+    <ul
+      ref={marqueeRef}
+      aria-label={scrollable ? 'Chart categories' : undefined}
+      tabIndex={scrollable ? 0 : undefined}
+      className={cx(
+        'w-full min-w-0 space-y-1.5 sm:flex-1',
+        scrollable && 'min-h-0 max-h-full flex-1 overflow-y-auto overscroll-contain px-1 py-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rmit-red',
+        className,
+      )}
+    >
       {data.map((d, i) => {
         const n = taskCounts?.[d.name]
         const p = prevTaskCounts?.[d.name]
@@ -201,7 +214,8 @@ function MixLegend({
           <li key={d.name}>
             <div
               className={cx(
-                'marquee-host flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 text-sm transition-colors',
+                'marquee-host flex items-center gap-2 rounded-md -mx-1 px-1 py-0.5 transition-colors',
+                scrollable ? 'text-xs' : 'text-sm',
                 clickable && 'cursor-pointer',
                 active === i && 'bg-subtle',
               )}
@@ -264,6 +278,7 @@ function MixLegend({
 /** Donut chart with a centered total and an external legend. */
 export function DonutChart({
   data,
+  scrollLegend,
   height = 240,
   minPoints = 1,
   emptyMessage,
@@ -280,11 +295,11 @@ export function DonutChart({
   if (total === 0 || data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
 
   return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row">
+    <div className={cx('flex items-center gap-4', scrollLegend ? 'h-full min-h-0 flex-row' : 'flex-col sm:flex-row')}>
       {/* The ring is shrink-0 inside a flexible, centring column: long category
           names used to squeeze the donut, because the legend's intrinsic width
           won and the ring was the only thing that could give. */}
-      <div className="flex w-full justify-center sm:w-auto sm:flex-1">
+      <div className={cx('flex justify-center', scrollLegend ? 'w-auto flex-1' : 'w-full sm:w-auto sm:flex-1')}>
         <div className="relative shrink-0" style={{ width: 180, height }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -344,7 +359,8 @@ export function DonutChart({
         compare={compare}
         sourceLabel={sourceLabel}
         // Half the panel at most — beyond that the names are eating the chart.
-        className="sm:max-w-[50%]"
+        className={scrollLegend ? 'max-w-[50%]' : 'sm:max-w-[50%]'}
+        scrollable={scrollLegend}
       />
     </div>
   )
@@ -358,6 +374,7 @@ export function DonutChart({
  */
 export function StackedShareBar({
   data,
+  scrollLegend,
   minPoints = 1,
   emptyMessage,
   compare,
@@ -373,13 +390,13 @@ export function StackedShareBar({
   const clickable = Boolean(onSelect)
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+    <div className={scrollLegend ? 'flex h-full min-h-0 flex-col gap-3' : 'space-y-3'}>
+      <div className="flex shrink-0 items-center justify-between">
         <span className="text-2xl font-bold text-ink">{total}</span>
         <span className="text-[11px] uppercase tracking-wide text-muted">total</span>
       </div>
       {/* The 100% stacked bar — segments in ranked order, coloured per category. */}
-      <div className="flex h-4 w-full overflow-hidden rounded-full ring-1 ring-line">
+      <div className="flex h-4 w-full shrink-0 overflow-hidden rounded-full ring-1 ring-line">
         {data.map((d, i) => (
           <div
             key={d.name}
@@ -408,6 +425,7 @@ export function StackedShareBar({
         compare={compare}
         sourceLabel={sourceLabel}
         showShare
+        scrollable={scrollLegend}
       />
     </div>
   )
@@ -422,7 +440,11 @@ export function MixChart(props: MixProps) {
   const [ref, width] = useContainerWidth<HTMLDivElement>()
   // Donut needs ~180 (ring) + gap + a readable legend; below that the bar wins.
   const narrow = width > 0 && width < 380
-  return <div ref={ref}>{narrow ? <StackedShareBar {...props} /> : <DonutChart {...props} />}</div>
+  return (
+    <div ref={ref} className={props.scrollLegend ? 'min-h-0 flex-1' : undefined}>
+      {narrow ? <StackedShareBar {...props} /> : <DonutChart {...props} />}
+    </div>
+  )
 }
 
 /**
