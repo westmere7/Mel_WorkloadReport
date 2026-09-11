@@ -5,7 +5,6 @@ export interface MondayWorkloadStatus {
   entered?: boolean
   columnTitle?: string
   targetLabel?: string
-  resetLabel?: string
   currentLabel?: string
 }
 
@@ -16,7 +15,7 @@ export function isMondayWorkloadEnabled(): boolean {
 export async function requestMondayWorkload(
   taskId: string,
   updatedAt: string,
-  action: 'status' | 'confirm' | 'unconfirm',
+  action: 'status' | 'confirm',
 ): Promise<MondayWorkloadStatus> {
   if (!isMondayWorkloadEnabled()) return { configured: false }
   const { data, error } = await getSupabase().functions.invoke<MondayWorkloadStatus & { error?: string }>(
@@ -35,10 +34,6 @@ export async function requestMondayWorkload(
   if (!data || typeof data.configured !== 'boolean') throw new Error('Couldn’t verify the monday.com status. Try again.')
   if (action === 'confirm' && data.configured && data.entered !== true) {
     throw new Error('monday.com hasn’t confirmed the update. Check the status and try again.')
-  }
-  if (action === 'unconfirm' && data.configured
-    && (data.entered !== false || !data.resetLabel || data.currentLabel !== data.resetLabel)) {
-    throw new Error('monday.com hasn’t confirmed the undo. Check the status and try again.')
   }
   return data
 }

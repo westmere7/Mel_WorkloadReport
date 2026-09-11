@@ -43,28 +43,26 @@ try {
   let entered = false
   let fail = false
   let confirms = 0
-  let unconfirms = 0
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.route('https://workload-ui.supabase.co/**', async (route) => {
     const { action } = route.request().postDataJSON()
-    if (action === 'confirm' || action === 'unconfirm') {
-      if (action === 'confirm') confirms++
-      else unconfirms++
+    if (action === 'confirm') {
+      confirms++
       if (fail) return route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ error: 'Test update failed.' }) })
-      entered = action === 'confirm'
+      entered = true
     }
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify(configured
-      ? { configured: true, entered, columnTitle: 'Report Assets', targetLabel: 'Entered', resetLabel: 'TBC', currentLabel: entered ? 'Entered' : 'TBC' }
+      ? { configured: true, entered, columnTitle: 'Dashboard input', targetLabel: 'Entered', currentLabel: entered ? 'Entered' : '' }
       : { configured: false }) })
   })
   const go = async (mode = '') => {
     await page.goto(`${url}?mode=${mode}`)
-    await page.getByRole('button', { name: 'Checking…' }).waitFor({ state: 'hidden' })
+    await page.getByRole('button', { name: 'Checking monday.com…' }).waitFor({ state: 'hidden' })
   }
   await go()
   await page.getByText(/Setup pending/).waitFor()
-  assert.equal(await page.getByRole('button', { name: 'Mark entered', exact: true }).isDisabled(), true)
+  assert.equal(await page.getByRole('button', { name: 'Mark workload entered', exact: true }).isDisabled(), true)
   configured = true
   for (const mode of ['new', 'unlinked', 'blank-link']) {
     await go(mode)
@@ -74,11 +72,11 @@ try {
   }
   for (const mode of ['draft', 'dirty']) {
     await go(mode)
-    await page.getByRole('button', { name: 'Mark entered', exact: true }).waitFor()
-    assert.equal(await page.getByRole('button', { name: 'Mark entered', exact: true }).isDisabled(), true)
+    await page.getByRole('button', { name: 'Mark workload entered', exact: true }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Mark workload entered', exact: true }).isDisabled(), true)
   }
   await go()
-  const mark = page.getByRole('button', { name: 'Mark entered', exact: true })
+  const mark = page.getByRole('button', { name: 'Mark workload entered', exact: true })
   await mark.waitFor()
   fail = true
   await mark.click()
@@ -88,30 +86,12 @@ try {
   assert.equal(confirms, 1, 'Retry checks status without repeating a write')
   fail = false
   await mark.click()
-  const undo = page.getByRole('button', { name: 'Undo entry', exact: true })
-  await undo.waitFor()
+  await page.getByRole('button', { name: 'Workload entered', exact: true }).waitFor()
   assert.equal(confirms, 2)
-  assert.equal(await undo.isEnabled(), true)
+  assert.equal(await page.getByRole('button', { name: 'Workload entered', exact: true }).isDisabled(), true)
   await go()
-  await undo.waitFor()
+  await page.getByRole('button', { name: 'Workload entered', exact: true }).waitFor()
   assert.equal(confirms, 2, 'Reload restores remote status without a write')
-  fail = true
-  await undo.click()
-  await page.getByRole('alert').filter({ hasText: 'Test update failed.' }).waitFor()
-  await page.getByRole('button', { name: 'Retry status check' }).click()
-  await undo.waitFor()
-  assert.equal(unconfirms, 1, 'Retry after failed undo only reads status')
-  fail = false
-  await undo.click()
-  await mark.waitFor()
-  assert.equal(unconfirms, 2)
-  await page.getByRole('status').filter({ hasText: 'Report Assets: TBC' }).waitFor()
-  await go()
-  await mark.waitFor()
-  assert.equal(unconfirms, 2, 'Reload restores TBC without another write')
-  await mark.click()
-  await undo.waitFor()
-  assert.equal(confirms, 3, 'Can mark entered again after undo')
   await page.setViewportSize({ width: 375, height: 500 })
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
   const screenshot = path.join(tmpdir(), 'monday-workload-mobile.png')
