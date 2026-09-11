@@ -99,6 +99,12 @@ try {
     background: getComputedStyle(button).backgroundColor,
     opacity: getComputedStyle(button).opacity,
   }))
+  // Wait for the existing button color/opacity transition to finish.
+  await page.waitForFunction(() => {
+    const button = document.querySelector('.btn-workload-entered')
+    return button && getComputedStyle(button).backgroundColor === 'rgb(176, 220, 81)'
+      && getComputedStyle(button).opacity === '1'
+  })
   assert.deepEqual(await appearance(), { background: 'rgb(176, 220, 81)', opacity: '1' })
   await page.evaluate(() => document.documentElement.classList.add('dark'))
   assert.deepEqual(await appearance(), { background: 'rgb(176, 220, 81)', opacity: '1' })
