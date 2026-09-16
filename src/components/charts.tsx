@@ -27,12 +27,20 @@ import { TrendDelta } from './ui/TrendDelta'
 import { cx } from '../lib/format'
 import { useNameMarquee } from '../lib/useNameMarquee'
 import { DEMO_INTRO_EASE, useDemoIntro } from '../lib/demo'
+import { useIsPresented } from './CardPresenter'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 
 /** Inline transition for a bar growing from 0 during the demo reveal (else none). */
 function introGrow(intro: boolean, prop = 'width'): string | undefined {
   return intro ? `${prop} 1000ms ${DEMO_INTRO_EASE}` : undefined
 }
+
+/** Donut ring: the dashboard size, the ceiling when a card is presented full
+ *  screen, and the radii as a fraction of it (58/84 of 180, kept exactly). */
+const RING = 180
+const RING_MAX = 460
+const RING_INNER = 58 / 180
+const RING_OUTER = 84 / 180
 
 /** True on narrow (mobile) viewports — Tailwind's `sm` breakpoint is 640px. */
 function useIsMobile(): boolean {
@@ -135,6 +143,29 @@ interface MixProps {
   prevTaskCounts?: Record<string, number>
   /** Label for the source year, used in the compare tooltip. */
   sourceLabel?: string
+}
+
+/** Live size of an element, for a chart that has to fit a box on BOTH axes. */
+function useContainerSize<T extends HTMLElement>(): [React.RefObject<T>, { w: number; h: number }] {
+  const ref = useRef<T>(null)
+  const [size, setSize] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => {
+      const r = el.getBoundingClientRect()
+      setSize((s) => (Math.abs(s.w - r.width) < 1 && Math.abs(s.h - r.height) < 1 ? s : { w: r.width, h: r.height }))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
+  return [ref, size]
 }
 
 /** Measure an element's live width for container-responsive layout — a
@@ -297,6 +328,16 @@ export function DonutChart({
   const colors = useChartColors()
   // Index of the section currently hovered (via a slice or its legend row).
   const [active, setActive] = useState<number | null>(null)
+  // Presenting a card full screen makes it much larger, but a fixed 180px ring
+  // would just sit in the middle of the extra space — so the ring grows into it.
+  // `useIsPresented` is the APP's full screen only; demo slides keep 180 (they are
+  // magnified as a whole instead), so neither view changes the other.
+  const [ringBoxRef, ringBox] = useContainerSize<HTMLDivElement>()
+  const presented = useIsPresented(ringBoxRef)
+  const ring =
+    presented && ringBox.w > 0 && ringBox.h > 0
+      ? Math.max(RING, Math.min(ringBox.w - 24, ringBox.h - 24, RING_MAX))
+      : RING
   const total = data.reduce((a, b) => a + b.value, 0)
   if (total === 0 || data.length < minPoints) return <NotEnough message={emptyMessage} height={height} />
 
@@ -305,16 +346,26 @@ export function DonutChart({
       {/* The ring is shrink-0 inside a flexible, centring column: long category
           names used to squeeze the donut, because the legend's intrinsic width
           won and the ring was the only thing that could give. */}
-      <div className={cx('flex justify-center', scrollLegend ? 'w-auto flex-1' : 'w-full sm:w-auto sm:flex-1')}>
-        <div className="relative shrink-0" style={{ width: 180, height }}>
+      <div
+        ref={ringBoxRef}
+        // ⚠️ `self-stretch` when presented: the parent row is `items-center`, so this
+        // column otherwise hugs its content — its measured height IS the ring's, and
+        // the ring could never grow past the size it already had.
+        className={cx(
+          'flex items-center justify-center',
+          presented && 'self-stretch',
+          scrollLegend ? 'w-auto flex-1' : 'w-full sm:w-auto sm:flex-1',
+        )}
+      >
+        <div className="relative shrink-0" style={{ width: ring, height: presented ? ring : height }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={data}
               dataKey="value"
               nameKey="name"
-              innerRadius={58}
-              outerRadius={84}
+              innerRadius={ring * RING_INNER}
+              outerRadius={ring * RING_OUTER}
               paddingAngle={2}
               stroke="none"
               activeIndex={active ?? undefined}
@@ -323,7 +374,7 @@ export function DonutChart({
                   cx={props.cx}
                   cy={props.cy}
                   innerRadius={props.innerRadius}
-                  outerRadius={props.outerRadius + 6}
+                  outerRadius={props.outerRadius + ring * 0.033}
                   startAngle={props.startAngle}
                   endAngle={props.endAngle}
                   fill={props.fill}
@@ -348,8 +399,14 @@ export function DonutChart({
           </PieChart>
         </ResponsiveContainer>
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold text-ink">{total}</span>
-            <span className="text-[11px] uppercase tracking-wide text-muted">total</span>
+            {/* The centre label tracks the ring so a grown donut isn't captioned in
+                the same small type it had at 180px. */}
+            <span className="font-bold text-ink" style={{ fontSize: ring * 0.155 }}>
+              {total}
+            </span>
+            <span className="uppercase tracking-wide text-muted" style={{ fontSize: Math.max(11, ring * 0.058) }}>
+              total
+            </span>
           </div>
         </div>
       </div>

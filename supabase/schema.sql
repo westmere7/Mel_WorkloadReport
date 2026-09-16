@@ -169,6 +169,10 @@ alter table public.settings
 -- after this text that outrank it.
 alter table public.settings
   add column if not exists advisor_prompt text not null default '';
+-- Team-defined holidays / closures for the Calendar page (Settings → Holidays):
+-- [{ id, name, start, end, scope: 'melbourne' | 'vietnam' | 'all' }]
+alter table public.settings
+  add column if not exists custom_holidays jsonb not null default '[]'::jsonb;
 
 -- GCMC functions that record workload (task-form tabs). Array of
 -- { name, color, workTypes, assetTypes }; order = tab order. The type lists are

@@ -11,9 +11,16 @@ import {
   type RefObject,
 } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { isAnyModalOpen } from '../components/ui/Modal'
 import { useStore } from '../data/store'
 import { previewTheme, storedTheme } from './theme'
 import { ratedAssetRows } from './effort'
+import {
+  cardTitle,
+  presentCards,
+  titleMatches,
+  topLevelCards,
+} from './present'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Demo mode — a presentation walkthrough of the LIVE dashboard.
@@ -137,11 +144,6 @@ export const DEMO_SLIDES: DemoSlide[] = [
   },
 ]
 
-/** Slide geometry (px, within the content column): caption band, outer padding, gap between cards. */
-const SLIDE_LABEL_H = 128
-const SLIDE_PAD = 28
-const SLIDE_GAP = 24
-
 interface DemoValue {
   stage: DemoStage
   /** Index into the resolved slides while `stage === 'slide'`, else -1. */
@@ -160,13 +162,6 @@ interface DemoValue {
 }
 
 const DemoContext = createContext<DemoValue | null>(null)
-
-/** Top-level dashboard cards only — a card nested in a card rides along with its parent. */
-function topLevelCards(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('main .card')).filter(
-    (el) => !el.parentElement?.closest('.card'),
-  )
-}
 
 /**
  * Tag the header (`.demo-el`) and every top-level dashboard card with a reveal
@@ -197,15 +192,6 @@ function tagPanels(): () => void {
   }
 }
 
-/** A card's panel title — the CardHeader <h3>, or a StatCard's label <p>. */
-function cardTitle(el: HTMLElement): string {
-  return (el.querySelector('h3, p')?.textContent ?? '').trim()
-}
-
-function titleMatches(title: string, wanted: string): boolean {
-  return title === wanted || title.startsWith(`${wanted} ·`) || title.startsWith(`${wanted} in `)
-}
-
 interface ResolvedSlide {
   slide: DemoSlide
   els: HTMLElement[]
@@ -225,77 +211,27 @@ function resolveSlides(hasRates: boolean): ResolvedSlide[] {
   })).filter((s) => (s.slide.custom === 'rates' ? hasRates : s.els.length > 0))
 }
 
-/**
- * Lift a slide's cards out of the grid and blow them up to fill the content column
- * under the caption band. Absolute positioning against the column (`.demo-column`,
- * the nearest positioned ancestor) escapes <main>'s scroll clipping; the cards keep
- * every React handler. Returns a cleanup that puts them back exactly as they were.
- *
- * ⚠️ The card is laid out at a SMALL logical width (`slide.lw`) and then scaled up
- * with a transform, rather than simply being made as wide as the slot. Two reasons:
- *   · type — everything in the card (text, bars, chart labels, the donut) grows by
- *     the scale factor, which is the point of a slide; merely widening the card
- *     leaves 12px legend text at 12px.
- *   · correctness — the stat figures are container-query sized (`17cqw`/`24cqw`)
- *     inside a FIXED `h-[5.5rem]` row, so a full-width layout makes the number's
- *     line box taller than its row and it overlaps the card header.
- * Scale, not zoom: `transform` leaves layout alone, so the logical box stays exactly
- * what we set and charts (which measure px) lay out predictably, then scale crisply
- * as SVG. `transform-origin: 0 0` makes the visual box (left, top, w*z, h*z).
- */
+/** Position a slide's cards. Geometry (and its gotchas) live in lib/present.ts. */
 function applySlide(entry: ResolvedSlide): () => void {
-  const column = document.querySelector<HTMLElement>('.demo-column')
   // A custom slide draws itself inside the overlay — there is nothing to lift.
-  if (!column || entry.els.length === 0) return () => {}
-  const W = column.clientWidth
-  const H = column.clientHeight
-  const n = entry.els.length
-  const areaH = H - SLIDE_LABEL_H - SLIDE_PAD
-  const visualW = (W - 2 * SLIDE_PAD - SLIDE_GAP * (n - 1)) / n
-  // Never below 1: on a narrow window the slot is already smaller than the logical
-  // width, and shrinking the card would read as worse than the dashboard itself.
-  const z = Math.max(1, visualW / (entry.slide.lw ?? DEFAULT_SLIDE_LW))
-  const logicalW = visualW / z
-  const logicalH = areaH / z
-  const fit = Boolean(entry.slide.fit)
-  entry.els.forEach((el, i) => {
-    el.classList.add('demo-slide-card')
-    Object.assign(el.style, {
-      position: 'absolute',
-      left: `${SLIDE_PAD + i * (visualW + SLIDE_GAP)}px`,
-      top: `${SLIDE_LABEL_H}px`,
-      width: `${logicalW}px`,
-      // Inline `auto` beats the cards' own h-full/h-80 classes, so a fit slide
-      // shrink-wraps its content; the cap keeps it inside the slide area.
-      height: fit ? 'auto' : `${logicalH}px`,
-      maxHeight: fit ? `${logicalH}px` : '',
-      margin: '0',
-      zIndex: '61',
-      transformOrigin: '0 0',
-      transform: `scale(${z})`,
-    })
-  })
-  if (fit) {
-    // Measure the natural (logical — transforms do not affect offsetHeight) heights,
-    // then give the pair the tallest one and centre the scaled block vertically.
-    const nat = Math.min(logicalH, Math.max(...entry.els.map((el) => el.offsetHeight)))
-    const top = SLIDE_LABEL_H + (areaH - nat * z) / 2
-    entry.els.forEach((el) => {
-      el.style.height = `${nat}px`
-      el.style.top = `${top}px`
-    })
-  }
-  return () => {
-    entry.els.forEach((el) => {
-      el.classList.remove('demo-slide-card')
-      for (const p of [
-        'position', 'left', 'top', 'width', 'height', 'max-height',
-        'margin', 'z-index', 'transform', 'transform-origin',
-      ]) {
-        el.style.removeProperty(p)
-      }
-    })
-  }
+  if (entry.els.length === 0) return () => {}
+  // ⚠️ The default matters: presentCards falls back to the SLOT width (i.e. no
+  // scaling) when `lw` is absent, so a slide without its own width would silently
+  // present at 1:1 instead of the tuned 780.
+  return presentCards(entry.els, { lw: entry.slide.lw ?? DEFAULT_SLIDE_LW, fit: entry.slide.fit })
+}
+
+/**
+ * Presentation geometry for a single card, reusing the slide widths tuned above —
+ * so the app's own full-screen (components/CardPresenter.tsx) inherits the same
+ * hard-won values, including the ones that stop the stat figures overlapping their
+ * header and the mix legend clipping. Falls back to the default for anything that
+ * isn't on a slide.
+ */
+export function presentGeometryForCard(el: HTMLElement): { lw: number; fit: boolean } {
+  const title = cardTitle(el)
+  const hit = DEMO_SLIDES.find((slide) => slide.titles.some((t) => titleMatches(title, t)))
+  return { lw: hit?.lw ?? DEFAULT_SLIDE_LW, fit: Boolean(hit?.fit) }
 }
 
 interface Pos {
@@ -394,20 +330,41 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     return applySlide(entry)
   }, [stage, slide])
 
-  // Presenter keys: → / Space / Enter advance, Esc leaves.
+  // Keyboard. While a demo runs, Space / → advance and Esc leaves. While one
+  // ISN'T running, Space starts one — deliberately narrowly, see below.
   useEffect(() => {
-    if (!active) return
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      const isSpace = e.key === ' ' || e.key === 'Spacebar'
+
+      if (!active) {
+        // ⚠️ Starting on Space is deliberately hard to trigger by accident, because
+        // Space already means two things everywhere else: scroll the page, and
+        // activate the focused control. So it only starts a demo when ALL of:
+        //   · we're on the dashboard (the demo's own page — /tasks and /help are
+        //     long scrolling pages where Space must stay page-down);
+        //   · nothing is focused (target is <body>) — otherwise Space belongs to the
+        //     focused button/checkbox, including the sidebar's own Demo button;
+        //   · no dialog is open;
+        //   · no modifier is held.
+        // Everywhere else Space keeps doing exactly what it always did.
+        if (!isSpace || pathname !== '/' || el !== document.body || isAnyModalOpen()) return
+        e.preventDefault()
+        start()
+        return
+      }
+
       if (e.key === 'Escape') {
         e.preventDefault()
         exit()
-      } else if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'ArrowRight') {
+      } else if (isSpace || e.key === 'ArrowRight') {
         // The presenter keys, and they win outright: preventDefault also cancels a
         // focused button's own activation (Space/Enter "click" a button), so after
         // clicking Next with the mouse a Space still advances exactly ONE stage
-        // rather than two — or none. Only bound while a demo is running.
+        // rather than two — or none.
         e.preventDefault()
         next()
       } else if (e.key === 'Enter') {
@@ -419,7 +376,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [active, next, exit])
+  }, [active, pathname, start, next, exit])
 
   const currentSlide = stage === 'slide' ? slidesRef.current[slide]?.slide ?? null : null
   const value = useMemo<DemoValue>(

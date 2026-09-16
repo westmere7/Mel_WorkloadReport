@@ -1290,8 +1290,20 @@ the `/* Demo mode */` block at the end of `src/index.css`.
   control has focus (so Enter on "Exit demo" exits). ⚠️ Space/→ call `preventDefault()`
   unconditionally, which also cancels a focused button's own Space-activation: after
   clicking Next with the mouse, focus sits on that button, and without this a Space
-  would fire both the native click AND the handler and skip a stage. The listener is
-  bound only while a demo is running, so Space is untouched everywhere else. **The sidebar stays on screen
+  would fire both the native click AND the handler and skip a stage.
+- **⚠️ Space also STARTS a demo**, so the whole thing is driveable from the keyboard.
+  This is the one shortcut that has to be live when no demo is running, and Space
+  already means two things everywhere else — scroll the page, and activate the focused
+  control — so it is deliberately narrow. It starts one only when ALL of: the route is
+  `/` (the dashboard; `/tasks` and `/help` are long scrolling pages where Space must
+  stay page-down), the event target is `<body>` (nothing focused — otherwise Space
+  belongs to that button or checkbox, including the sidebar's own Demo button), no
+  `<Modal>` is open (`isAnyModalOpen()`, exported from `ui/Modal.tsx`, reads the same
+  stack Escape uses), and no modifier is held. Anything narrower than this and it
+  wouldn't fire; anything wider and it would eat a keystroke that already had a job.
+  ⚠️ The trade-off it does make: on the dashboard, with nothing focused, Space no
+  longer page-scrolls. Wheel, arrows and PageDown still do. If that ever bites, the
+  guard to tighten is the `pathname === '/'` branch in `lib/demo.tsx`. **The sidebar stays on screen
   for the whole demo** — it is deliberately NOT part of any animation; the overlay is
   mounted inside the content column (`.demo-column`, `relative`) so it covers only the
   header + main area.
@@ -1404,6 +1416,123 @@ the `/* Demo mode */` block at the end of `src/index.css`.
   ⚠️ `FitBox` measures with a ResizeObserver, which reports the LAYOUT box and so ignores
   the transform — no feedback loop between scaling and measuring. It renders hidden until
   measured so it can't flash at 1:1 first.
+
+## 25. Per-card full screen (the normal app) ⚠️
+
+`src/components/CardPresenter.tsx` + `PanelExpand.tsx`, geometry shared with demo
+mode in `src/lib/present.ts`.
+
+- **What it is**: hovering a dashboard card reveals a small full-screen control beside
+  the "?"; clicking it lifts that card out of the grid onto the whole content column
+  under its own title (no sub-caption). Escape, the Close button or the backdrop puts
+  it back. The card stays LIVE — same React tree, charts still hoverable — because it
+  is the same `presentCards()` mechanism demo mode uses, not a re-render.
+- **⚠️ It fills, demo mode magnifies.** Both scale, but for opposite reasons: a demo
+  slide is laid out narrow and blown up because a projector needs big type; here the
+  card is laid out at `APP_MAX_LW` (1120 ≈ a full-width card on a 1440 screen) so it
+  is 1:1 there and magnified on anything wider — ~1.5x at 2000px. Uncapped, a 1680px
+  layout left 12px legend text at 12px and the container-query stat figures resolved
+  to ~400px tall, pushing the card past its area.
+- **⚠️ A `fit` card's height must be re-measured, not taken once.** Its content is
+  still moving when it arrives: it REMOUNTS (useDemoRevealKey), its `cqw` figures
+  re-resolve at the new width, and a presented panel may show more rows than it did in
+  the grid. Freezing the first measurement left content spilling out of the card — up
+  to 1483px on a 2000px screen. `presentCards` keeps a ResizeObserver and re-applies
+  scale and top from `offsetHeight`, which ignores transforms, so it can't feed back.
+  `allowShrink` lets such a card go below 1:1 rather than overflow.
+- **Panels show MORE when presented, not just bigger**: `useIsPresented(ref)` (true
+  when the ref sits inside the presented card) drives it — the Effort card lists 12
+  time consumers instead of 3, and `DonutChart` grows its ring from the fixed 180px up
+  to `RING_MAX` 460 with the centre label tracking it. ⚠️ The ring's column must get
+  `self-stretch` when presented: its parent row is `items-center`, so it otherwise
+  hugs its content and the measured height IS the ring's — it could never grow.
+  `useIsPresented` reads the APP's presenter only, so demo slides are unaffected.
+- **⚠️ `Modal` is portalled to `<body>`** (`ui/Modal.tsx`). `PanelInfo` renders its
+  dialog inside the card, and `position: fixed` resolves against the nearest
+  TRANSFORMED ancestor — so a card that is scaled (on hover, or presented, or on a
+  slide) would trap its own dialog inside itself. React events still bubble through
+  the React tree, so callers are unaffected.
+- **Hover affordances**: every header control — the "?", the full-screen button, the
+  Group switch, the demand chart's type tabs — carries `.panel-action` and is hidden
+  until the card is hovered or something inside it is focused (always visible where
+  there is no hover, i.e. touch). Cards lift by `scale(1.008)` on hover, scoped to
+  `main[data-page='/']`: it means "this opens full screen", so the task list's filter
+  panel and table — cards too — must not move. `isAnyModalOpen()` from `ui/Modal.tsx`
+  exposes the open-dialog stack for global shortcuts.
+
+
+## 26. Calendar page & holidays ⚠️
+
+`src/pages/Calendar.tsx` (route `/calendar`, nav item between Task List and Settings),
+`src/lib/calendar.ts` (per-day load), `src/lib/holidays.ts` (public holidays), and the
+**Holidays & closures** card in Settings (`HolidaysCard`).
+
+- **What it shows**: a year as 12 month grids, one cell per day, coloured by the work
+  active that day — Tasks (count), Assets or Effort (only when rates exist). A task's
+  assets/effort are spread EVENLY across its span, so the calendar shows where the work
+  sat, not when it was booked. Drafts are excluded, like the dashboard. Hover a day →
+  the side panel lists its holidays and tasks (heaviest first); hover a task → every day
+  of its span rings in navy; hovering a day alone rings the union of its tasks' spans
+  faintly; click a day to pin it; click a task → the Task details modal.
+- **Colour**: an orange→red ramp (`HEAT` in calendar.ts), pale orange tint → RMIT
+  orange `#F58220` → RMIT red `#E61E2A`, dark ink on the orange steps and white once it
+  turns red. ⚠️ Hue AND lightness change between steps on purpose — a red-only ramp was
+  tried first and neighbouring shades could not be told apart on a 20px cell; a brown
+  top step separated but read as off-brand. Six steps, not more: with the Tasks unit
+  the values are small integers, so more bands than distinct values just sit empty.
+  ⚠️ **Dark mode has its own ramp** (`HEAT_DARK`), not the light one dimmed: deep maroon
+  a step above the navy card → bright coral `#ff5a5a`, so quiet days sink into the
+  background and busy ones glow. The light ramp's pale tints go washed-out pink on
+  navy, and a dark low end would read backwards on white — so `heatColor(level, dark)`
+  / `heatInk(level, dark)` take the theme from `useTheme()`. ⚠️ Toggling the `dark`
+  class on `<html>` directly (e.g. in a test) does NOT switch the ramp — the theme
+  store only notifies through `apply()`/`previewTheme()`; use the header toggle.
+  ⚠️ Levels are RANK-based (quantile bands), not proportional: tasks run for weeks, so
+  most days sit near the maximum and a proportional scale came out one solid colour; a
+  square-root scale made it WORSE (it lifts low values). Integer ties can still merge a
+  band, so 5 of 6 shades in use is expected. Days after today are faded to 18% — a plan,
+  not a record — and return to full strength when highlighted, hovered or pinned. The
+  date number is deliberately small (0.34 of the cell): the colour is the data. Holiday
+  markers avoid the ramp: navy dot = Melbourne, gold dot = Vietnam, dashed navy
+  outline = RMIT closure.
+- **Fits the viewport instead of scrolling** (`useFitCells`): at `xl` and up the page is
+  one viewport tall, the card fills it, and the day-cell size is computed from BOTH the
+  grid's width and height, subtracting gaps and month headers, so all twelve months fit.
+  ⚠️ It tries 4, 3 and 2 month columns and keeps whichever gives the LARGEST cell — a
+  width breakpoint alone chose 3 columns (4 rows) at 1440×900, where height was the
+  binding constraint, and drove the cells to the 16px floor; 4 columns fits at 21px.
+  When cells would fall below 21px it drops the weekday label row to buy them height
+  (`fit.weekdays`). Measured: 21px at 1440×900, 32px at 1920×1080, 16px at 1280×800 —
+  all without scrolling. Below `xl` the calendar stacks above the panel and only width
+  constrains, so it scrolls; cells never drop below 16px because scrolling beats an
+  illegible calendar. The side panel is 300px at `xl`, 340px at `2xl`. ⚠️ The spacing
+  constants at the top of Calendar.tsx must match the JSX gaps or the fit is off by a
+  few pixels and the last row scrolls.
+- **⚠️ The hovered day must survive the pointer leaving the grid.** The first cut reset
+  it on the grid's `mouseleave`, which fired the moment you moved toward the side
+  panel — so a task row could never be hovered without pinning first. The day now stays
+  until another is hovered; only the hovered TASK clears on leaving the list.
+- **Holidays**: Victoria is computed by RULE (nth weekday, Easter algorithm, weekend
+  substitutes for New Year / Australia Day, additional days for Christmas/Boxing Day —
+  cross-checked against RMIT's page: Boxing Day additional = Mon 28 Dec 2026). The one
+  gazetted-by-year VIC holiday, Grand Final Friday, is a TABLE (2023–26) with a
+  last-Friday-of-September fallback flagged provisional. Vietnam's lunar holidays can't
+  be computed, so `VIETNAM` is a table of the official announced PERIODS (whole break
+  incl. folded weekends) for 2024–26, with 2027 = the Ministry's proposal, flagged
+  provisional; off-table years get fixed-date holidays only. RMIT closure = 25 Dec–1 Jan
+  (published for 2025 & 2026; assumed thereafter, flagged). Sources are in the file
+  header. ⚠️ Add a row to `VIETNAM` and `GRAND_FINAL_FRIDAY` each autumn when the next
+  year is gazetted — `vietnamConfirmed()` drives the "(provisional)" legend note.
+- **Team holidays** (`AppSettings.customHolidays`, column `settings.custom_holidays`
+  jsonb): any day or run of days, scoped Whole team / Melbourne / Vietnam, added and
+  removed in Settings → Holidays & closures. `normalizeCustomHolidays()` (holidays.ts)
+  is the single validator used by BOTH repositories — it drops malformed rows and
+  repairs `end < start` rather than letting one bad entry take the calendar down.
+  Follows the usual migration pattern: `isMissingCustomHolidaysColumn` retries the
+  upsert without it, and `saveSettings` falls back to the in-memory value so a holiday
+  added before the column exists stays on screen (it won't persist until
+  `schema.sql` is re-run — the ALTER is in there).
+
 - **⚠️ Scaled cards and pointer maths.** Anything that converts client pixels into a
   chart's own coordinate space must divide by the measured scale, or it is wrong by the
   scale factor and increasingly so away from the element's top-left corner.

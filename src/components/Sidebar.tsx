@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   ArrowRight,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   BookOpen,
@@ -26,6 +27,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/tasks', label: 'Task List', icon: List },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/help', label: 'Help', icon: BookOpen },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -152,7 +154,13 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
                 if (demo.active) demo.next()
                 else demo.start()
               }}
-              title={demo.active ? (demo.isLast ? 'Finish demo (→)' : 'Next (→)') : 'Demo mode — a presentation walkthrough of the dashboard'}
+              title={
+                demo.active
+                  ? demo.isLast
+                    ? 'Finish demo (Space)'
+                    : 'Next (Space)'
+                  : 'Demo mode — a presentation walkthrough of the dashboard (Space)'
+              }
               className={cx(
                 'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
                 collapsed ? 'justify-center' : 'justify-center md:justify-start',

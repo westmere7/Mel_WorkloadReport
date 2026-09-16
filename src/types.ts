@@ -202,6 +202,23 @@ export interface ChartGroups {
   type: ChartGroup[]
 }
 
+/** Who a team-defined holiday applies to. */
+export type HolidayScope = 'melbourne' | 'vietnam' | 'all'
+
+/**
+ * A day (or run of days) the team is away that isn't a public holiday — a team
+ * retreat, an office closure. Shown on the Calendar alongside the built-in
+ * Melbourne / Vietnam public holidays and RMIT's Christmas closure.
+ */
+export interface CustomHoliday {
+  id: string
+  name: string
+  /** ISO dates, inclusive. `end` >= `start`; a single day repeats `start`. */
+  start: string
+  end: string
+  scope: HolidayScope
+}
+
 /** User-editable lists + app preferences. */
 export interface AppSettings {
   squads: string[]
@@ -250,6 +267,8 @@ export interface AppSettings {
    * this text cannot override. Empty string means "use the built-in default".
    */
   advisorPrompt: string
+  /** Team-defined holidays and closures (Settings → Holidays). See CustomHoliday. */
+  customHolidays: CustomHoliday[]
 }
 
 /** Empty breakdown helper. */

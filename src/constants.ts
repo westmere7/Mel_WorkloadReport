@@ -518,6 +518,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   // Empty = follow DEFAULT_ADVISOR_PROMPT, so improvements to the default reach
   // teams that never edited it.
   advisorPrompt: '',
+  customHolidays: [],
 }
 
 /** Legacy fixed breakdown keys → their default display names, for migrating old data. */

@@ -168,7 +168,7 @@ export function PanelInfo({ panel }: { panel: keyof typeof PANEL_INFO }) {
         onClick={() => setOpen(true)}
         title={`What does "${info.title}" mean?`}
         aria-label={`What does "${info.title}" mean?`}
-        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-line text-[10px] font-bold text-muted transition hover:border-faint hover:text-ink"
+        className="panel-action flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-line text-[10px] font-bold text-muted transition hover:border-faint hover:text-ink"
       >
         ?
       </button>

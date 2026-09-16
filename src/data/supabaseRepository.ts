@@ -1,4 +1,5 @@
 import type { AdvisorCacheEntry } from '../lib/advisor/cache'
+import { normalizeCustomHolidays } from '../lib/holidays'
 import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
 import type { Repository } from './repository'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
@@ -182,6 +183,12 @@ function isMissingKeywordsColumn(err: unknown): boolean {
 }
 
 /** True if a Supabase error is complaining about a missing `chart_groups` column (pre-migration). */
+/** True if a Supabase error is complaining about a missing settings `custom_holidays` column (pre-migration). */
+function isMissingCustomHolidaysColumn(err: unknown): boolean {
+  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
+  return msg.includes('custom_holidays') && (msg.includes('column') || msg.includes('schema cache'))
+}
+
 function isMissingChartGroupsColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
   return msg.includes('chart_groups') && (msg.includes('column') || msg.includes('schema cache'))
@@ -652,6 +659,7 @@ export class SupabaseRepository implements Repository {
       campaignKeywords: normalizeKeywordMap(data.campaign_keywords),
       chartGroups: normalizeChartGroups(data.chart_groups),
       advisorPrompt: typeof data.advisor_prompt === 'string' ? data.advisor_prompt : '',
+      customHolidays: normalizeCustomHolidays(data.custom_holidays),
     }
   }
 
@@ -682,8 +690,14 @@ export class SupabaseRepository implements Repository {
       asset_rates: settings.assetRates,
       asset_rates_log: settings.assetRatesLog ?? [],
       advisor_prompt: settings.advisorPrompt,
+      custom_holidays: settings.customHolidays ?? [],
     }
     let { data, error } = await upsert(payload)
+    // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
+    if (error && isMissingCustomHolidaysColumn(error)) {
+      delete payload.custom_holidays
+      ;({ data, error } = await upsert(payload))
+    }
     // Retry dropping columns the DB hasn't migrated yet, so the rest still saves.
     if (error && isMissingBoardNamesColumn(error)) {
       delete payload.monday_board_names
@@ -745,6 +759,9 @@ export class SupabaseRepository implements Repository {
       sizeDurations: normalizeSizeDurations(data.size_durations ?? settings.sizeDurations),
       allowRemoveUsed: data.allow_remove_used ?? settings.allowRemoveUsed,
       peopleMondayIds: data.people_monday ?? settings.peopleMondayIds,
+      // Falls back to what was just saved when the column hasn't been migrated yet,
+      // so a team holiday added before `custom_holidays` exists stays on screen.
+      customHolidays: data.custom_holidays ? normalizeCustomHolidays(data.custom_holidays) : settings.customHolidays,
       functions: data.functions
         ? normalizeFunctions(data.functions, data.types ?? settings.types, data.asset_types ?? settings.assetTypes)
         : settings.functions,

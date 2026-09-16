@@ -4,10 +4,12 @@ import { NewTaskProvider } from './components/NewTaskModal'
 import { StoreProvider, useStore } from './data/store'
 import { useAuth } from './lib/auth'
 import { DemoProvider } from './lib/demo'
+import { CardPresenterProvider } from './components/CardPresenter'
 import { Dashboard } from './pages/Dashboard'
 import { AdvisorPage } from './pages/Advisor'
 import { HelpPage } from './pages/Help'
 import { TaskList } from './pages/TaskList'
+import { CalendarPage } from './pages/Calendar'
 import { SettingsPage } from './pages/Settings'
 import { ShowcasePage } from './pages/Showcase'
 import { ShowcaseViewerPage } from './pages/ShowcaseViewer'
@@ -23,6 +25,8 @@ export default function App() {
       <Route element={<StoreShell />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/tasks" element={<TaskList />} />
+        {/* Public like the dashboard — a year of workload as a heatmap. */}
+        <Route path="/calendar" element={<CalendarPage />} />
         {/* Public like the dashboard — reading the manual needs no sign-in. */}
         <Route path="/help" element={<HelpPage />} />
         {/* Public too: anyone may READ the analysis; generating is gated inside. */}
@@ -61,9 +65,11 @@ function StoreShell() {
     <StoreProvider>
       <NewTaskProvider>
         <DemoProvider>
-          <Layout>
-            <ShellBody />
-          </Layout>
+          <CardPresenterProvider>
+            <Layout>
+              <ShellBody />
+            </Layout>
+          </CardPresenterProvider>
         </DemoProvider>
       </NewTaskProvider>
     </StoreProvider>

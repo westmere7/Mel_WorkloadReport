@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Archive, ArrowRightLeft, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Settings2, Sparkles, Tag, Timer, Trash2, Users, X } from 'lucide-react'
+import { AlertTriangle, Archive, ArrowRightLeft, CalendarDays, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Settings2, Sparkles, Tag, Timer, Trash2, Users, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -21,7 +21,7 @@ import {
   DEFAULT_ADVISOR_PROMPT,
   ADVISOR_PROMPT_MAX,
 } from '../constants'
-import { cx, toMessage } from '../lib/format'
+import { cx, formatDate, toMessage } from '../lib/format'
 import { isMondayLookupEnabled } from '../lib/monday'
 import { APP_VERSION, CHANGELOG, type ChangeKind } from '../lib/changelog'
 import {
@@ -36,7 +36,7 @@ import { ChartGroupsModal } from '../components/ChartGroupsModal'
 import { AssetRatesModal } from '../components/AssetRatesModal'
 import { useScrollFade } from '../lib/useScrollFade'
 import type { LucideIcon } from 'lucide-react'
-import type { AppSettings, FunctionConfig, Size } from '../types'
+import type { AppSettings, FunctionConfig, HolidayScope, Size } from '../types'
 
 type ListKey = keyof Pick<AppSettings, 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes'>
 
@@ -77,6 +77,7 @@ export function SettingsPage() {
       {/* Dashboard display preferences (collapsible) — includes chart groups,
           deep-linked from the dashboard panels' gear icons (#chart-groups). */}
       <DashboardPrefsCard />
+      <HolidaysCard />
 
       {/* Groups — collapsible section holding every editable reference list */}
       <CollapsibleSection
@@ -1159,6 +1160,129 @@ function AdvisorCard() {
 
 /** Collapsible Dashboard settings: display toggles (per-browser) + synced chart
  *  groups. Deep-linked to #chart-groups by the gear on the dashboard panels. */
+const SCOPE_LABEL: Record<HolidayScope, string> = { all: 'Whole team', melbourne: 'Melbourne', vietnam: 'Vietnam' }
+
+/**
+ * Team-defined holidays and closures — anything from a retreat to an office
+ * shutdown — layered over the built-in public holidays on the Calendar page. Any
+ * day or run of days, for the whole team or one location.
+ */
+function HolidaysCard() {
+  const { settings, saveSettings } = useStore()
+  const list = settings.customHolidays ?? []
+  const [name, setName] = useState('')
+  const [start, setStart] = useState('')
+  const [end, setEnd] = useState('')
+  const [scope, setScope] = useState<HolidayScope>('all')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const add = async () => {
+    const label = name.trim()
+    if (!label) return setError('Give the holiday a name.')
+    if (!start) return setError('Pick a start date.')
+    if (end && end < start) return setError('The end date is before the start.')
+    setBusy(true)
+    setError(null)
+    try {
+      const next = [...list, { id: crypto.randomUUID(), name: label, start, end: end || start, scope }].sort((a, b) =>
+        a.start.localeCompare(b.start),
+      )
+      await saveSettings({ ...settings, customHolidays: next })
+      setName('')
+      setStart('')
+      setEnd('')
+    } catch (e) {
+      setError(toMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const remove = async (id: string) => {
+    setBusy(true)
+    try {
+      await saveSettings({ ...settings, customHolidays: list.filter((h) => h.id !== id) })
+    } catch (e) {
+      setError(toMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <CollapsibleSection
+      title="Holidays & closures"
+      subtitle="Days the team is away, shown on the Calendar with the built-in Melbourne and Vietnam public holidays and RMIT's Christmas closure."
+      storageKey="mwr.settings.holidaysOpen"
+      defaultOpen={false}
+    >
+      <div className="space-y-4">
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1.6fr)_repeat(2,minmax(0,1fr))_minmax(0,1fr)_auto]">
+          <input
+            className="input"
+            placeholder="Team retreat, office closure…"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-label="Holiday name"
+          />
+          <input type="date" className="input" value={start} onChange={(e) => setStart(e.target.value)} aria-label="Start date" />
+          <input
+            type="date"
+            className="input"
+            value={end}
+            min={start || undefined}
+            onChange={(e) => setEnd(e.target.value)}
+            aria-label="End date (optional)"
+            title="End date — leave blank for a single day"
+          />
+          <select className="input" value={scope} onChange={(e) => setScope(e.target.value as HolidayScope)} aria-label="Applies to">
+            {(Object.keys(SCOPE_LABEL) as HolidayScope[]).map((s) => (
+              <option key={s} value={s}>
+                {SCOPE_LABEL[s]}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="btn-primary whitespace-nowrap" onClick={add} disabled={busy}>
+            <Plus className="h-4 w-4" /> Add
+          </button>
+        </div>
+        {error && <p className="text-xs text-brand-600">{error}</p>}
+
+        {list.length === 0 ? (
+          <p className="flex items-center gap-2 text-xs text-muted">
+            <CalendarDays className="h-4 w-4 text-faint" /> No team holidays yet — public holidays and the RMIT closure are
+            always shown.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line rounded-xl border border-line">
+            {list.map((h) => (
+              <li key={h.id} className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
+                <CalendarDays className="h-4 w-4 shrink-0 text-faint" />
+                <span className="min-w-0 flex-1 truncate font-medium text-ink">{h.name}</span>
+                <span className="shrink-0 text-xs text-muted">
+                  {formatDate(h.start)}
+                  {h.end !== h.start && ` → ${formatDate(h.end)}`}
+                </span>
+                <Badge tone={h.scope === 'melbourne' ? 'navy' : h.scope === 'vietnam' ? 'gold' : 'plum'}>{SCOPE_LABEL[h.scope]}</Badge>
+                <button
+                  type="button"
+                  onClick={() => remove(h.id)}
+                  disabled={busy}
+                  title="Remove"
+                  aria-label={`Remove ${h.name}`}
+                  className="rounded-md p-1 text-muted transition hover:bg-subtle hover:text-brand-600"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </CollapsibleSection>
+  )
+}
+
 function DashboardPrefsCard() {
   const prefs = useDashboardPrefs()
   const { settings } = useStore()

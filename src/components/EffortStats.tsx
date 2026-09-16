@@ -1,11 +1,14 @@
+import { useRef } from 'react'
 import { Card, CardHeader } from './ui/Card'
 import { PanelInfo } from './PanelInfo'
+import { PanelExpand } from './PanelExpand'
 import { AnimatedNumber } from './ui/AnimatedNumber'
 import { TrendDelta } from './ui/TrendDelta'
 import { SIZE_COLORS, SIZE_SHORT } from '../constants'
 import { formatHours } from '../lib/effort'
 import { cx } from '../lib/format'
 import { DEMO_INTRO_EASE, useDemoIntro } from '../lib/demo'
+import { useIsPresented } from './CardPresenter'
 import type { NamedCount } from '../lib/analytics'
 
 /** Shared comparison context for the effort-mode header panels. */
@@ -86,7 +89,12 @@ export function VolumeCompactCard({
             ? `${cmp.activeYear} over ${cmp.srcYear}${cmp.ytd ? ` — to ${cmp.todayDM}` : ''}`
             : 'What was produced, counted'
         }
-        action={<PanelInfo panel="volume" />}
+        action={
+              <div className="flex items-center gap-1.5">
+                <PanelExpand />
+                <PanelInfo panel="volume" />
+              </div>
+            }
         className={HEADER_BOX}
       />
       <div className="flex items-stretch gap-4">
@@ -113,6 +121,8 @@ export function VolumeCompactCard({
 
 /** How many of the leading asset types to list before collapsing the rest. */
 const TOP_TYPES = 3
+/** …and how many once the card is full screen, where there is room to spare. */
+const TOP_TYPES_PRESENTED = 12
 
 // Volume and Effort sit side by side, so their big FIGURES must land on the same
 // horizontal line. Centring each block in its own card can't do that, and a header
@@ -122,7 +132,10 @@ const TOP_TYPES = 3
 // fixed-height figure row that bottom-aligns the glyphs. Captions below keep their
 // own natural spacing.
 const HEADER_BOX = 'h-[3.75rem] [&>div>p]:line-clamp-2'
-const FIGURE_ROW = 'flex h-[5.5rem] items-end'
+// `figure-row` is a stable hook for CSS: presenting a card full screen widens it a
+// long way, and these figures are container-query sized, so the fixed height has to
+// give or the number overflows it upward into the header (see index.css).
+const FIGURE_ROW = 'figure-row flex h-[5.5rem] items-end'
 
 /**
  * One task-size distribution bar. `fmt` renders a segment's value for the tooltip.
@@ -262,6 +275,11 @@ export function EffortSummaryCard({
   cmp: CompareCtx
 }) {
   const { intro, ready } = useDemoIntro()
+  // Full screen has room for more than three, and this is the one card that openly
+  // hides data ("remaining 46% hidden") — so presenting it shows more of the list.
+  const topRef = useRef<HTMLDivElement>(null)
+  const presented = useIsPresented(topRef)
+  const topN = presented ? TOP_TYPES_PRESENTED : TOP_TYPES
   // Hours per asset — the figure that actually separates effort from volume: it
   // says whether the month's mix was heavy or light, which a count can't.
   const perAsset = assets > 0 ? hours / assets : 0
@@ -283,7 +301,12 @@ export function EffortSummaryCard({
             : 'How much work that actually was, weighted by output rate'
         }
         className={HEADER_BOX}
-        action={<PanelInfo panel="effort" />}
+        action={
+              <div className="flex items-center gap-1.5">
+                <PanelExpand />
+                <PanelInfo panel="effort" />
+              </div>
+            }
       />
 
       {/* The hours total is the headline, so it gets the card's whole width; the
@@ -321,20 +344,20 @@ export function EffortSummaryCard({
           Volume panel; this is the view only effort can give — a type can be a
           sliver of the output and a big slice of the work. */}
       {byType.length > 0 && (
-        <div className="mt-3 space-y-1.5">
+        <div ref={topRef} className="mt-3 space-y-1.5">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-faint">
-            Top {Math.min(TOP_TYPES, byType.length)} time consumers
-            {byType.length > TOP_TYPES && (
-              // The three shares don't sum to 100%, so name what's left out.
+            Top {Math.min(topN, byType.length)} time consumers
+            {byType.length > topN && (
+              // The listed shares don't sum to 100%, so name what's left out.
               <span className="normal-case">
                 {' '}
-                (remaining {Math.round((byType.slice(TOP_TYPES).reduce((a, d) => a + d.value, 0) / hours) * 100)}%
+                (remaining {Math.round((byType.slice(topN).reduce((a, d) => a + d.value, 0) / hours) * 100)}%
                 hidden)
               </span>
             )}
           </span>
           <ol className="space-y-1">
-            {byType.slice(0, TOP_TYPES).map((d, i) => (
+            {byType.slice(0, topN).map((d, i) => (
               <li key={d.name} className="flex items-center gap-2" title={`${d.name}: ${formatHours(d.value)}`}>
                 <span className="w-3 shrink-0 text-[10px] font-bold text-faint">{i + 1}</span>
                 {/* Asset-type names run long ("Brochure (under 8 Pages)"), so give

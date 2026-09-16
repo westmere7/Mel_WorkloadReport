@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 /**
@@ -8,6 +9,16 @@ import { X } from 'lucide-react'
  * editor) would take its parent down with it on a single keypress.
  */
 const openModals: object[] = []
+
+/**
+ * True while any <Modal> is open. For global keyboard shortcuts that must not fire
+ * over a dialog — demo mode's "Space starts a demo" is the caller (see lib/demo.tsx).
+ * Reads the same stack Escape uses, so it covers every Modal-based dialog in the app
+ * without each one having to opt in.
+ */
+export function isAnyModalOpen(): boolean {
+  return openModals.length > 0
+}
 
 interface ModalProps {
   open: boolean
@@ -47,7 +58,14 @@ export function Modal({ open, onClose, title, children, footer, wide, widthClass
 
   if (!open) return null
 
-  return (
+  // ⚠️ Portalled to <body> rather than rendered where it sits in the tree. A modal
+  // opened from inside a card (PanelInfo's "?") would otherwise be a DOM descendant
+  // of that card — and `position: fixed` resolves against the nearest TRANSFORMED
+  // ancestor, not the viewport, so the dialog would be trapped inside the card
+  // whenever the card is scaled: on hover (see .card:hover in index.css), and on a
+  // demo slide. React events still bubble through the React tree, so nothing about
+  // the callers changes.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-900/70 p-4 backdrop-blur-sm sm:p-8"
       onClick={closeOnBackdrop ? onClose : undefined}
@@ -69,6 +87,7 @@ export function Modal({ open, onClose, title, children, footer, wide, widthClass
           <div className="flex justify-end gap-2 border-t border-line px-5 py-4">{footer}</div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

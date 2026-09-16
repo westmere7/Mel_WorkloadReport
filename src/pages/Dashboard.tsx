@@ -10,6 +10,7 @@ import { ChartGroupsModal } from '../components/ChartGroupsModal'
 import { EffortInfoModal } from '../components/EffortInfoModal'
 import { EffortSummaryCard, VolumeCompactCard } from '../components/EffortStats'
 import { PanelInfo } from '../components/PanelInfo'
+import { PanelExpand } from '../components/PanelExpand'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
 import { StatCard } from '../components/ui/StatCard'
@@ -395,7 +396,9 @@ export function Dashboard() {
   // Per-panel controls: an independent grouped/individual toggle (only when that
   // panel's dimension has groups) + the gear that opens the Chart groups pop-up.
   const groupControls = (on: boolean, toggle: () => void, hasGroups: boolean, openTab: 'asset' | 'type') => (
-    <div className="flex items-center gap-1.5">
+    // `panel-action`: hidden until the card is hovered, like the ? and full-screen
+    // controls beside it — the header should read as a title, not a toolbar.
+    <div className="panel-action flex items-center gap-1.5">
       {hasGroups && (
         <button
           type="button"
@@ -805,7 +808,12 @@ export function Dashboard() {
           <CardHeader
             title="Tasks by squad"
             subtitle={`Requests by stakeholder team${squadCompareSuffix}`}
-            action={<PanelInfo panel="tasksBySquad" />}
+            action={
+              <div className="flex items-center gap-1.5">
+                <PanelExpand />
+                <PanelInfo panel="tasksBySquad" />
+              </div>
+            }
           />
           <RankedBars
             data={bySquadTasks}
@@ -820,7 +828,12 @@ export function Dashboard() {
           <CardHeader
             title="Assets by squad"
             subtitle={`Deliverables by stakeholder team${squadCompareSuffix}`}
-            action={<PanelInfo panel="assetsBySquad" />}
+            action={
+              <div className="flex items-center gap-1.5">
+                <PanelExpand />
+                <PanelInfo panel="assetsBySquad" />
+              </div>
+            }
           />
           <RankedBars
             data={bySquad}
@@ -882,6 +895,7 @@ export function Dashboard() {
                     </>
                   ) : null}
                   </div>
+                  <PanelExpand />
                   <PanelInfo panel="workload" />
                 </div>
               }
@@ -918,7 +932,12 @@ export function Dashboard() {
             <CardHeader
               title="Asset count by campaign"
               subtitle={`Total deliverables produced per campaign${campaignSubtitleSuffix}${compareSubtitleSuffix}`}
-              action={<PanelInfo panel="campaign" />}
+              action={
+              <div className="flex items-center gap-1.5">
+                <PanelExpand />
+                <PanelInfo panel="campaign" />
+              </div>
+            }
             />
             <div className="relative min-h-[220px] flex-1">
               <div className="absolute inset-0">
@@ -959,6 +978,7 @@ export function Dashboard() {
                       rawAssetGroups.length > 0,
                       'asset',
                     )}
+                    <PanelExpand />
                     <PanelInfo panel="assetMix" />
                   </div>
                 }
@@ -990,6 +1010,7 @@ export function Dashboard() {
                       rawTypeGroups.length > 0,
                       'type',
                     )}
+                    <PanelExpand />
                     <PanelInfo panel="workTypeMix" />
                   </div>
                 }
@@ -1016,8 +1037,9 @@ export function Dashboard() {
               action={
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   {/* Dimension tabs — split the chart by asset type or work type
-                      (mirrors the Settings → Dashboard preference; local only). */}
-                  <div className="inline-flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
+                      (mirrors the Settings → Dashboard preference; local only).
+                      Hover-only with the rest of the header controls. */}
+                  <div className="panel-action inline-flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
                     {(
                       [
                         ['asset', 'Asset types'],
@@ -1040,13 +1062,14 @@ export function Dashboard() {
                       </button>
                     ))}
                   </div>
-                  <span className="h-4 w-px shrink-0 bg-line" aria-hidden="true" />
+                  <span className="panel-action h-4 w-px shrink-0 bg-line" aria-hidden="true" />
                   {groupControls(
                     groupDemand,
                     () => setDashboardPrefs({ groupDemand: !groupDemand }),
                     demandHasGroups,
                     demandDim,
                   )}
+                  <PanelExpand />
                   <PanelInfo panel="demand" />
                 </div>
               }

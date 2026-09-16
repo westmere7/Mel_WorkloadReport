@@ -601,14 +601,15 @@ html[data-demo='gauge'] .demo-panel {
   }
 }
 
-/* Slides: the caption fades up; the card only FADES — it carries an inline
-   `transform: scale()` (see applySlide) and a keyframe that touches transform
-   would overwrite it, including after it finishes via `both`. Its animationstart
-   is also what remounts the card's content so the charts replay (useDemoRevealKey). */
+/* A presented card (demo slide or the app's full-screen) only FADES — it carries an
+   inline `transform: scale()` from presentCards(), and a keyframe that touches
+   transform would overwrite it, including after it finishes via `both`. Its
+   animationstart is also what remounts the card's content so the charts replay
+   (useDemoRevealKey). The caption above it fades up. */
 .demo-slide-label {
   animation: demo-fade-up 500ms ease-out both;
 }
-.demo-slide-card {
+.present-card {
   animation: demo-fade 420ms ease-out both;
 }
 
@@ -617,7 +618,7 @@ html[data-demo='gauge'] .demo-panel {
   html[data-demo='reveal'] .demo-panel,
   .demo-overlay,
   .demo-slide-label,
-  .demo-slide-card,
+  .present-card,
   .demo-word > span,
   .demo-rule,
   .demo-sub,
@@ -628,4 +629,72 @@ html[data-demo='gauge'] .demo-panel {
     animation-duration: 1ms;
     animation-delay: 0ms;
   }
+}
+
+/* ── Card header actions & hover affordance ───────────────────────────────
+   The "?" (PanelInfo) and full-screen (PanelExpand) controls stay out of the way
+   until the card is hovered, or something inside it takes focus so the keyboard
+   can still reach them. Touch devices have no hover, so they stay visible there. */
+.panel-action {
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.card:hover .panel-action,
+.card:focus-within .panel-action {
+  opacity: 1;
+}
+@media (hover: none) {
+  .panel-action {
+    opacity: 1;
+  }
+}
+/* Never during a demo — on a projector they are a distraction. A card presented in
+   the app keeps its "?" though (you opened the panel to study it, so the explainer
+   is exactly what you might want next); its expand button unmounts on its own. */
+html[data-demo] .panel-action {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+/* A very slight lift so a card reads as something you can act on — the dashboard
+   only, where a card opens full screen. The task list's filter panel and table are
+   cards too and shouldn't move. Never while a card carries a presentation transform. */
+main[data-page='/'] .card {
+  transition: transform 160ms ease;
+}
+main[data-page='/'] .card:hover {
+  transform: scale(1.008);
+}
+html[data-demo] main .card:hover,
+html[data-present] main .card:hover {
+  transform: none;
+}
+
+/* The per-card full-screen backdrop + its title. */
+.present-overlay {
+  animation: demo-fade 200ms ease-out both;
+}
+.present-title {
+  animation: demo-fade-up 380ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main[data-page='/'] .card {
+    transition: none;
+  }
+  main[data-page='/'] .card:hover {
+    transform: none;
+  }
+  .present-overlay,
+  .present-title {
+    animation: none;
+  }
+}
+
+/* Presenting a card full screen widens it far past the dashboard column, and the
+   stat figures are container-query sized (`17cqw` / `24cqw`) inside a FIXED
+   `h-[5.5rem]` row — at that width the number's line box is taller than the row and
+   overflows it UPWARD, over the card's own header. Let the row grow instead. */
+html[data-present] .figure-row {
+  height: auto;
 }

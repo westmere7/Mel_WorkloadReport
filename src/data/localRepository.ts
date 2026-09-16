@@ -1,4 +1,5 @@
 import type { AppSettings, Task, TaskInput } from '../types'
+import { normalizeCustomHolidays } from '../lib/holidays'
 import type { Repository } from './repository'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
 import type { ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
@@ -226,6 +227,7 @@ export class LocalRepository implements Repository {
       chartGroups: normalizeChartGroups(stored.chartGroups),
       assetRates: normalizeAssetRates(stored.assetRates),
       assetRatesLog: normalizeRateLog(stored.assetRatesLog),
+      customHolidays: normalizeCustomHolidays(stored.customHolidays),
     }
   }
 

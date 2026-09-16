@@ -6,6 +6,7 @@ import { LoginModal } from './LoginModal'
 import { AccountModal } from './AccountModal'
 import { UpdateNotice } from './UpdateNotice'
 import { DemoOverlay } from './demo/DemoOverlay'
+import { CardPresenterOverlay } from './CardPresenter'
 import { useTheme } from '../lib/theme'
 import { useAuth } from '../lib/auth'
 import { cx } from '../lib/format'
@@ -13,6 +14,7 @@ import { cx } from '../lib/format'
 const TITLES: Record<string, { title: string; subtitle: string }> = {
   '/': { title: 'Dashboard', subtitle: '' },
   '/tasks': { title: 'Task List', subtitle: 'All registered tasks' },
+  '/calendar': { title: 'Calendar', subtitle: 'Workload by day, with public holidays' },
   '/advisor': { title: 'Advisor', subtitle: 'In development — a look at what’s coming' },
   '/showcase': { title: 'Showcase', subtitle: 'Build a shareable animated year-in-review' },
   '/settings': { title: 'Settings', subtitle: 'Manage campaigns, work types and people' },
@@ -58,9 +60,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <HeaderSlotContext.Provider value={setHeaderSlots}>
       <div className="flex h-screen overflow-hidden bg-surface">
         <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
-        {/* `relative` + `demo-column`: demo mode covers just this column (sidebar stays) and
-            positions its full-screen slide cards against it (see lib/demo.tsx). */}
-        <div className={cx('demo-column relative flex min-w-0 flex-1 flex-col', pathname === '/tasks' ? 'overflow-y-auto' : 'overflow-hidden')}>
+        {/* `relative` + `present-column`: demo mode and the per-card full-screen both
+            cover just this column (the sidebar stays) and position the lifted card
+            against it — see lib/present.ts. */}
+        <div className={cx('present-column relative flex min-w-0 flex-1 flex-col', pathname === '/tasks' ? 'overflow-y-auto' : 'overflow-hidden')}>
           {/* Top bar — wraps to two rows on mobile (title/controls, then the page slots).
               sm:min-h keeps the height identical across pages regardless of subtitle. */}
           <header className="demo-el mx-6 mt-6 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-card px-3 py-3 sm:min-h-20 sm:gap-x-4 sm:px-5 sm:py-4">
@@ -141,9 +144,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </header>
 
           {/* Extra bottom padding on mobile so content clears the fixed bottom nav. */}
-          <main className={cx('p-6 pb-24 pt-4 md:pb-6', pathname === '/tasks' ? 'flex-none' : 'flex-1 overflow-y-auto')}>{children}</main>
+          {/* `data-page`: the hover lift is an affordance for "this card opens full
+              screen", which is the dashboard only — the task list's filter panel and
+              table are cards too and must stay put (see index.css). */}
+          <main
+            data-page={pathname}
+            className={cx('p-6 pb-24 pt-4 md:pb-6', pathname === '/tasks' ? 'flex-none' : 'flex-1 overflow-y-auto')}
+          >
+            {children}
+          </main>
           {/* Demo-mode screens — null unless a demo is running (see lib/demo.tsx). */}
           <DemoOverlay />
+          {/* Per-card full-screen — null unless a card is presented. */}
+          <CardPresenterOverlay />
           {/* Bottom navigation — mobile only (the sidebar is hidden there). */}
           <MobileNav />
         </div>
