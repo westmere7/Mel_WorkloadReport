@@ -520,8 +520,8 @@ html[data-demo='reveal'] .demo-panel {
 
 /* 4. …and leave quickly in the same order before the gauge fades in. */
 html[data-demo='gauge'] .demo-panel {
-  animation: demo-panel-out 420ms cubic-bezier(0.4, 0, 1, 1) both;
-  animation-delay: calc(var(--demo-i, 0) * 45ms);
+  animation: demo-panel-out 300ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation-delay: calc(var(--demo-i, 0) * 25ms);
 }
 @keyframes demo-panel-out {
   to {
@@ -534,8 +534,8 @@ html[data-demo='gauge'] .demo-panel {
   animation: demo-fade 320ms ease-out both;
 }
 .demo-overlay-late {
-  animation-duration: 600ms;
-  animation-delay: 950ms;
+  animation-duration: 400ms;
+  animation-delay: 500ms;
 }
 @keyframes demo-fade {
   from {
@@ -588,7 +588,8 @@ html[data-demo='gauge'] .demo-panel {
   animation: demo-fade-up 700ms ease-out 1100ms both;
 }
 .demo-gauge {
-  animation: demo-fade-up 700ms ease-out 1100ms both;
+  /* No extra delay: the overlay above is already invisible until 500 ms. */
+  animation: demo-fade-up 450ms ease-out both;
 }
 @keyframes demo-fade-up {
   from {

@@ -41,7 +41,7 @@ export function DemoOverlay() {
       )}
       {/* Keyed by slide so re-entering it replays the bar intro. */}
       {stage === 'slide' && currentSlide?.custom === 'rates' && <RatesSlide key={`rates-${slide}`} />}
-      {stage === 'gauge' && <Gauge startDelayMs={1500} />}
+      {stage === 'gauge' && <Gauge startDelayMs={500} />}
     </div>
   )
 }

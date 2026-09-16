@@ -47,14 +47,14 @@ function bandAt(theta: number): number {
   return Math.min(BANDS.length - 1, Math.max(0, Math.floor((theta + 90) / SWEEP)))
 }
 
-// Spring tuning. ω₀ sets the sweep speed (≈1.2 s to first reach the target);
-// ζ < 1 is what makes it overshoot and bounce — ~0.42 gives a visible first
-// bounce, a small second one, then rest.
-const OMEGA = 5.2
-const ZETA = 0.42
+// Spring tuning. ω₀ sets the sweep speed (≈0.7 s to first reach the target);
+// ζ < 1 is what makes it overshoot and bounce — ~0.45 gives a visible first
+// bounce, a small second one, then rest by ~1.5 s.
+const OMEGA = 8
+const ZETA = 0.45
 const START = -90
 const TARGET = 0 // dead centre — middle of the "High" band
-const REST_AFTER_S = 2.4 // when the idle tremble fades in
+const REST_AFTER_S = 1.5 // when the idle tremble fades in
 
 export function Gauge({ startDelayMs = 0 }: { startDelayMs?: number }) {
   const needleRef = useRef<SVGGElement>(null)
@@ -77,7 +77,7 @@ export function Gauge({ startDelayMs = 0 }: { startDelayMs?: number }) {
     let v = 0
     let last = 0
     let elapsed = 0
-    let nextKick = REST_AFTER_S + 1.2
+    let nextKick = REST_AFTER_S + 0.8
     let raf = 0
     let currentBand = bandAt(START)
 
@@ -89,7 +89,7 @@ export function Gauge({ startDelayMs = 0 }: { startDelayMs?: number }) {
 
       // Idle tremble: a few incommensurate sines, ramped in once the sweep has
       // settled, plus an occasional tiny kick so the needle "reacts" now and then.
-      const ramp = Math.min(1, Math.max(0, (elapsed - REST_AFTER_S) / 1.5))
+      const ramp = Math.min(1, Math.max(0, (elapsed - REST_AFTER_S) / 1.0))
       const tremble =
         ramp * (0.9 * Math.sin(elapsed * 2.3) + 0.45 * Math.sin(elapsed * 5.1 + 1.7) + 0.2 * Math.sin(elapsed * 11 + 0.4))
       if (elapsed > nextKick) {

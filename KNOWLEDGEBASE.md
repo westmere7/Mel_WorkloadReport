@@ -1493,8 +1493,12 @@ mode in `src/lib/present.ts`.
   band, so 5 of 6 shades in use is expected. Days after today are faded to 18% — a plan,
   not a record — and return to full strength when highlighted, hovered or pinned. The
   date number is deliberately small (0.34 of the cell): the colour is the data. Holiday
-  markers avoid the ramp: navy dot = Melbourne, gold dot = Vietnam, dashed navy
-  outline = RMIT closure.
+  markers avoid the ramp and are **clipped corners** of the cell (`HolidayCorner`, a
+  `clip-path` triangle 0.4 of the cell, min 5 px; the cell is `overflow-hidden` so it
+  follows the rounded edge): top-LEFT gold = Vietnam, top-RIGHT navy = Melbourne — the
+  side alone tells them apart, and both can show on one day. Dashed navy outline = RMIT
+  closure. (Replaced the earlier pair of 5 px dots, which were hard to see and merged
+  when both regions fell on one day.)
 - **Weeks start Monday** (`WEEKDAYS` Mon→Sun; `monthCells` places the 1st by
   `(getUTCDay() + 6) % 7`). A **Fade weekends** toggle in the header (remembered in
   `mwr.calendar.fadeWeekends`) drops Saturday and Sunday cells — and their column
@@ -1557,11 +1561,18 @@ mode in `src/lib/present.ts`.
   the SVG out in logical px, which is why the charts themselves render correctly.
 - **Gauge**: five bands (Low / Med / High / Very High / Dial 000) as SVG ring segments
   with `<textPath>` labels, 640×420 viewBox (the extra height keeps "WORKLOAD LEVEL"
-  clear of the hub), up to 1000 px wide; the needle is a damped spring in rAF (ω₀ 5.2,
-  ζ 0.42 → one clear overshoot, a small second bounce) that sweeps from the far left
-  to dead centre, then keeps a faint VU-meter tremble (summed sines + occasional random
-  velocity kicks). It writes `transform` on the `<g>` directly — no per-frame React
-  state; only the "current level" readout is state. Respects `prefers-reduced-motion`.
+  clear of the hub), up to 1000 px wide; the needle is a damped spring in rAF (ω₀ 8,
+  ζ 0.45 → one clear overshoot, a small second bounce, at rest by ~1.5 s) that sweeps
+  from the far left to dead centre, then keeps a faint VU-meter tremble (summed sines +
+  occasional random velocity kicks). It writes `transform` on the `<g>` directly — no
+  per-frame React state; only the "current level" readout is state. Respects
+  `prefers-reduced-motion`. Timing on entering the stage (measured with Playwright):
+  panels out 300 ms (25 ms stagger), overlay `.demo-overlay-late` 500 ms delay + 400 ms
+  fade (only matters coming straight from `reveal` — from a slide the overlay is
+  already up), `.demo-gauge` fades up 450 ms with no extra delay, needle starts at
+  `startDelayMs` 500 → dial opaque ≈0.45 s, reads HIGH ≈0.75 s, settled ≈1.5 s.
+  ⚠️ Earlier build stacked a 1100 ms `.demo-gauge` delay + 1500 ms needle delay + ω₀
+  5.2 on top of the overlay delay → ~1.8 s blank, ~4 s to rest; felt like a slow load.
 - **Testing**: the Browser pane may time out screenshots during the heavy title
   animation; Playwright at 1440×900 is reliable — click `button[name=/Demo mode/]`, then
   `aside button:has-text("Next")`, and read `document.documentElement.dataset.demo`,

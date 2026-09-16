@@ -44,11 +44,32 @@ const PER_WEEK = 7
 /** Weekend fade — softer than the 18% future fade so they stay readable, just secondary. */
 const WEEKEND_OPACITY = 'opacity-[0.35]'
 
-/** Marker colours for the holiday dots — deliberately NOT red, which is the heat. */
-const REGION_DOT: Record<HolidayRegion, string> = {
-  vic: 'bg-rmit-navy dark:bg-navy-100',
-  vn: 'bg-accent-gold',
-  rmit: '', // shown as a dashed outline, not a dot
+/** Holiday markers are clipped corners of the cell: Vietnam takes the top-LEFT
+ *  corner, Melbourne the top-RIGHT, so the two never collide and the side alone
+ *  tells them apart. Colours deliberately NOT red, which is the heat. */
+const REGION_CORNER: Record<Exclude<HolidayRegion, 'rmit'>, { side: 'left' | 'right'; bg: string }> = {
+  vn: { side: 'left', bg: 'bg-accent-gold' },
+  vic: { side: 'right', bg: 'bg-rmit-navy dark:bg-navy-100' },
+}
+// RMIT closure is shown as a dashed outline, not a corner.
+/** Right-angle triangle filling one top corner of a square. */
+const CORNER_CLIP: Record<'left' | 'right', string> = {
+  left: 'polygon(0 0, 100% 0, 0 100%)',
+  right: 'polygon(0 0, 100% 0, 100% 100%)',
+}
+/** Corner size for a given cell size (px) — big enough to read, clear of the day number. */
+const cornerSize = (cell: number) => Math.max(5, Math.round(cell * 0.4))
+
+/** One clipped corner — used on the day cells and in the legend. */
+function HolidayCorner({ region, size }: { region: Exclude<HolidayRegion, 'rmit'>; size: number }) {
+  const c = REGION_CORNER[region]
+  return (
+    <span
+      aria-hidden
+      className={cx('pointer-events-none absolute top-0', c.side === 'left' ? 'left-0' : 'right-0', c.bg)}
+      style={{ width: size, height: size, clipPath: CORNER_CLIP[c.side] }}
+    />
+  )
 }
 const REGION_TONE: Record<HolidayRegion, 'navy' | 'gold' | 'gray'> = { vic: 'navy', vn: 'gold', rmit: 'gray' }
 
@@ -285,7 +306,8 @@ export function CalendarPage() {
                         ...(bg ? { backgroundColor: bg, color: heatInk(level, dark) } : {}),
                       }}
                       className={cx(
-                        'relative flex items-center justify-center rounded-[4px] font-medium transition',
+                        // overflow-hidden so the holiday corners follow the rounded cell edge.
+                        'relative flex items-center justify-center overflow-hidden rounded-[4px] font-medium transition',
                         future && 'opacity-[0.18] hover:opacity-100',
                         weekend && `${WEEKEND_OPACITY} hover:opacity-100`,
                         !bg && 'bg-subtle text-muted',
@@ -295,15 +317,11 @@ export function CalendarPage() {
                       )}
                     >
                       {Number(d.slice(-2))}
-                      {hs.some((h) => h.region !== 'rmit') && (
-                        <span className="absolute right-[2px] top-[2px] flex gap-[2px]">
-                          {(['vic', 'vn'] as HolidayRegion[])
-                            .filter((r) => hs.some((h) => h.region === r))
-                            .map((r) => (
-                              <span key={r} className={cx('h-[5px] w-[5px] rounded-full', REGION_DOT[r])} />
-                            ))}
-                        </span>
-                      )}
+                      {(['vn', 'vic'] as const)
+                        .filter((r) => hs.some((h) => h.region === r))
+                        .map((r) => (
+                          <HolidayCorner key={r} region={r} size={cornerSize(fit.cell)} />
+                        ))}
                     </button>
                   )
                 })}
@@ -322,11 +340,17 @@ export function CalendarPage() {
             <span className="ml-1">Busier</span>
           </span>
           <span className="flex items-center gap-1.5">
-            <span className={cx('h-[6px] w-[6px] rounded-full', REGION_DOT.vic)} /> Melbourne public holiday
+            <span className="relative h-3 w-3 overflow-hidden rounded-[3px] bg-subtle">
+              <HolidayCorner region="vn" size={7} />
+            </span>
+            Vietnam public holiday
+            {!vietnamConfirmed(year) && <span className="text-faint">(provisional for {year})</span>}
           </span>
           <span className="flex items-center gap-1.5">
-            <span className={cx('h-[6px] w-[6px] rounded-full', REGION_DOT.vn)} /> Vietnam public holiday
-            {!vietnamConfirmed(year) && <span className="text-faint">(provisional for {year})</span>}
+            <span className="relative h-3 w-3 overflow-hidden rounded-[3px] bg-subtle">
+              <HolidayCorner region="vic" size={7} />
+            </span>
+            Melbourne public holiday
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-[3px] outline outline-1 outline-dashed outline-rmit-navy dark:outline-navy-100" /> RMIT Christmas closure
