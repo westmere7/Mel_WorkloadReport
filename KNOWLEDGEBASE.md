@@ -1273,3 +1273,161 @@ only MODEL output is audited, and there the sign-copying rule is a real protecti
   mode/compare/function — the JSON must be identical.
 - A cross-check that the whole-record year pair is right: its `assetsChange` /
   `effortChange` must equal what the dashboard's YTD compare mode shows.
+
+## 24. Demo mode (presentation walkthrough) ⚠️ v0.10.x
+
+`src/lib/demo.tsx` (`DemoProvider` / `useDemo()` → `{ stage, slide, currentSlide,
+active, isLast, start, next, exit }`, plus the `useDemoRevealKey` / `useDemoIntro`
+hooks), `src/components/demo/DemoOverlay.tsx`, `src/components/demo/Gauge.tsx`, and
+the `/* Demo mode */` block at the end of `src/index.css`.
+
+- **What it is**: a click-through presentation of the LIVE dashboard for showing the
+  app to a room. Entered from the **Demo mode** button at the bottom of the sidebar
+  (which replaced the Advisor + Showcase nav items — both routes still exist, they're
+  just not in the nav; Help §08 says to type `/showcase`). While active that button
+  reads **Next** (then **Finish** on the gauge) with a small "Exit demo · Esc" link
+  under it. **Space** and **→** advance, `Esc` exits, and Enter is left to whatever
+  control has focus (so Enter on "Exit demo" exits). ⚠️ Space/→ call `preventDefault()`
+  unconditionally, which also cancels a focused button's own Space-activation: after
+  clicking Next with the mouse, focus sits on that button, and without this a Space
+  would fire both the native click AND the handler and skip a stage. The listener is
+  bound only while a demo is running, so Space is untouched everywhere else. **The sidebar stays on screen
+  for the whole demo** — it is deliberately NOT part of any animation; the overlay is
+  mounted inside the content column (`.demo-column`, `relative`) so it covers only the
+  header + main area.
+- **Stages** (`html[data-demo="<stage>"]` drives every visual):
+  `blank` → `title` ("GCMC" red + "Dashboard" navy rise out of a mask, red rule,
+  subline "RMIT GCMC Workload Report") → `reveal` (dashboard panels animate in,
+  ~5 s) → `slide` × N (one per `DEMO_SLIDES` entry) → `gauge` → exit.
+- **Well contained by construction**: it never touches the store, the repository or
+  any persisted preference. Light mode is forced with `previewTheme('light')`
+  (`lib/theme.ts`) — applies the class and notifies `useTheme` consumers **without
+  writing `mwr.theme`** — and exit calls `previewTheme(storedTheme())`, which re-derives
+  the user's real choice (saved value, else OS preference) exactly like the boot script
+  in `index.html`. Other users see nothing; the dashboard underneath keeps its live
+  subscriptions.
+- **Reveal order is measured, not hard-coded**: on entering `reveal`, `tagPanels()`
+  collects `.demo-el` (the header, tagged in `Layout.tsx`) and every top-level
+  `main .card`, sorts them by on-screen position (rows bucketed within 40 px, then
+  left→right), and sets `.demo-panel` + `--demo-i`. CSS staggers by
+  `calc(var(--demo-i) * 400ms)`; the gauge stage reuses the same indices for a quick
+  animate-out. Tags are removed on exit. ⚠️ Both the root attribute and the tagging run
+  in `useLayoutEffect` — with `useEffect` the commit that unmounts the overlay paints
+  one frame of untagged (fully visible) cards before the stagger applies.
+- **Charts animate in WITH their panel** — the data, not just the card. `Card` and
+  `StatCard` wrap their children in a `<Fragment key={useDemoRevealKey(ref)}>`; the key
+  bumps on the card's own `animationstart` for `demo-panel-in` (i.e. after its stagger
+  delay), so the content REMOUNTS the instant the card fades in: recharts charts run
+  their mount animation, the workload area re-draws (`.workload-area` clip wipe), and
+  anything using `useDemoIntro()` grows from zero — `AnimatedNumber` reels roll up
+  from 0 (1.4 s), `RankedBars` / `StackedShareBar` / EffortStats size + top-3 bars
+  transition width from 0 % (1 s, `DEMO_INTRO_EASE`). `useDemoIntro` reads
+  `stage === 'reveal'` ONCE at mount (`useRef`), so only components mounted mid-reveal
+  get an intro; normal renders are byte-for-byte unchanged (`ready` is true from the
+  start, no inline transition).
+- **Slides are the real cards, not screenshots**: `DEMO_SLIDES` names panel titles
+  (matched against the CardHeader `<h3>` / StatCard label, with compare-mode " ·" and
+  "Workload & tasks in <year>" suffixes tolerated). On leaving the reveal
+  `resolveSlides()` finds the matching cards on THIS dashboard (empty slides are
+  skipped — e.g. Assets-mode hero cards are matched by their own titles);
+  `applySlide()` then positions each card absolutely under a 128 px caption band
+  (side by side when a slide has two). Absolute positioning escapes `<main>`'s scroll
+  clipping because the containing block is the column, an ancestor of `main`. The
+  cleanup strips every inline property, so nothing leaks past exit.
+- **⚠️ Slide cards are laid out SMALL and scaled up, not widened.** Each slide carries
+  a logical width `lw`; the card is laid out at `lw` and given
+  `transform: scale(slotWidth / lw)` with `transform-origin: 0 0`, so its visual box is
+  `(left, top, lw*z, h*z)`. Two reasons, and both are load-bearing:
+  · **Type.** Everything scales — text, bars, chart labels, the donut. Merely making the
+    card wide leaves 12 px legend text at 12 px, which is the thing that reads as "not a
+    slide" on a projector. `z` rises with the screen (≈1.2–1.44 at 1440×900, ≈1.6–2.05 at
+    1920×1080) because `lw` is a cap, so a bigger projector means bigger type, not a
+    wider, emptier card.
+  · **Correctness.** The stat figures are container-query sized (`17cqw` / `24cqw` in
+    EffortStats) inside a FIXED `h-[5.5rem]` row. Laid out at full slide width, `24cqw`
+    resolved to ~158 px and the line box (leading 0.8 → ~127 px) overflowed the 88 px row
+    UPWARD, overlapping the card header. Keeping the logical width ≤ ~498 px keeps the
+    figure inside its row; `FIT_SLIDE_LW` is 400.
+  Scale, not `zoom`: `transform` leaves layout alone, so the logical box is exactly what
+  we set and charts (which measure px) lay out predictably, then scale crisply as SVG.
+  ⚠️ `.demo-slide-card` may therefore only animate OPACITY — a keyframe touching
+  `transform` overwrites the inline scale, and with `both` it keeps overwriting it after
+  the animation ends.
+  `lw` per slide: `FIT_SLIDE_LW` 400 (stat cards, ranked bars), `MIX_SLIDE_LW` 470,
+  `WORKLOAD_SLIDE_LW` 880, `DEFAULT_SLIDE_LW` 780 (other full-width charts).
+  ⚠️ `WORKLOAD_SLIDE_LW` is deliberately WIDER than the default — i.e. that slide's type
+  is a little SMALLER — because that card's header carries the hover readout for the dot
+  under the pointer, and the readout is as wide as the task name (capped at
+  `max-w-[24rem]` = 384px). Measured at 780: the header needs
+  max(title 174, subtitle 392) + 12 + 384 + 8 + 20 = 816px of content and had 740, so the
+  subtitle wrapped to a second line the moment a dot was hovered — the header grew
+  40 → 54px and the chart under it jumped 422 → 408px, on every hover. 880 (840 content)
+  keeps it on one line for every task in the record. ⚠️ `MIX_SLIDE_LW` has two floors, both from
+  `DonutChart`: below ~380 px of CONTENT `MixChart` swaps the donut for the stacked bar,
+  and the ring is a fixed 180 px so the legend only ever gets `content − 196`. At 430 that
+  left ~122 px for a category name against the ~125 px "Concept development" needs and
+  `useNameMarquee` clipped it mid-word; 470 gives ~234 px.
+  `fit: true` slides (stat cards, ranked bars) shrink-wrap instead of filling: `height:auto`
+  (inline beats `h-full`/`h-80`), measure `offsetHeight` (logical — transforms don't affect
+  it), give the pair the tallest height and centre the scaled block vertically.
+- **Charts replay on every slide, not just the reveal.** `useDemoRevealKey` remounts a
+  card's content on `animationstart` for EITHER `demo-panel-in` (reveal stagger) or
+  `demo-fade` (arriving on a slide), and `useDemoIntro` treats both `reveal` and `slide`
+  as intro stages. So each slide re-runs the recharts mount animations, the workload clip
+  wipe, the odometer roll-up and the grow-from-zero bars at the slide's larger size.
+- **A slide can render its own content** (`DemoSlide.custom`) for data with no card to
+  lift. Only the **output rates** slide does today: the rates comparison lives in
+  `EffortInfoModal` ("How the asset types compare"), which can't be pulled out of the
+  grid, so `components/demo/RatesSlide.tsx` draws the same data at presentation size.
+  `resolveSlides()` keeps a custom slide on its own terms rather than by matched cards,
+  `applySlide()` no-ops for it, and `<DemoOverlay/>` renders it under the caption band.
+  ⚠️ Its rows come from `ratedAssetRows()` in `lib/effort.ts`, **shared with that
+  modal** — the derivation was lifted there so the slide and the app can't drift.
+  `DemoProvider` reads the store (it sits inside `StoreProvider`) and drops the slide
+  when no asset type carries a rate: an empty chart on a projector is worse than one
+  slide fewer.
+  ⚠️ The label `<div>` and the custom component are SIBLINGS in the overlay, so they
+  need distinct React keys — both using `key={slide}` is a duplicate key, and React
+  then leaves a stale label mounted, which made every later slide read "Output rates".
+- **⚠️ Fitting free-form slide content** (`FitBox` in RatesSlide): content is composed at
+  a fixed logical width and scaled by `min(availW / logicalW, availH / naturalH)`, so it
+  fills the slide at any row count (capped at `MAX_SCALE`). Because the scale is uniform,
+  **the composed sizes are arbitrary — what decides the on-screen size is the content's
+  aspect ratio against the slide's, and how much of each row is type rather than gap.**
+  The first cut used `space-y-2.5` under 19px text: nearly half of each row was spacing,
+  the list was height-bound, and it scaled DOWN to 0.87 — 16.6px on screen. Tight rows
+  (`space-y-1.5`) with 24px text in the same box give ~21.5px at 1440×900 and 27px at
+  1920×1080. Shrinking the composed text to "make it fit" achieves nothing; it scales
+  straight back up. If the list ever grows enough to look cramped, the lever that
+  actually helps is two columns (halving the row count roughly doubles the row pitch),
+  not smaller type.
+  ⚠️ `FitBox` measures with a ResizeObserver, which reports the LAYOUT box and so ignores
+  the transform — no feedback loop between scaling and measuring. It renders hidden until
+  measured so it can't flash at 1:1 first.
+- **⚠️ Scaled cards and pointer maths.** Anything that converts client pixels into a
+  chart's own coordinate space must divide by the measured scale, or it is wrong by the
+  scale factor and increasingly so away from the element's top-left corner.
+  `TaskDotsLayer` (`charts.tsx`) hit-tests the workload dots this way, and on the slide
+  it was picking the wrong task by up to ~207px at 1440×900 (~280px at 1920×1080).
+  `toUser()` now derives the ratio from the hit rect itself —
+  `sx = box.width / width`, where `box` is the client rect (visual px) and `width` is the
+  rect's user-space width — which is exactly 1 on the unscaled dashboard (verified: the
+  change is a mathematical no-op there) and equals the card scale on a slide. Prefer that
+  ratio over reading the ancestor's `transform`: it also absorbs page zoom and any future
+  wrapper. Note `ResponsiveContainer` and `useContainerWidth` are NOT affected — they
+  measure via ResizeObserver/`getBoundingClientRect` on the layout box, and recharts lays
+  the SVG out in logical px, which is why the charts themselves render correctly.
+- **Gauge**: five bands (Low / Med / High / Very High / Dial 000) as SVG ring segments
+  with `<textPath>` labels, 640×420 viewBox (the extra height keeps "WORKLOAD LEVEL"
+  clear of the hub), up to 1000 px wide; the needle is a damped spring in rAF (ω₀ 5.2,
+  ζ 0.42 → one clear overshoot, a small second bounce) that sweeps from the far left
+  to dead centre, then keeps a faint VU-meter tremble (summed sines + occasional random
+  velocity kicks). It writes `transform` on the `<g>` directly — no per-frame React
+  state; only the "current level" readout is state. Respects `prefers-reduced-motion`.
+- **Testing**: the Browser pane may time out screenshots during the heavy title
+  animation; Playwright at 1440×900 is reliable — click `button[name=/Demo mode/]`, then
+  `aside button:has-text("Next")`, and read `document.documentElement.dataset.demo`,
+  `.demo-panel` indices and `.demo-slide-card` counts between clicks. Prove the
+  remount by stamping `main .card svg` with a data attribute before the reveal and
+  checking none survive it. On exit assert `.dark` is back, `.demo-panel` count is 0
+  and no `main .card` carries an inline `style`.

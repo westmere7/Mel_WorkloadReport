@@ -1,5 +1,6 @@
-import type { AssetRates, Task } from '../types'
-import { FALLBACK_ITEM, hoursPerUnit } from '../constants'
+import type { AppSettings, AssetRates, Task } from '../types'
+import { FALLBACK_ITEM, formatRatePerUnit, hoursPerUnit, sortAlpha } from '../constants'
+import { formatRate } from './rateLog'
 
 // ── Effort-weighted workload ────────────────────────────────────────────────
 //
@@ -75,6 +76,39 @@ export function effortByAssetType(tasks: Task[], rates: AssetRates): { name: str
   return Object.entries(rec)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
+}
+
+/** One rated asset type, for the "how the asset types compare" chart. */
+export interface RatedAssetRow {
+  name: string
+  /** Hours ONE unit takes — the bar length and the heat colour come from this. */
+  hours: number
+  /** "2 hours each" — `formatRatePerUnit` without its leading "≈ ". */
+  perUnit: string
+  /** "300 per 1 day" — the rate exactly as it was recorded. */
+  rate: string
+}
+
+/**
+ * Rated asset types, SLOWEST first, plus that slowest figure so bars can be drawn
+ * to scale against it. Types with no rate are dropped (`hoursPerUnit` returns 0).
+ *
+ * Shared by the Effort info modal ("How the asset types compare") and demo mode's
+ * output-rates slide, which is the one slide that can't lift a dashboard card —
+ * keeping the derivation here is what stops the two drifting apart.
+ */
+export function ratedAssetRows(settings: AppSettings): { rated: RatedAssetRow[]; slowest: number } {
+  const rates = settings.assetRates ?? {}
+  const rated = sortAlpha(settings.assetTypes)
+    .map((name) => ({
+      name,
+      hours: hoursPerUnit(rates[name]),
+      perUnit: formatRatePerUnit(rates[name]).replace('≈ ', ''),
+      rate: formatRate(rates[name]),
+    }))
+    .filter((r) => r.hours > 0)
+    .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name))
+  return { rated, slowest: rated.length ? rated[0].hours : 0 }
 }
 
 /** Hours as a compact label — "1,240 h", "6.5 h". Display only. */

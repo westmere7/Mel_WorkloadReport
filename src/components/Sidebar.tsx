@@ -1,19 +1,21 @@
 import { NavLink } from 'react-router-dom'
 import {
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
-  Clapperboard,
   BookOpen,
   LayoutDashboard,
   List,
   Plus,
+  Presentation,
   Settings,
-  Telescope,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 import { cx } from '../lib/format'
 import { useNewTask } from './NewTaskModal'
 import { useAuth } from '../lib/auth'
+import { useDemo } from '../lib/demo'
 
 interface NavItem {
   to: string
@@ -25,21 +27,22 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/tasks', label: 'Task List', icon: List },
   { to: '/help', label: 'Help', icon: BookOpen },
-  { to: '/advisor', label: 'Advisor', icon: Telescope },
-  { to: '/showcase', label: 'Showcase', icon: Clapperboard },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
+// Advisor (/advisor) and Showcase (/showcase) are still routable but no longer
+// in the nav — their slot at the bottom of the rail is the Demo mode button.
 
 /** Pages that require sign-in — hidden from the nav for anonymous viewers. */
-const EDIT_ONLY = ['/settings', '/showcase']
+const EDIT_ONLY = ['/settings']
 
-/** Pages hidden from the mobile tab bar — the Showcase builder/player are
-    desktop-only, and the Help manual's screenshots read best on desktop. */
-const MOBILE_HIDDEN = ['/showcase', '/help', '/advisor']
+/** Pages hidden from the mobile tab bar — the Help manual's screenshots read
+    best on desktop. */
+const MOBILE_HIDDEN = ['/help']
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
+  const demo = useDemo()
   const nav = canEdit ? NAV : NAV.filter((item) => !EDIT_ONLY.includes(item.to))
 
   // Rail mode = icon-only 68px. Always on mobile; on desktop it's the collapsed
@@ -48,9 +51,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const railOnly = (expandedMd: string) => (collapsed ? '' : expandedMd)
   const hideLabel = collapsed ? 'hidden' : 'hidden md:inline'
 
-  // Help + Showcase sit together at the BOTTOM of the rail (Help directly above
-  // the Showcase icon); the rest stay grouped up top.
-  const BOTTOM = ['/help', '/advisor', '/showcase']
+  // Help sits at the BOTTOM of the rail, directly above the Demo mode button;
+  // the rest stay grouped up top.
+  const BOTTOM = ['/help']
   const topNav = nav.filter((item) => !BOTTOM.includes(item.to))
   const bottomNav = nav.filter((item) => BOTTOM.includes(item.to))
 
@@ -136,12 +139,53 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
           <div className="flex-1" />
 
-          {/* Showreel — parked low in the rail, just above the footer. */}
-          {bottomNav.length > 0 && (
-            <nav className={cx('mb-2 flex flex-col gap-1.5', railOnly('md:items-stretch'))}>
-              {bottomNav.map(renderLink)}
-            </nav>
-          )}
+          {/* Help + Demo mode — parked low in the rail, just above the footer. The
+              demo button becomes "Next" (then "Finish") while a demo is running, with
+              a small Exit link beneath it; the sidebar itself stays on screen for the
+              whole demo so this control is always bottom-left (see lib/demo.tsx). */}
+          <nav className={cx('mb-2 flex flex-col gap-1.5', railOnly('md:items-stretch'))}>
+            {bottomNav.map(renderLink)}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                if (demo.active) demo.next()
+                else demo.start()
+              }}
+              title={demo.active ? (demo.isLast ? 'Finish demo (→)' : 'Next (→)') : 'Demo mode — a presentation walkthrough of the dashboard'}
+              className={cx(
+                'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
+                collapsed ? 'justify-center' : 'justify-center md:justify-start',
+                demo.active
+                  ? 'bg-rmit-red text-white hover:bg-brand-600'
+                  : 'text-muted hover:bg-subtle hover:text-ink dark:text-navy-100 dark:hover:bg-white/5 dark:hover:text-white',
+              )}
+            >
+              {demo.active ? (
+                <ArrowRight className="h-5 w-5 shrink-0" strokeWidth={2.4} />
+              ) : (
+                <Presentation className="h-5 w-5 shrink-0" strokeWidth={2.2} />
+              )}
+              <span className={hideLabel}>{demo.active ? (demo.isLast ? 'Finish' : 'Next') : 'Demo mode'}</span>
+            </button>
+            {demo.active && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  demo.exit()
+                }}
+                title="Exit demo (Esc)"
+                className={cx(
+                  'flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium text-muted transition hover:text-ink',
+                  !collapsed && 'md:justify-start',
+                )}
+              >
+                <X className="h-3.5 w-3.5 shrink-0" strokeWidth={2.4} />
+                <span className={hideLabel}>Exit demo · Esc</span>
+              </button>
+            )}
+          </nav>
 
           <div className={cx('px-2 pb-1', collapsed ? 'hidden' : 'hidden md:block')}>
             <p className="text-[11px] leading-relaxed text-muted dark:text-navy-200">RMIT GCMC Team</p>

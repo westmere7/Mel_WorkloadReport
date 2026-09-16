@@ -26,7 +26,13 @@ import { useTheme } from '../lib/theme'
 import { TrendDelta } from './ui/TrendDelta'
 import { cx } from '../lib/format'
 import { useNameMarquee } from '../lib/useNameMarquee'
+import { DEMO_INTRO_EASE, useDemoIntro } from '../lib/demo'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+
+/** Inline transition for a bar growing from 0 during the demo reveal (else none). */
+function introGrow(intro: boolean, prop = 'width'): string | undefined {
+  return intro ? `${prop} 1000ms ${DEMO_INTRO_EASE}` : undefined
+}
 
 /** True on narrow (mobile) viewports — Tailwind's `sm` breakpoint is 640px. */
 function useIsMobile(): boolean {
@@ -385,6 +391,7 @@ export function StackedShareBar({
 }: MixProps) {
   const colors = useChartColors()
   const [active, setActive] = useState<number | null>(null)
+  const { intro, ready } = useDemoIntro()
   const total = data.reduce((a, b) => a + b.value, 0)
   if (total === 0 || data.length < minPoints) return <NotEnough message={emptyMessage} height={160} />
   const clickable = Boolean(onSelect)
@@ -402,7 +409,8 @@ export function StackedShareBar({
             key={d.name}
             className={cx('h-full transition-opacity', clickable && 'cursor-pointer')}
             style={{
-              width: `${(d.value / total) * 100}%`,
+              width: ready ? `${(d.value / total) * 100}%` : '0%',
+              transition: introGrow(intro),
               background: d.color ?? colors[i % colors.length],
               opacity: active == null || active === i ? 1 : 0.35,
             }}
@@ -477,6 +485,7 @@ export function RankedBars({
   sourceLabel?: string
 }) {
   const colors = useChartColors()
+  const { intro, ready } = useDemoIntro()
   if (data.length < minPoints) return <NotEnough message={emptyMessage} height={180} />
   const prevByName = compare ? new Map(compare.map((d) => [d.name, d.value])) : null
   // Shared scale so the target-year bar and the source-year marker line up. In
@@ -525,7 +534,7 @@ export function RankedBars({
               <div className="relative h-2.5 flex-1 rounded-full bg-subtle">
                 <div
                   className="absolute inset-y-0 left-0 rounded-full transition-[width]"
-                  style={{ width: `${(d.value / max) * 100}%`, background: color }}
+                  style={{ width: ready ? `${(d.value / max) * 100}%` : '0%', transition: introGrow(intro), background: color }}
                 />
                 {prev > 0 && (
                   <span
@@ -539,7 +548,7 @@ export function RankedBars({
               <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-subtle">
                 <div
                   className="h-full rounded-full transition-[width]"
-                  style={{ width: `${(d.value / max) * 100}%`, background: color }}
+                  style={{ width: ready ? `${(d.value / max) * 100}%` : '0%', transition: introGrow(intro), background: color }}
                 />
               </div>
             )}
@@ -1035,11 +1044,28 @@ function TaskDotsLayer({
     .sort((a, b) => a.cx - b.cx)
   const hovered = placed.find((c) => c.t.id === hoveredId) ?? null
 
+  /**
+   * Pointer (client px) → chart user-space coordinates.
+   *
+   * ⚠️ `box` is the hit rect's CLIENT rect, so its size is in VISUAL pixels, while
+   * `left/top/width/plotH` and every dot's `cx/cy` are in the chart's own user
+   * space. Those are the same thing at 1:1 — but not when an ancestor is scaled.
+   * Demo mode lays a slide's card out small and scales it up with a transform
+   * (see lib/demo.tsx), which made every hit test miss by the scale factor,
+   * increasingly so away from the rect's top-left corner (~200px at the right-hand
+   * edge, so the wrong task was reported under the pointer). Deriving the ratio
+   * from the rect itself is exact at any scale and a no-op at 1:1.
+   */
+  const toUser = (clientX: number, clientY: number, box: DOMRect) => {
+    const sx = width > 0 && box.width > 0 ? box.width / width : 1
+    const sy = plotH > 0 && box.height > 0 ? box.height / plotH : 1
+    return { mx: left + (clientX - box.left) / sx, my: top + (clientY - box.top) / sy }
+  }
+
   // Nearest dot by 2D distance so same-day dots (which differ only in y) can
   // each be picked out with the pointer.
   const nearest = (clientX: number, clientY: number, box: DOMRect) => {
-    const mx = left + (clientX - box.left)
-    const my = top + (clientY - box.top)
+    const { mx, my } = toUser(clientX, clientY, box)
     let best = placed[0]
     let bestD = Infinity
     for (const c of placed) {
@@ -1055,8 +1081,7 @@ function TaskDotsLayer({
   // Every dot within CYCLE_R of the pointer, nearest first — the pool Shift+wheel
   // steps through so dots buried under others are still reachable.
   const candidatesAt = (clientX: number, clientY: number, box: DOMRect) => {
-    const mx = left + (clientX - box.left)
-    const my = top + (clientY - box.top)
+    const { mx, my } = toUser(clientX, clientY, box)
     const R2 = CYCLE_R * CYCLE_R
     return placed
       .map((c) => ({ c, d: (c.cx - mx) ** 2 + (c.cy - my) ** 2 }))

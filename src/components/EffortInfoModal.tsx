@@ -5,7 +5,8 @@ import { AssetRatesModal } from './AssetRatesModal'
 import { useStore } from '../data/store'
 import { useAuth } from '../lib/auth'
 import { useScrollFade } from '../lib/useScrollFade'
-import { effortHeatColor, formatRatePerUnit, hoursPerUnit, sortAlpha } from '../constants'
+import { effortHeatColor } from '../constants'
+import { ratedAssetRows } from '../lib/effort'
 
 /**
  * Explains the workload chart's Assets ↔ Effort switch, shows how the rated asset
@@ -29,21 +30,14 @@ export function EffortInfoModal({
   const { canEdit } = useAuth()
   const [editOpen, setEditOpen] = useState(false)
   const listRef = useScrollFade<HTMLUListElement>()
-  const rates = settings.assetRates ?? {}
 
-  /** Rated types, slowest first, with the bar scale taken from the slowest. */
-  const rows = useMemo(() => {
-    const rated = sortAlpha(settings.assetTypes)
-      .map((name) => ({
-        name,
-        hours: hoursPerUnit(rates[name]),
-        label: formatRatePerUnit(rates[name]).replace('≈ ', ''),
-      }))
-      .filter((r) => r.hours > 0)
-      .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name))
-    return { rated, slowest: rated.length ? rated[0].hours : 0 }
+  /** Rated types, slowest first, with the bar scale taken from the slowest.
+   *  Shared with demo mode's rates slide — see lib/effort.ts. */
+  const rows = useMemo(
+    () => ratedAssetRows(settings),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.assetTypes, settings.assetRates])
+    [settings.assetTypes, settings.assetRates],
+  )
 
   return (
     <>
@@ -150,7 +144,7 @@ export function EffortInfoModal({
                         }}
                       />
                     </span>
-                    <span className="w-28 shrink-0 text-right text-xs text-muted">{r.label}</span>
+                    <span className="w-28 shrink-0 text-right text-xs text-muted">{r.perUnit}</span>
                   </li>
                 ))}
               </ul>

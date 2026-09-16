@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { Fragment, useRef, type ReactNode } from 'react'
 import { cx } from '../../lib/format'
+import { useDemoRevealKey } from '../../lib/demo'
 
 export function Card({
   children,
@@ -8,7 +9,15 @@ export function Card({
   children: ReactNode
   className?: string
 }) {
-  return <div className={cx('card p-5', className)}>{children}</div>
+  // Demo mode only: content remounts as the card is revealed so its charts
+  // animate in. The key is a constant 0 otherwise (see useDemoRevealKey).
+  const ref = useRef<HTMLDivElement>(null)
+  const revealKey = useDemoRevealKey(ref)
+  return (
+    <div ref={ref} className={cx('card p-5', className)}>
+      <Fragment key={revealKey}>{children}</Fragment>
+    </div>
+  )
 }
 
 export function CardHeader({

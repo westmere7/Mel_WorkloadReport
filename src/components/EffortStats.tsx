@@ -5,6 +5,7 @@ import { TrendDelta } from './ui/TrendDelta'
 import { SIZE_COLORS, SIZE_SHORT } from '../constants'
 import { formatHours } from '../lib/effort'
 import { cx } from '../lib/format'
+import { DEMO_INTRO_EASE, useDemoIntro } from '../lib/demo'
 import type { NamedCount } from '../lib/analytics'
 
 /** Shared comparison context for the effort-mode header panels. */
@@ -146,6 +147,7 @@ function SizeBar({
   inlineLabel?: boolean
   fmt: (value: number) => string
 }) {
+  const { intro, ready } = useDemoIntro()
   if (total <= 0) return null
   const bar = (
     <div className="flex h-3.5 w-full overflow-hidden rounded-full bg-subtle">
@@ -155,7 +157,8 @@ function SizeBar({
               key={d.name}
               className="h-full first:rounded-l-full last:rounded-r-full"
               style={{
-                width: `${(d.value / total) * 100}%`,
+                width: ready ? `${(d.value / total) * 100}%` : '0%',
+                transition: intro ? `width 1000ms ${DEMO_INTRO_EASE}` : undefined,
                 backgroundColor: SIZE_COLORS[d.name as keyof typeof SIZE_COLORS],
                 opacity: muted ? 0.55 : 1,
               }}
@@ -258,6 +261,7 @@ export function EffortSummaryCard({
   byType: NamedCount[]
   cmp: CompareCtx
 }) {
+  const { intro, ready } = useDemoIntro()
   // Hours per asset — the figure that actually separates effort from volume: it
   // says whether the month's mix was heavy or light, which a count can't.
   const perAsset = assets > 0 ? hours / assets : 0
@@ -339,7 +343,11 @@ export function EffortSummaryCard({
                 <span className="h-1.5 min-w-[2.5rem] flex-1 overflow-hidden rounded-full bg-subtle">
                   <span
                     className="block h-full rounded-full bg-accent-plum"
-                    style={{ width: `${(d.value / byType[0].value) * 100}%`, minWidth: '2px' }}
+                    style={{
+                      width: ready ? `${(d.value / byType[0].value) * 100}%` : '0%',
+                      transition: intro ? `width 1000ms ${DEMO_INTRO_EASE}` : undefined,
+                      minWidth: '2px',
+                    }}
                   />
                 </span>
                 <span className="w-8 shrink-0 text-right text-[10px] font-semibold text-muted">

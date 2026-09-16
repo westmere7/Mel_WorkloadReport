@@ -3,6 +3,7 @@ import { Layout } from './components/Layout'
 import { NewTaskProvider } from './components/NewTaskModal'
 import { StoreProvider, useStore } from './data/store'
 import { useAuth } from './lib/auth'
+import { DemoProvider } from './lib/demo'
 import { Dashboard } from './pages/Dashboard'
 import { AdvisorPage } from './pages/Advisor'
 import { HelpPage } from './pages/Help'
@@ -59,9 +60,11 @@ function StoreShell() {
   return (
     <StoreProvider>
       <NewTaskProvider>
-        <Layout>
-          <ShellBody />
-        </Layout>
+        <DemoProvider>
+          <Layout>
+            <ShellBody />
+          </Layout>
+        </DemoProvider>
       </NewTaskProvider>
     </StoreProvider>
   )

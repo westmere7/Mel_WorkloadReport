@@ -488,3 +488,144 @@
     animation: none;
   }
 }
+
+/* ── Demo mode (src/lib/demo.tsx) ──────────────────────────────────────────
+   Everything is keyed off `html[data-demo="<stage>"]`. `.demo-el` marks the
+   header; `.demo-panel` + `--demo-i` are set on it and every top-level
+   dashboard card by tagPanels() in reading order. The sidebar is deliberately
+   untouched — it stays on screen as the presenter's control. Purely visual —
+   no layout or data is touched. */
+html[data-demo='blank'] .demo-el,
+html[data-demo='blank'] main,
+html[data-demo='title'] .demo-el,
+html[data-demo='title'] main {
+  visibility: hidden;
+}
+
+/* 3. Panels arrive one after another, L→R then T→B (~5 s for the dashboard). */
+html[data-demo='reveal'] .demo-panel {
+  animation: demo-panel-in 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--demo-i, 0) * 400ms);
+}
+@keyframes demo-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 4. …and leave quickly in the same order before the gauge fades in. */
+html[data-demo='gauge'] .demo-panel {
+  animation: demo-panel-out 420ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation-delay: calc(var(--demo-i, 0) * 45ms);
+}
+@keyframes demo-panel-out {
+  to {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.985);
+  }
+}
+
+.demo-overlay {
+  animation: demo-fade 320ms ease-out both;
+}
+.demo-overlay-late {
+  animation-duration: 600ms;
+  animation-delay: 950ms;
+}
+@keyframes demo-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 2. Title: each word rises out of a mask, then a red rule draws, then the subline. */
+.demo-word {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding-bottom: 0.08em;
+}
+.demo-word > span {
+  display: inline-block;
+  animation: demo-word-up 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes demo-word-up {
+  from {
+    opacity: 0;
+    transform: translateY(110%);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+.demo-rule {
+  transform-origin: left center;
+  animation: demo-rule 700ms cubic-bezier(0.22, 1, 0.36, 1) 700ms both;
+}
+@keyframes demo-rule {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+.demo-sub {
+  animation: demo-fade-up 700ms ease-out 1100ms both;
+}
+.demo-gauge {
+  animation: demo-fade-up 700ms ease-out 1100ms both;
+}
+@keyframes demo-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Slides: the caption fades up; the card only FADES — it carries an inline
+   `transform: scale()` (see applySlide) and a keyframe that touches transform
+   would overwrite it, including after it finishes via `both`. Its animationstart
+   is also what remounts the card's content so the charts replay (useDemoRevealKey). */
+.demo-slide-label {
+  animation: demo-fade-up 500ms ease-out both;
+}
+.demo-slide-card {
+  animation: demo-fade 420ms ease-out both;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-demo='reveal'] .demo-panel,
+  .demo-overlay,
+  .demo-slide-label,
+  .demo-slide-card,
+  .demo-word > span,
+  .demo-rule,
+  .demo-sub,
+  .demo-gauge {
+    animation: none;
+  }
+  html[data-demo='gauge'] .demo-panel {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+}

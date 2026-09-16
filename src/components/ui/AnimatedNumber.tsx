@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { DEMO_INTRO_EASE, useDemoIntro } from '../../lib/demo'
 
 const DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
@@ -70,6 +71,11 @@ export function AnimatedNumber({
 
 function Reel({ digit, duration }: { digit: number; duration: number }) {
   const reduced = usePrefersReducedMotion()
+  // Demo reveal only: start every reel on 0 and roll up to the digit (odometer
+  // spin-up). Normally a reel mounts straight on its digit, as before.
+  const { intro, ready } = useDemoIntro()
+  const shown = ready ? digit : 0
+  const ms = intro ? 1400 : duration
   return (
     <span
       aria-hidden
@@ -79,8 +85,8 @@ function Reel({ digit, duration }: { digit: number; duration: number }) {
       <span
         className="flex flex-col"
         style={{
-          transform: `translateY(-${digit}em)`,
-          transition: reduced ? undefined : `transform ${duration}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
+          transform: `translateY(-${shown}em)`,
+          transition: reduced ? undefined : `transform ${ms}ms ${intro ? DEMO_INTRO_EASE : 'cubic-bezier(0.2, 0.8, 0.2, 1)'}`,
         }}
       >
         {DIGITS.map((d) => (

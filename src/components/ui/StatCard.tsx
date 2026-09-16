@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react'
+import { Fragment, useRef, type ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { cx } from '../../lib/format'
+import { useDemoRevealKey } from '../../lib/demo'
 
 interface StatCardProps {
   label: string
@@ -25,11 +26,15 @@ const ACCENTS: Record<NonNullable<StatCardProps['accent']>, string> = {
 
 export function StatCard({ label, value, icon: Icon, hint, footer, delta, accent = 'navy', size = 'md' }: StatCardProps) {
   const lg = size === 'lg'
+  // Demo mode only: content remounts as the card is revealed (see Card.tsx).
+  const ref = useRef<HTMLDivElement>(null)
+  const revealKey = useDemoRevealKey(ref)
 
   // Hero: a vertical KPI card whose big number fills its (stretched) cell.
   if (size === 'xl') {
     return (
-      <div className="card flex h-full flex-col p-5 [container-type:inline-size]">
+      <div ref={ref} className="card flex h-full flex-col p-5 [container-type:inline-size]">
+        <Fragment key={revealKey}>
         <p className="text-sm font-semibold uppercase tracking-wide text-muted">{label}</p>
         <div className="flex min-w-0 flex-1 flex-col justify-center">
           <div className="flex min-w-0 flex-wrap items-end gap-x-3 gap-y-1">
@@ -41,12 +46,14 @@ export function StatCard({ label, value, icon: Icon, hint, footer, delta, accent
           {hint && <p className="mt-2 truncate text-sm text-muted">{hint}</p>}
           {footer && <div className="mt-2">{footer}</div>}
         </div>
+        </Fragment>
       </div>
     )
   }
 
   return (
-    <div className={cx('card flex items-center', lg ? 'gap-4 p-5' : 'gap-3.5 p-4')}>
+    <div ref={ref} className={cx('card flex items-center', lg ? 'gap-4 p-5' : 'gap-3.5 p-4')}>
+      <Fragment key={revealKey}>
       {Icon && (
         <div
           className={cx(
@@ -66,6 +73,7 @@ export function StatCard({ label, value, icon: Icon, hint, footer, delta, accent
         </div>
         {hint && <p className="truncate text-xs text-muted">{hint}</p>}
       </div>
+      </Fragment>
     </div>
   )
 }
