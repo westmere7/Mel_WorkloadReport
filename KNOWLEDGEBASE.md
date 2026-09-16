@@ -1495,6 +1495,15 @@ mode in `src/lib/present.ts`.
   date number is deliberately small (0.34 of the cell): the colour is the data. Holiday
   markers avoid the ramp: navy dot = Melbourne, gold dot = Vietnam, dashed navy
   outline = RMIT closure.
+- **Weeks start Monday** (`WEEKDAYS` Mon→Sun; `monthCells` places the 1st by
+  `(getUTCDay() + 6) % 7`). A **Fade weekends** toggle in the header (remembered in
+  `mwr.calendar.fadeWeekends`) drops Saturday and Sunday cells — and their column
+  labels — to 35% opacity, gentler than the 18% future fade so they stay readable but
+  secondary. ⚠️ Fade, not hide: a first cut removed the two columns, which also
+  removed the weekend-only holidays (Saturday before Easter, the folded-in Tết weekend
+  days) and reshaped every month; fading keeps the grid's shape and all 365 days. A
+  faded cell returns to full strength when highlighted, hovered or pinned, same as a
+  future day.
 - **Fits the viewport instead of scrolling** (`useFitCells`): at `xl` and up the page is
   one viewport tall, the card fills it, and the day-cell size is computed from BOTH the
   grid's width and height, subtracting gaps and month headers, so all twelve months fit.

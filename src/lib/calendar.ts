@@ -145,14 +145,27 @@ export const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
-export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+/** Weeks start on Monday. */
+export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-/** The cells of a month grid: leading blanks (null) then every ISO date. Weeks start Sunday. */
+/** Monday = 0 … Sunday = 6 for a UTC date. */
+const mondayIndex = (dt: Date) => (dt.getUTCDay() + 6) % 7
+
+/** True for a Saturday or Sunday ISO date. */
+export function isWeekendISO(iso: string): boolean {
+  return mondayIndex(new Date(`${iso}T00:00:00Z`)) >= 5
+}
+
+/**
+ * The cells of a month grid: leading blanks (null) so the 1st lands in its weekday
+ * column (Monday first), then every date. Weekends are always present — the
+ * Calendar page FADES them on request rather than removing them, so the grid keeps
+ * its shape and weekend-only holidays stay visible.
+ */
 export function monthCells(year: number, month: number): (string | null)[] {
   const first = new Date(Date.UTC(year, month, 1))
-  const lead = first.getUTCDay()
   const count = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
-  const cells: (string | null)[] = Array.from({ length: lead }, () => null)
+  const cells: (string | null)[] = Array.from({ length: mondayIndex(first) }, () => null)
   for (let d = 1; d <= count; d++) {
     cells.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
   }

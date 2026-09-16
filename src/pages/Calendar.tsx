@@ -21,6 +21,7 @@ import {
   heatColor,
   heatInk,
   heatLevel,
+  isWeekendISO,
   monthCells,
   taskDays,
   type CalendarUnit,
@@ -36,6 +37,12 @@ import type { Task } from '../types'
 // ─────────────────────────────────────────────────────────────────────────────
 
 const UNITS: CalendarUnit[] = ['tasks', 'assets', 'effort']
+
+/** Fade Saturday and Sunday cells — remembered per browser. */
+const FADE_WEEKENDS_KEY = 'mwr.calendar.fadeWeekends'
+const PER_WEEK = 7
+/** Weekend fade — softer than the 18% future fade so they stay readable, just secondary. */
+const WEEKEND_OPACITY = 'opacity-[0.35]'
 
 /** Marker colours for the holiday dots — deliberately NOT red, which is the heat. */
 const REGION_DOT: Record<HolidayRegion, string> = {
@@ -63,7 +70,7 @@ const CELL_MAX = 44
  * calendar stacks above the panel and is allowed to scroll. Cells never go below
  * CELL_MIN: on a small screen scrolling beats an illegible calendar.
  */
-function useFitCells(ref: React.RefObject<HTMLElement>) {
+function useFitCells(ref: React.RefObject<HTMLElement>, perWeek: number) {
   const [fit, setFit] = useState({ cols: 4, cell: 26, weekdays: true })
   useLayoutEffect(() => {
     const el = ref.current
@@ -80,7 +87,7 @@ function useFitCells(ref: React.RefObject<HTMLElement>) {
       let best = { cols: 4, cell: 0, weekdays: true }
       for (const cols of [4, 3, 2]) {
         const rows = Math.ceil(12 / cols)
-        const cellW = ((W - MONTH_GAP_X * (cols - 1)) / cols - CELL_GAP * 6) / 7
+        const cellW = ((W - MONTH_GAP_X * (cols - 1)) / cols - CELL_GAP * (perWeek - 1)) / perWeek
         for (const weekdays of [true, false]) {
           const head = weekdays ? MONTH_HEAD_H : MONTH_HEAD_COMPACT_H
           const cellH = bounded ? ((H - MONTH_GAP_Y * (rows - 1)) / rows - head - CELL_GAP * 5) / 6 : Infinity
@@ -104,7 +111,7 @@ function useFitCells(ref: React.RefObject<HTMLElement>) {
       ro.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [ref])
+  }, [ref, perWeek])
   return fit
 }
 
@@ -134,8 +141,24 @@ export function CalendarPage() {
   const [viewTask, setViewTask] = useState<Task | null>(null)
   const day = pinnedDay ?? hoverDay
   const today = todayISO()
+  const [fadeWeekends, setFadeWeekends] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(FADE_WEEKENDS_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleFadeWeekends = () => {
+    const v = !fadeWeekends
+    setFadeWeekends(v)
+    try {
+      localStorage.setItem(FADE_WEEKENDS_KEY, v ? '1' : '0')
+    } catch {
+      /* preference just won't stick */
+    }
+  }
   const gridRef = useRef<HTMLDivElement>(null)
-  const fit = useFitCells(gridRef)
+  const fit = useFitCells(gridRef, PER_WEEK)
   const dayLoad = day ? load.days.get(day) : undefined
 
   // The block to light up: every day of the hovered task's span.
@@ -144,6 +167,7 @@ export function CalendarPage() {
   useEffect(() => {
     setHeaderSlots({
       left: (
+        <div className="flex items-center gap-2">
         <div className="flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
           {UNITS.filter((u) => u !== 'effort' || ratesConfigured).map((u) => (
             <button
@@ -160,6 +184,19 @@ export function CalendarPage() {
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={toggleFadeWeekends}
+          aria-pressed={fadeWeekends}
+          title="Fade Saturday and Sunday so the working week stands out"
+          className={cx(
+            'rounded-lg px-2.5 py-1.5 text-xs font-semibold transition',
+            fadeWeekends ? 'bg-rmit-navy text-white dark:bg-navy-300' : 'bg-subtle text-muted hover:text-ink',
+          )}
+        >
+          Fade weekends
+        </button>
+        </div>
       ),
       right: (
         <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="input w-auto py-1.5 text-sm font-semibold">
@@ -172,7 +209,7 @@ export function CalendarPage() {
       ),
     })
     return () => setHeaderSlots({})
-  }, [setHeaderSlots, years, year, activeUnit, ratesConfigured])
+  }, [setHeaderSlots, years, year, activeUnit, ratesConfigured, fadeWeekends])
 
   const valueLabel = (v: number) =>
     activeUnit === 'effort' ? formatHours(v) : activeUnit === 'assets' ? `${Math.round(v).toLocaleString()} assets/day` : `${v} ${v === 1 ? 'task' : 'tasks'}`
@@ -206,11 +243,15 @@ export function CalendarPage() {
               <p className="mb-1.5 text-center text-xs font-bold uppercase tracking-wide text-ink">{name}</p>
               <div
                 className="grid justify-center"
-                style={{ gridTemplateColumns: `repeat(7, ${fit.cell}px)`, gap: CELL_GAP }}
+                style={{ gridTemplateColumns: `repeat(${PER_WEEK}, ${fit.cell}px)`, gap: CELL_GAP }}
               >
                 {fit.weekdays &&
-                  WEEKDAYS.map((w) => (
-                    <span key={w} className="text-center font-semibold text-faint" style={{ fontSize: Math.max(8, Math.round(fit.cell * 0.36)) }}>
+                  WEEKDAYS.map((w, i) => (
+                    <span
+                      key={w}
+                      className={cx('text-center font-semibold text-faint', fadeWeekends && i >= 5 && WEEKEND_OPACITY)}
+                      style={{ fontSize: Math.max(8, Math.round(fit.cell * 0.36)) }}
+                    >
                       {fit.cell >= 26 ? w : w[0]}
                     </span>
                   ))}
@@ -227,6 +268,8 @@ export function CalendarPage() {
                   // not a record. They come back to full strength when they're part
                   // of a highlighted block, are the hovered day, or under the pointer.
                   const future = d > today && !isStrong && !isDay
+                  // Weekends fade the same way, more gently, when asked to.
+                  const weekend = fadeWeekends && !future && !isStrong && !isDay && isWeekendISO(d)
                   return (
                     <button
                       key={d}
@@ -244,6 +287,7 @@ export function CalendarPage() {
                       className={cx(
                         'relative flex items-center justify-center rounded-[4px] font-medium transition',
                         future && 'opacity-[0.18] hover:opacity-100',
+                        weekend && `${WEEKEND_OPACITY} hover:opacity-100`,
                         !bg && 'bg-subtle text-muted',
                         closed && 'outline outline-1 outline-dashed outline-offset-[-1px] outline-rmit-navy dark:outline-navy-100',
                         isStrong && 'z-10 ring-2 ring-rmit-navy dark:ring-white',
