@@ -5,7 +5,6 @@ import { Sidebar, MobileNav } from './Sidebar'
 import { LoginModal } from './LoginModal'
 import { AccountModal } from './AccountModal'
 import { UpdateNotice } from './UpdateNotice'
-import { DemoOverlay } from './demo/DemoOverlay'
 import { CardPresenterOverlay } from './CardPresenter'
 import { useTheme } from '../lib/theme'
 import { useAuth } from '../lib/auth'
@@ -60,13 +59,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <HeaderSlotContext.Provider value={setHeaderSlots}>
       <div className="flex h-screen overflow-hidden bg-surface">
         <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
-        {/* `relative` + `present-column`: demo mode and the per-card full-screen both
-            cover just this column (the sidebar stays) and position the lifted card
-            against it — see lib/present.ts. */}
+        {/* `relative` + `present-column`: the per-card full-screen covers just this
+            column (the sidebar stays) and positions the lifted card against it — see
+            lib/present.ts. */}
         <div className={cx('present-column relative flex min-w-0 flex-1 flex-col', pathname === '/tasks' ? 'overflow-y-auto' : 'overflow-hidden')}>
           {/* Top bar — wraps to two rows on mobile (title/controls, then the page slots).
               sm:min-h keeps the height identical across pages regardless of subtitle. */}
-          <header className="demo-el mx-6 mt-6 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-card px-3 py-3 sm:min-h-20 sm:gap-x-4 sm:px-5 sm:py-4">
+          <header className="mx-6 mt-6 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-card px-3 py-3 sm:min-h-20 sm:gap-x-4 sm:px-5 sm:py-4">
             {/* Title / brand cluster */}
             <div className="order-1 flex min-w-0 items-center gap-3">
               {/* Brand mark on mobile, where the sidebar rail is hidden. */}
@@ -153,8 +152,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           >
             {children}
           </main>
-          {/* Demo-mode screens — null unless a demo is running (see lib/demo.tsx). */}
-          <DemoOverlay />
           {/* Per-card full-screen — null unless a card is presented. */}
           <CardPresenterOverlay />
           {/* Bottom navigation — mobile only (the sidebar is hidden there). */}

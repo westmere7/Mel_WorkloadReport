@@ -1,29 +1,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Presenting a dashboard card — shared by demo mode's slides (lib/demo.tsx) and
-// the app's per-card full-screen (components/CardPresenter.tsx).
+// Presenting a dashboard card full screen (components/CardPresenter.tsx).
 //
-// Both do the same thing: lift a live card out of the grid and blow it up to fill
-// the content column, keeping every React handler and every chart interactive. The
-// geometry lives here so the two can't drift — and because getting it wrong has
-// specific, non-obvious failure modes, documented on `presentCards`.
+// Lifts a live card out of the grid and blows it up to fill the content column,
+// keeping every React handler and every chart interactive. The geometry lives here
+// because getting it wrong has specific, non-obvious failure modes, documented on
+// `presentCards`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** The content column (right of the sidebar) that presented cards are placed over. */
-export const COLUMN_SELECTOR = '.present-column'
+const COLUMN_SELECTOR = '.present-column'
 
-/** Height reserved at the top of the column for the caption. */
-export const PRESENT_LABEL_H = 128
+/** Height reserved at the top of the column for the title. */
+const PRESENT_LABEL_H = 128
 /** Outer padding around the presented card(s). */
-export const PRESENT_PAD = 28
-/** Gap between two cards sharing a slide. */
-export const PRESENT_GAP = 24
-
-/** Top-level dashboard cards — a card nested in a card rides along with its parent. */
-export function topLevelCards(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('main .card')).filter(
-    (el) => !el.parentElement?.closest('.card'),
-  )
-}
+const PRESENT_PAD = 28
+/** Gap between cards presented side by side. */
+const PRESENT_GAP = 24
 
 /** A card's panel title — the CardHeader <h3>, or a StatCard's label <p>. */
 export function cardTitle(el: HTMLElement): string {
@@ -35,20 +27,29 @@ export function cardTitle(el: HTMLElement): string {
  * adds: compare mode appends " · 2026 over 2025", and the workload card is titled
  * "Workload & tasks in 2026".
  */
-export function titleMatches(title: string, wanted: string): boolean {
+function titleMatches(title: string, wanted: string): boolean {
   return title === wanted || title.startsWith(`${wanted} ·`) || title.startsWith(`${wanted} in `)
+}
+
+/**
+ * Content-sized cards (stat cards, ranked bars), by panel title. When presented they
+ * shrink-wrap to their content and centre vertically instead of stretching into a
+ * tall, empty box; every other card (charts) fills the area.
+ */
+const FIT_CARD_TITLES = ['Volume', 'Asset count', 'Effort', 'Task count', 'Tasks by squad', 'Assets by squad']
+
+/** Whether `el` is one of the content-sized cards above (see PresentOptions.fit). */
+export function isFitCard(el: HTMLElement): boolean {
+  const title = cardTitle(el)
+  return FIT_CARD_TITLES.some((t) => titleMatches(title, t))
 }
 
 export interface PresentOptions {
   /**
-   * Explicit logical width each card is LAID OUT at before being scaled up. The
+   * Cap on the logical width each card is LAID OUT at before being scaled up: the
+   * card is laid out at `min(slot, maxLw)` and scaled up to fill the slot. The
    * type-size dial — smaller means a bigger scale and bigger type — and also a
-   * correctness control; see the warnings below. Demo slides set this per slide.
-   */
-  lw?: number
-  /**
-   * Cap on the logical width when `lw` isn't given: the card is laid out at
-   * `min(slot, maxLw)` and scaled up to fill the slot. On a wide screen this is what
+   * correctness control; see the warnings below. On a wide screen this is what
    * makes the type grow instead of the layout just getting emptier.
    */
   maxLw?: number
@@ -65,7 +66,7 @@ export interface PresentOptions {
 }
 
 /**
- * Lay `els` out side by side across the column, under the caption band, scaled to
+ * Lay `els` out side by side across the column, under the title band, scaled to
  * fill it. Returns a cleanup that restores them exactly.
  *
  * ⚠️ Cards are laid out at a SMALL logical width and scaled with a transform rather
@@ -77,9 +78,9 @@ export interface PresentOptions {
  *     ~400px and the card grows far past the area it was given.
  *
  * ⚠️ A `fit` card's height is re-measured with a ResizeObserver rather than taken
- * once. Its content is still moving when it arrives — it REMOUNTS (see
- * useDemoRevealKey), its container-query figures re-resolve against the new width,
- * and a presented panel may choose to show more rows than it did in the grid.
+ * once. Its content is still moving when it arrives — its container-query figures
+ * re-resolve against the new width, and a presented panel may choose to show more
+ * rows than it did in the grid (see useIsPresented).
  * Measuring once froze a stale height and the content spilled out of the card, by
  * as much as 1483px on a 2000px screen. `offsetHeight` ignores transforms, so
  * re-applying the scale from it can't feed back into the measurement.
@@ -100,7 +101,7 @@ export function presentCards(els: HTMLElement[], o: PresentOptions = {}): () => 
   const n = els.length
   const areaH = H - PRESENT_LABEL_H - PRESENT_PAD
   const slotW = (W - 2 * PRESENT_PAD - PRESENT_GAP * (n - 1)) / n
-  const logicalW = o.lw ?? Math.min(slotW, o.maxLw ?? Infinity)
+  const logicalW = Math.min(slotW, o.maxLw ?? Infinity)
   // Never below 1 here: on a narrow window the slot is already smaller than the
   // logical width, and shrinking would read as worse than the dashboard itself.
   const baseZ = Math.max(1, slotW / logicalW)

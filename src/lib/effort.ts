@@ -92,10 +92,7 @@ export interface RatedAssetRow {
 /**
  * Rated asset types, SLOWEST first, plus that slowest figure so bars can be drawn
  * to scale against it. Types with no rate are dropped (`hoursPerUnit` returns 0).
- *
- * Shared by the Effort info modal ("How the asset types compare") and demo mode's
- * output-rates slide, which is the one slide that can't lift a dashboard card —
- * keeping the derivation here is what stops the two drifting apart.
+ * Used by the Effort info modal ("How the asset types compare").
  */
 export function ratedAssetRows(settings: AppSettings): { rated: RatedAssetRow[]; slowest: number } {
   const rates = settings.assetRates ?? {}

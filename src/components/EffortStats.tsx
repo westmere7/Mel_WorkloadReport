@@ -7,7 +7,6 @@ import { TrendDelta } from './ui/TrendDelta'
 import { SIZE_COLORS, SIZE_SHORT } from '../constants'
 import { formatHours } from '../lib/effort'
 import { cx } from '../lib/format'
-import { DEMO_INTRO_EASE, useDemoIntro } from '../lib/demo'
 import { useIsPresented } from './CardPresenter'
 import type { NamedCount } from '../lib/analytics'
 
@@ -160,7 +159,6 @@ function SizeBar({
   inlineLabel?: boolean
   fmt: (value: number) => string
 }) {
-  const { intro, ready } = useDemoIntro()
   if (total <= 0) return null
   const bar = (
     <div className="flex h-3.5 w-full overflow-hidden rounded-full bg-subtle">
@@ -170,8 +168,7 @@ function SizeBar({
               key={d.name}
               className="h-full first:rounded-l-full last:rounded-r-full"
               style={{
-                width: ready ? `${(d.value / total) * 100}%` : '0%',
-                transition: intro ? `width 1000ms ${DEMO_INTRO_EASE}` : undefined,
+                width: `${(d.value / total) * 100}%`,
                 backgroundColor: SIZE_COLORS[d.name as keyof typeof SIZE_COLORS],
                 opacity: muted ? 0.55 : 1,
               }}
@@ -274,7 +271,6 @@ export function EffortSummaryCard({
   byType: NamedCount[]
   cmp: CompareCtx
 }) {
-  const { intro, ready } = useDemoIntro()
   // Full screen has room for more than three, and this is the one card that openly
   // hides data ("remaining 46% hidden") — so presenting it shows more of the list.
   const topRef = useRef<HTMLDivElement>(null)
@@ -367,8 +363,7 @@ export function EffortSummaryCard({
                   <span
                     className="block h-full rounded-full bg-accent-plum"
                     style={{
-                      width: ready ? `${(d.value / byType[0].value) * 100}%` : '0%',
-                      transition: intro ? `width 1000ms ${DEMO_INTRO_EASE}` : undefined,
+                      width: `${(d.value / byType[0].value) * 100}%`,
                       minWidth: '2px',
                     }}
                   />

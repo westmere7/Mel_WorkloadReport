@@ -498,7 +498,7 @@ export function HelpPage() {
 
               <Section id="showcase" n="08" title="Showcase" signIn>
                 <P>
-                  The Showcase (open <B>/showcase</B> in the address bar — it&rsquo;s no longer in the sidebar) turns a period&rsquo;s workload into an animated,
+                  The Showcase (bottom of the sidebar) turns a period&rsquo;s workload into an animated,
                   presentable story. A guided wizard picks the span, stats, top projects and style, and
                   produces a full-screen presentation to play in meetings or share by link — viewers
                   don&rsquo;t need to sign in.

@@ -11,17 +11,16 @@ import {
   type RefObject,
 } from 'react'
 import { Minimize2 } from 'lucide-react'
-import { presentGeometryForCard } from '../lib/demo'
-import { cardTitle, presentCards } from '../lib/present'
+import { cardTitle, isFitCard, presentCards } from '../lib/present'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Per-card full screen (the normal app, NOT demo mode).
+// Per-card full screen.
 //
 // Click the expand icon in a card's header and that card is lifted out of the grid
-// and blown up to fill the content column under its own title — the same mechanism
-// demo mode uses for a slide, so a chart stays live and interactive rather than
-// becoming a picture of itself. Purely presentational: nothing is stored, no data
-// is touched, and Escape (or the close button, or the backdrop) puts it back.
+// and blown up to fill the content column under its own title (lib/present.ts), so a
+// chart stays live and interactive rather than becoming a picture of itself. Purely
+// presentational: nothing is stored, no data is touched, and Escape (or the close
+// button, or the backdrop) puts it back.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -69,7 +68,7 @@ export function useIsPresented(ref: RefObject<HTMLElement>): boolean {
 
 /**
  * The backdrop + title for a presented card. Mounted inside the content column
- * (see Layout) so the sidebar stays usable, exactly like the demo overlay.
+ * (see Layout) so the sidebar stays usable.
  */
 export function CardPresenterOverlay() {
   const ctx = useContext(PresentContext)
@@ -87,16 +86,13 @@ export function CardPresenterOverlay() {
     setTitle(cardTitle(card))
     const scroller = card.closest('main')
     scrollRef.current = scroller?.scrollTop ?? 0
-    // ⚠️ Deliberately NOT scaled (no `lw`): the card is laid out at the full width of
-    // the canvas at 1:1. Demo mode magnifies instead, because a projector needs big
-    // type; here the point is to SEE MORE — at full width a mix legend shows every
-    // type instead of eight, the campaign bars get room for their labels, and the
-    // Effort card lists more than its top three. Scaling up would fill the same space
-    // with the same amount of data.
-    // `fit` still comes from the slide table: stat cards and ranked bars shrink-wrap
-    // and centre rather than stretching into a tall, empty box.
-    const { fit } = presentGeometryForCard(card)
-    const restore = presentCards([card], { fit, maxLw: APP_MAX_LW, allowShrink: true })
+    // ⚠️ Laid out at up to APP_MAX_LW and only magnified beyond that: the point is
+    // to SEE MORE — at full width a mix legend shows every type instead of eight, the
+    // campaign bars get room for their labels, and the Effort card lists more than
+    // its top three. Scaling up harder would fill the same space with the same data.
+    // `fit`: stat cards and ranked bars shrink-wrap and centre rather than
+    // stretching into a tall, empty box.
+    const restore = presentCards([card], { fit: isFitCard(card), maxLw: APP_MAX_LW, allowShrink: true })
     return () => {
       restore()
       if (scroller) scroller.scrollTop = scrollRef.current
@@ -125,9 +121,7 @@ export function CardPresenterOverlay() {
   return (
     <div className="present-overlay absolute inset-0 z-[60] bg-surface" onClick={close}>
       <div className="absolute inset-x-0 top-0 flex h-32 items-center justify-center px-20 text-center">
-        {/* `dark:text-ink`: demo mode forces LIGHT mode so navy always reads there,
-            but this runs in whatever theme the user is in — navy on the dark
-            surface is all but invisible. */}
+        {/* `dark:text-ink`: navy on the dark surface is all but invisible. */}
         <p className="present-title truncate font-display text-4xl font-bold leading-tight text-rmit-navy dark:text-ink sm:text-5xl">
           {title}
         </p>

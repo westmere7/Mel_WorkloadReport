@@ -3,7 +3,6 @@ import { Layout } from './components/Layout'
 import { NewTaskProvider } from './components/NewTaskModal'
 import { StoreProvider, useStore } from './data/store'
 import { useAuth } from './lib/auth'
-import { DemoProvider } from './lib/demo'
 import { CardPresenterProvider } from './components/CardPresenter'
 import { Dashboard } from './pages/Dashboard'
 import { AdvisorPage } from './pages/Advisor'
@@ -64,13 +63,11 @@ function StoreShell() {
   return (
     <StoreProvider>
       <NewTaskProvider>
-        <DemoProvider>
-          <CardPresenterProvider>
-            <Layout>
-              <ShellBody />
-            </Layout>
-          </CardPresenterProvider>
-        </DemoProvider>
+        <CardPresenterProvider>
+          <Layout>
+            <ShellBody />
+          </Layout>
+        </CardPresenterProvider>
       </NewTaskProvider>
     </StoreProvider>
   )

@@ -31,8 +31,7 @@ export function EffortInfoModal({
   const [editOpen, setEditOpen] = useState(false)
   const listRef = useScrollFade<HTMLUListElement>()
 
-  /** Rated types, slowest first, with the bar scale taken from the slowest.
-   *  Shared with demo mode's rates slide — see lib/effort.ts. */
+  /** Rated types, slowest first, with the bar scale taken from the slowest — see lib/effort.ts. */
   const rows = useMemo(
     () => ratedAssetRows(settings),
     // eslint-disable-next-line react-hooks/exhaustive-deps

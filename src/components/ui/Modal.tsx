@@ -10,16 +10,6 @@ import { X } from 'lucide-react'
  */
 const openModals: object[] = []
 
-/**
- * True while any <Modal> is open. For global keyboard shortcuts that must not fire
- * over a dialog — demo mode's "Space starts a demo" is the caller (see lib/demo.tsx).
- * Reads the same stack Escape uses, so it covers every Modal-based dialog in the app
- * without each one having to opt in.
- */
-export function isAnyModalOpen(): boolean {
-  return openModals.length > 0
-}
-
 interface ModalProps {
   open: boolean
   onClose: () => void
@@ -62,9 +52,9 @@ export function Modal({ open, onClose, title, children, footer, wide, widthClass
   // opened from inside a card (PanelInfo's "?") would otherwise be a DOM descendant
   // of that card — and `position: fixed` resolves against the nearest TRANSFORMED
   // ancestor, not the viewport, so the dialog would be trapped inside the card
-  // whenever the card is scaled: on hover (see .card:hover in index.css), and on a
-  // demo slide. React events still bubble through the React tree, so nothing about
-  // the callers changes.
+  // whenever the card is scaled: on hover (see .card:hover in index.css), and when
+  // presented full screen. React events still bubble through the React tree, so
+  // nothing about the callers changes.
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-900/70 p-4 backdrop-blur-sm sm:p-8"

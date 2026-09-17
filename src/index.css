@@ -489,55 +489,11 @@
   }
 }
 
-/* ── Demo mode (src/lib/demo.tsx) ──────────────────────────────────────────
-   Everything is keyed off `html[data-demo="<stage>"]`. `.demo-el` marks the
-   header; `.demo-panel` + `--demo-i` are set on it and every top-level
-   dashboard card by tagPanels() in reading order. The sidebar is deliberately
-   untouched — it stays on screen as the presenter's control. Purely visual —
-   no layout or data is touched. */
-html[data-demo='blank'] .demo-el,
-html[data-demo='blank'] main,
-html[data-demo='title'] .demo-el,
-html[data-demo='title'] main {
-  visibility: hidden;
-}
-
-/* 3. Panels arrive one after another, L→R then T→B (~5 s for the dashboard). */
-html[data-demo='reveal'] .demo-panel {
-  animation: demo-panel-in 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--demo-i, 0) * 400ms);
-}
-@keyframes demo-panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(22px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* 4. …and leave quickly in the same order before the gauge fades in. */
-html[data-demo='gauge'] .demo-panel {
-  animation: demo-panel-out 300ms cubic-bezier(0.4, 0, 1, 1) both;
-  animation-delay: calc(var(--demo-i, 0) * 25ms);
-}
-@keyframes demo-panel-out {
-  to {
-    opacity: 0;
-    transform: translateY(-14px) scale(0.985);
-  }
-}
-
-.demo-overlay {
-  animation: demo-fade 320ms ease-out both;
-}
-.demo-overlay-late {
-  animation-duration: 400ms;
-  animation-delay: 500ms;
-}
-@keyframes demo-fade {
+/* ── Per-card full screen (src/components/CardPresenter.tsx) ──────────────
+   A presented card only FADES — it carries an inline `transform: scale()` from
+   presentCards(), and a keyframe that touches transform would overwrite it,
+   including after it finishes via `both`. */
+@keyframes present-fade {
   from {
     opacity: 0;
   }
@@ -545,53 +501,7 @@ html[data-demo='gauge'] .demo-panel {
     opacity: 1;
   }
 }
-
-/* 2. Title: each word rises out of a mask, then a red rule draws, then the subline. */
-.demo-word {
-  display: inline-block;
-  overflow: hidden;
-  vertical-align: bottom;
-  padding-bottom: 0.08em;
-}
-.demo-word > span {
-  display: inline-block;
-  animation: demo-word-up 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: var(--d, 0ms);
-}
-@keyframes demo-word-up {
-  from {
-    opacity: 0;
-    transform: translateY(110%);
-    filter: blur(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-    filter: none;
-  }
-}
-.demo-rule {
-  transform-origin: left center;
-  animation: demo-rule 700ms cubic-bezier(0.22, 1, 0.36, 1) 700ms both;
-}
-@keyframes demo-rule {
-  from {
-    opacity: 0;
-    transform: scaleX(0);
-  }
-  to {
-    opacity: 1;
-    transform: scaleX(1);
-  }
-}
-.demo-sub {
-  animation: demo-fade-up 700ms ease-out 1100ms both;
-}
-.demo-gauge {
-  /* No extra delay: the overlay above is already invisible until 500 ms. */
-  animation: demo-fade-up 450ms ease-out both;
-}
-@keyframes demo-fade-up {
+@keyframes present-fade-up {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -601,34 +511,12 @@ html[data-demo='gauge'] .demo-panel {
     transform: none;
   }
 }
-
-/* A presented card (demo slide or the app's full-screen) only FADES — it carries an
-   inline `transform: scale()` from presentCards(), and a keyframe that touches
-   transform would overwrite it, including after it finishes via `both`. Its
-   animationstart is also what remounts the card's content so the charts replay
-   (useDemoRevealKey). The caption above it fades up. */
-.demo-slide-label {
-  animation: demo-fade-up 500ms ease-out both;
-}
 .present-card {
-  animation: demo-fade 420ms ease-out both;
+  animation: present-fade 420ms ease-out both;
 }
-
-
 @media (prefers-reduced-motion: reduce) {
-  html[data-demo='reveal'] .demo-panel,
-  .demo-overlay,
-  .demo-slide-label,
-  .present-card,
-  .demo-word > span,
-  .demo-rule,
-  .demo-sub,
-  .demo-gauge {
+  .present-card {
     animation: none;
-  }
-  html[data-demo='gauge'] .demo-panel {
-    animation-duration: 1ms;
-    animation-delay: 0ms;
   }
 }
 
@@ -649,13 +537,8 @@ html[data-demo='gauge'] .demo-panel {
     opacity: 1;
   }
 }
-/* Never during a demo — on a projector they are a distraction. A card presented in
-   the app keeps its "?" though (you opened the panel to study it, so the explainer
+/* A presented card keeps its "?" (you opened the panel to study it, so the explainer
    is exactly what you might want next); its expand button unmounts on its own. */
-html[data-demo] .panel-action {
-  opacity: 0 !important;
-  pointer-events: none;
-}
 
 /* A very slight lift so a card reads as something you can act on — the dashboard
    only, where a card opens full screen. The task list's filter panel and table are
@@ -666,17 +549,16 @@ main[data-page='/'] .card {
 main[data-page='/'] .card:hover {
   transform: scale(1.008);
 }
-html[data-demo] main .card:hover,
 html[data-present] main .card:hover {
   transform: none;
 }
 
 /* The per-card full-screen backdrop + its title. */
 .present-overlay {
-  animation: demo-fade 200ms ease-out both;
+  animation: present-fade 200ms ease-out both;
 }
 .present-title {
-  animation: demo-fade-up 380ms ease-out both;
+  animation: present-fade-up 380ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {

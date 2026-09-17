@@ -26,14 +26,8 @@ import { useTheme } from '../lib/theme'
 import { TrendDelta } from './ui/TrendDelta'
 import { cx } from '../lib/format'
 import { useNameMarquee } from '../lib/useNameMarquee'
-import { DEMO_INTRO_EASE, useDemoIntro } from '../lib/demo'
 import { useIsPresented } from './CardPresenter'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-
-/** Inline transition for a bar growing from 0 during the demo reveal (else none). */
-function introGrow(intro: boolean, prop = 'width'): string | undefined {
-  return intro ? `${prop} 1000ms ${DEMO_INTRO_EASE}` : undefined
-}
 
 /** Donut ring: the dashboard size, the ceiling when a card is presented full
  *  screen, and the radii as a fraction of it (58/84 of 180, kept exactly). */
@@ -330,8 +324,6 @@ export function DonutChart({
   const [active, setActive] = useState<number | null>(null)
   // Presenting a card full screen makes it much larger, but a fixed 180px ring
   // would just sit in the middle of the extra space — so the ring grows into it.
-  // `useIsPresented` is the APP's full screen only; demo slides keep 180 (they are
-  // magnified as a whole instead), so neither view changes the other.
   const [ringBoxRef, ringBox] = useContainerSize<HTMLDivElement>()
   const presented = useIsPresented(ringBoxRef)
   const ring =
@@ -448,7 +440,6 @@ export function StackedShareBar({
 }: MixProps) {
   const colors = useChartColors()
   const [active, setActive] = useState<number | null>(null)
-  const { intro, ready } = useDemoIntro()
   const total = data.reduce((a, b) => a + b.value, 0)
   if (total === 0 || data.length < minPoints) return <NotEnough message={emptyMessage} height={160} />
   const clickable = Boolean(onSelect)
@@ -466,8 +457,7 @@ export function StackedShareBar({
             key={d.name}
             className={cx('h-full transition-opacity', clickable && 'cursor-pointer')}
             style={{
-              width: ready ? `${(d.value / total) * 100}%` : '0%',
-              transition: introGrow(intro),
+              width: `${(d.value / total) * 100}%`,
               background: d.color ?? colors[i % colors.length],
               opacity: active == null || active === i ? 1 : 0.35,
             }}
@@ -542,7 +532,6 @@ export function RankedBars({
   sourceLabel?: string
 }) {
   const colors = useChartColors()
-  const { intro, ready } = useDemoIntro()
   if (data.length < minPoints) return <NotEnough message={emptyMessage} height={180} />
   const prevByName = compare ? new Map(compare.map((d) => [d.name, d.value])) : null
   // Shared scale so the target-year bar and the source-year marker line up. In
@@ -591,7 +580,7 @@ export function RankedBars({
               <div className="relative h-2.5 flex-1 rounded-full bg-subtle">
                 <div
                   className="absolute inset-y-0 left-0 rounded-full transition-[width]"
-                  style={{ width: ready ? `${(d.value / max) * 100}%` : '0%', transition: introGrow(intro), background: color }}
+                  style={{ width: `${(d.value / max) * 100}%`, background: color }}
                 />
                 {prev > 0 && (
                   <span
@@ -605,7 +594,7 @@ export function RankedBars({
               <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-subtle">
                 <div
                   className="h-full rounded-full transition-[width]"
-                  style={{ width: ready ? `${(d.value / max) * 100}%` : '0%', transition: introGrow(intro), background: color }}
+                  style={{ width: `${(d.value / max) * 100}%`, background: color }}
                 />
               </div>
             )}
@@ -1107,11 +1096,11 @@ function TaskDotsLayer({
    * ⚠️ `box` is the hit rect's CLIENT rect, so its size is in VISUAL pixels, while
    * `left/top/width/plotH` and every dot's `cx/cy` are in the chart's own user
    * space. Those are the same thing at 1:1 — but not when an ancestor is scaled.
-   * Demo mode lays a slide's card out small and scales it up with a transform
-   * (see lib/demo.tsx), which made every hit test miss by the scale factor,
-   * increasingly so away from the rect's top-left corner (~200px at the right-hand
-   * edge, so the wrong task was reported under the pointer). Deriving the ratio
-   * from the rect itself is exact at any scale and a no-op at 1:1.
+   * Presenting a card full screen lays it out at a logical width and scales it up
+   * with a transform (see lib/present.ts), which made every hit test miss by the
+   * scale factor, increasingly so away from the rect's top-left corner (~200px at
+   * the right-hand edge, so the wrong task was reported under the pointer).
+   * Deriving the ratio from the rect itself is exact at any scale and a no-op at 1:1.
    */
   const toUser = (clientX: number, clientY: number, box: DOMRect) => {
     const sx = width > 0 && box.width > 0 ? box.width / width : 1
