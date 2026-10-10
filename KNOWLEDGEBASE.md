@@ -1421,3 +1421,27 @@ only MODEL output is audited, and there the sign-copying rule is a real protecti
   upsert without it, and `saveSettings` falls back to the in-memory value so a holiday
   added before the column exists stays on screen (it won't persist until
   `schema.sql` is re-run — the ALTER is in there).
+
+---
+
+## 26. monday.com Item View (`/embed/item`) — asset checklist ⚠️ DEMO
+
+A private monday app (Developer Center → **Item View** feature, external URL
+`https://<vercel-domain>/embed/item`) adds an **Assets** tab to each monday item card,
+where the team creates deliverables and checks them off. `src/pages/MondayItemView.tsx`,
+routed in `App.tsx` OUTSIDE the app shell (no store, no Layout).
+
+- **⚠️ DEMO, UNWIRED:** in-memory seed data (`demoAssets()`, due dates relative to today),
+  lost on reload; Reset button re-seeds. Nothing is read from / written to Supabase or
+  monday. Asset types + people are hard-coded demo lists, not `settings`.
+- UI: progress card (done / working / to-do bar, monday status colours), quick-add row
+  (name + type + owner + due, Enter adds), filter tabs, groups per asset type with
+  per-group progress + collapse. Rows: round check-off, click-to-rename, status pill
+  (native select overlay; hidden < 460px), owner avatar (select overlay), due date
+  (`showPicker`, red when overdue), hover delete (always visible on touch).
+- Theme follows monday via `monday-sdk-js` `listen('context')` (light → light,
+  dark/black → dark), not persisted; `?theme=dark` for testing outside monday.
+- ⚠️ Don't use `crypto.randomUUID` here — undefined in a non-secure frame (crashed the
+  iframe test); ids come from a module counter.
+- Next (not built): persist assets (own table keyed by monday item id, or monday
+  subitems), use the item's real name/id from context, real asset types/people.

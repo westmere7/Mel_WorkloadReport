@@ -12,6 +12,7 @@ import { CalendarPage } from './pages/Calendar'
 import { SettingsPage } from './pages/Settings'
 import { ShowcasePage } from './pages/Showcase'
 import { ShowcaseViewerPage } from './pages/ShowcaseViewer'
+import { MondayItemViewPage } from './pages/MondayItemView'
 
 export default function App() {
   return (
@@ -19,6 +20,10 @@ export default function App() {
       {/* Public, chrome-free showcase viewer — anyone with the link, no sign-in,
           no store mount, no sidebar/header. */}
       <Route path="/showcase/:id" element={<ShowcaseViewerPage />} />
+
+      {/* monday.com Item View (iframe in a monday item card) — asset checklist, no chrome.
+          DEMO: in-memory data only, no store. */}
+      <Route path="/embed/item" element={<MondayItemViewPage />} />
 
       {/* Everything else runs inside the app shell (store + chrome). */}
       <Route element={<StoreShell />}>
