@@ -19,15 +19,60 @@
   --mv-idle: #c4c4c4;
   --mv-empty: #e6e9ef;
   --mv-negative: #d83a52;
+  --mv-surface: #ffffff;
+  --mv-placeholder: #9699a6;
+  --mv-banner-text: #1f4e8c;
+  --mv-danger-hover: #fbe9ec;
+  --mv-overlay: rgba(41, 47, 76, 0.7);
 
   min-height: 100vh;
-  background: #fff;
+  background: var(--mv-surface);
   color: var(--mv-text);
   font-family: Figtree, Roboto, 'Noto Sans Hebrew', 'Noto Kufi Arabic', 'Noto Sans JP', sans-serif;
   font-size: 14px;
   line-height: 1.43;
   -webkit-font-smoothing: antialiased;
 }
+/* monday dark theme (Vibe dark tokens) */
+.mv.mv-theme-dark {
+  --mv-surface: #181b34;
+  --mv-selected: #133774;
+  --mv-text: #d5d8df;
+  --mv-text-2: #9699a6;
+  --mv-border: #4b4e69;
+  --mv-ui-border: #797e93;
+  --mv-hover: #4b4e69;
+  --mv-grey: #30324e;
+  --mv-empty: #3b3e5c;
+  --mv-negative: #f65f7c;
+  --mv-placeholder: #797e93;
+  --mv-banner-text: #cce5ff;
+  --mv-danger-hover: rgba(246, 95, 124, 0.15);
+  --mv-overlay: rgba(0, 0, 0, 0.6);
+}
+/* monday night theme ("black") */
+.mv.mv-theme-black {
+  --mv-surface: #111111;
+  --mv-selected: #133774;
+  --mv-text: #eeeeee;
+  --mv-text-2: #aaaaaa;
+  --mv-border: #3a3a3a;
+  --mv-ui-border: #6b6b6b;
+  --mv-hover: #333333;
+  --mv-grey: #222222;
+  --mv-empty: #333333;
+  --mv-negative: #f65f7c;
+  --mv-placeholder: #777777;
+  --mv-banner-text: #cce5ff;
+  --mv-danger-hover: rgba(246, 95, 124, 0.15);
+  --mv-overlay: rgba(0, 0, 0, 0.7);
+}
+.mv.mv-theme-dark,
+.mv.mv-theme-black {
+  background: var(--mv-surface);
+  color-scheme: dark; /* native date picker / selects / scrollbars */
+}
+
 /* zero-specificity reset so component classes below win */
 :where(.mv button) {
   font: inherit;
@@ -41,7 +86,7 @@
 /* ── Preview chrome (standalone only — inside monday, monday draws this) ── */
 .mv-preview-banner {
   background: var(--mv-selected);
-  color: #1f4e8c;
+  color: var(--mv-banner-text);
   font-size: 12px;
   padding: 6px 16px;
   text-align: center;
@@ -317,7 +362,7 @@
   min-height: 56px;
   padding: 8px 10px 8px 16px;
   border-bottom: 1px solid var(--mv-border);
-  background: #fff;
+  background: var(--mv-surface);
 }
 .mv-row:last-child {
   border-bottom: 0;
@@ -378,7 +423,7 @@
   flex-shrink: 0;
   border: 2px solid var(--mv-ui-border);
   border-radius: 50%;
-  background: #fff;
+  background: var(--mv-surface);
   color: transparent;
   cursor: pointer;
   transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease;
@@ -400,7 +445,7 @@
   min-height: 44px;
   padding: 8px 10px 8px 16px;
   border: 0;
-  background: #fff;
+  background: var(--mv-surface);
   color: var(--mv-text-2);
   text-align: left;
   cursor: pointer;
@@ -459,7 +504,7 @@
 }
 .mv-btn-primary:disabled {
   background: var(--mv-empty);
-  color: #9699a6;
+  color: var(--mv-placeholder);
   cursor: not-allowed;
 }
 .mv-btn-tertiary {
@@ -474,7 +519,7 @@
   padding: 0 8px;
 }
 .mv-btn-danger:hover {
-  background: #fbe9ec;
+  background: var(--mv-danger-hover);
 }
 .mv-input {
   width: 100%;
@@ -484,7 +529,7 @@
   border-radius: 4px;
   font: inherit;
   color: var(--mv-text);
-  background: #fff;
+  background: var(--mv-surface);
   outline: none;
 }
 .mv-input:hover {
@@ -494,7 +539,7 @@
   border-color: var(--mv-primary);
 }
 .mv-input::placeholder {
-  color: #9699a6;
+  color: var(--mv-placeholder);
 }
 .mv-field-label {
   display: flex;
@@ -527,7 +572,7 @@
   height: 40px;
   border: 1px solid var(--mv-ui-border);
   border-radius: 4px;
-  background: #fff;
+  background: var(--mv-surface);
   cursor: pointer;
 }
 .mv-step-btn:hover:not(:disabled) {
@@ -550,7 +595,7 @@
   padding: 0 10px 0 4px;
   border: 1px solid var(--mv-border);
   border-radius: 16px;
-  background: #fff;
+  background: var(--mv-surface);
   cursor: pointer;
 }
 .mv-chip:hover {
@@ -574,7 +619,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(41, 47, 76, 0.7);
+  background: var(--mv-overlay);
   animation: mv-fade 0.15s ease;
 }
 .mv-sheet {
@@ -582,7 +627,7 @@
   flex-direction: column;
   width: 100%;
   max-height: 92vh;
-  background: #fff;
+  background: var(--mv-surface);
   border-radius: 16px 16px 0 0;
   box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3);
   animation: mv-up 0.2s ease;
@@ -692,7 +737,7 @@
   border-top: 0;
 }
 .mv-details .mv-person {
-  background: #fff;
+  background: var(--mv-surface);
 }
 
 /* ── Asset lines ── */
@@ -721,7 +766,7 @@
 }
 .mv-btn-secondary {
   border: 1px solid var(--mv-ui-border);
-  background: #fff;
+  background: var(--mv-surface);
 }
 .mv-btn-secondary:hover {
   background: var(--mv-hover);
@@ -833,7 +878,7 @@
   height: 12px;
   border-radius: 50%;
   border: 3px solid var(--mv-primary);
-  background: #fff;
+  background: var(--mv-surface);
   box-sizing: border-box;
   z-index: 1;
 }
@@ -854,7 +899,7 @@
   padding: 8px 12px;
   border-left: 6px solid var(--mv-primary);
   border-radius: 4px;
-  background: #fff;
+  background: var(--mv-surface);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
   transform: translate(-24px, -50%) rotate(-1.5deg);
   pointer-events: none;
@@ -892,7 +937,7 @@
 }
 .mv-avatar-empty {
   border: 1px dashed var(--mv-ui-border);
-  background: #fff;
+  background: var(--mv-surface);
   color: var(--mv-text-2);
   font-weight: 500;
 }

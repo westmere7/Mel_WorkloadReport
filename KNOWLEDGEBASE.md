@@ -1467,7 +1467,14 @@ app shell, inside `StoreProvider` only (live task data, no Layout).
   a target while dragging. The Group field in the sheet is the keyboard equivalent.
 - **monday look:** Figtree + Poppins (`@fontsource`), Vibe colours as literal values
   (`mv-` classes, no app tokens), monday status colours, group colour strips, bottom
-  sheet on phones / dialog ≥640px. Forces LIGHT (removes `.dark` while mounted).
+  sheet on phones / dialog ≥640px. Removes the app's `.dark` class while mounted and
+  uses its own palette: **themes** light (default) · dark · black (monday "night"), as
+  `.mv-theme-*` variable sets (`--mv-surface`, `--mv-text`, …; no literal whites).
+  Theme source: monday's SDK context `theme` (installed app) → else `?theme=dark|black`
+  → else light. html/body are painted the theme colour; dark/black set `color-scheme: dark`.
+- **Plain monday Embed widget ≠ app:** an embed is just an iframe — monday never answers
+  the SDK, so no item id / theme arrive. It works only with `?itemId=` (+ `?theme=`) in
+  each widget's URL. Auto item id + theme need the installed Item View app.
   `:where(.mv button)` reset keeps component colours winning — a plain `.mv button`
   reset turned the status labels dark.
 - **Standalone only:** a preview banner + monday-like item header (title, Updates / Files

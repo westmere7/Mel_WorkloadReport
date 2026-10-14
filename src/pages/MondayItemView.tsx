@@ -70,8 +70,14 @@ const STATUS_ORDER: Status[] = ['notStarted', 'working', 'stuck', 'done']
 const LEGEND_ORDER: Status[] = ['done', 'working', 'stuck', 'notStarted']
 const SHORT_LABEL: Record<Status, string> = { done: 'done', working: 'working', stuck: 'stuck', notStarted: 'not started' }
 const DETAILS_KEY = 'mwr.itemAssets.detailsOpen'
-const UNPLANNED = '#e6e9ef'
-const UNGROUPED_COLOR = '#c3c6d4'
+const UNPLANNED = 'var(--mv-empty)'
+const UNGROUPED_COLOR = 'var(--mv-ui-border)'
+
+/** monday's themes. Light is the default; dark/black (night) come from monday's
+ *  context once installed as an app, or `?theme=dark|black` when embedded/opened plainly. */
+type MondayTheme = 'light' | 'dark' | 'black'
+const THEME_BG: Record<MondayTheme, string> = { light: '#ffffff', dark: '#181b34', black: '#111111' }
+const toTheme = (t: string | null | undefined): MondayTheme => (t === 'dark' || t === 'black' ? t : 'light')
 // monday board-group colours.
 const GROUP_COLORS = ['#579bfc', '#a25ddc', '#ff642e', '#037f4c', '#ff158a', '#0086c0', '#cab641', '#784bd1', '#00c875', '#e2445c']
 const AVATAR_COLORS = ['#ff7575', '#579bfc', '#a25ddc', '#00a9a5', '#e2445c', '#037f4c', '#ff642e', '#784bd1', '#0086c0']
@@ -286,8 +292,12 @@ export function MondayItemViewPage() {
   const { loading, error, tasks, settings } = useStore()
   const [itemId, setItemId] = useState<string | null>(paramItemId)
   const [waiting, setWaiting] = useState(!paramItemId && !standalone)
+  // monday's own theme (app context) wins over ?theme=; default light.
+  const [mondayTheme, setMondayTheme] = useState<string | null>(null)
+  const theme = toTheme(mondayTheme ?? params.get('theme'))
 
-  // monday's light theme only (for now): drop the app's dark class while mounted.
+  // This page uses its own monday palette: drop the app's dark class while
+  // mounted, and paint html/body in the theme colour (no light flash on overscroll).
   useEffect(() => {
     const root = document.documentElement
     const wasDark = root.classList.contains('dark')
@@ -296,14 +306,21 @@ export function MondayItemViewPage() {
       if (wasDark) root.classList.add('dark')
     }
   }, [])
-
-  // Inside a monday item card, monday tells us which item is open.
   useEffect(() => {
-    if (paramItemId || standalone) return
-    const timer = window.setTimeout(() => setWaiting(false), CONTEXT_TIMEOUT_MS)
+    const els = [document.documentElement, document.body]
+    els.forEach((el) => (el.style.backgroundColor = THEME_BG[theme]))
+    return () => els.forEach((el) => (el.style.backgroundColor = ''))
+  }, [theme])
+
+  // Inside monday (installed app), monday sends the open item + its theme.
+  // A plain embed never answers — then ?itemId= / ?theme= are all we have.
+  useEffect(() => {
+    if (standalone) return
+    const timer = paramItemId ? 0 : window.setTimeout(() => setWaiting(false), CONTEXT_TIMEOUT_MS)
     const unlisten = mondaySdk().listen('context', (res) => {
-      const ctx = res.data as { itemId?: number }
-      if (ctx.itemId) setItemId(String(ctx.itemId))
+      const ctx = res.data as { itemId?: number; theme?: string }
+      if (ctx.theme) setMondayTheme(ctx.theme)
+      if (!paramItemId && ctx.itemId) setItemId(String(ctx.itemId))
       window.clearTimeout(timer)
       setWaiting(false)
     })
@@ -353,7 +370,7 @@ export function MondayItemViewPage() {
   }
 
   return (
-    <div className="mv">
+    <div className={`mv mv-theme-${theme}`}>
       {standalone && (
         <>
           <div className="mv-preview-banner">Preview: how this tab appears inside a monday.com item</div>
@@ -791,8 +808,8 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
                   aria-expanded={open}
                   onClick={() => toggle(key)}
                 >
-                  <ChevronDown size={18} color={group ? color : '#676879'} />
-                  <span className="mv-group-title" style={{ color: group ? color : '#676879' }}>
+                  <ChevronDown size={18} style={{ color: group ? color : 'var(--mv-text-2)' }} />
+                  <span className="mv-group-title" style={{ color: group ? color : 'var(--mv-text-2)' }}>
                     {group?.name ?? 'No group'}
                   </span>
                   <span className="mv-group-count">
