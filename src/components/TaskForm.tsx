@@ -9,6 +9,7 @@ import {
   EyeOff,
   History,
   ImagePlus,
+  ListChecks,
   Loader2,
   Plus,
   RotateCcw,
@@ -39,7 +40,7 @@ import { ImageLightbox } from './ui/ImageLightbox'
 import { addDaysISO, cx, todayISO, toMessage } from '../lib/format'
 import { compressToWebP, ACCEPTED_IMAGE_TYPES } from '../lib/image'
 import { deriveHalf, parseTaskCode, type ParsedCode } from '../lib/taskCode'
-import { isMondayLookupEnabled, resolvePeopleFromMonday, searchMonday, type MondayHit } from '../lib/monday'
+import { assetsTabUrl, isMondayLookupEnabled, resolvePeopleFromMonday, searchMonday, type MondayHit } from '../lib/monday'
 
 const MAX_IMAGES = 10
 
@@ -2599,6 +2600,25 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               className="inline-flex items-center justify-center rounded-lg border border-line bg-subtle p-1.5 opacity-40 cursor-not-allowed"
             >
               <img src="/monday.svg" alt="Monday.com" className="h-4 w-4 grayscale" />
+            </span>
+          )}
+          {assetsTabUrl(mondayUrl) ? (
+            <a
+              href={assetsTabUrl(mondayUrl)!}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open the Assets tab — asset lines, people in charge and progress for this monday item"
+              aria-label="Open Assets tab"
+              className="inline-flex items-center justify-center rounded-lg border border-line bg-subtle p-1.5 text-muted transition hover:bg-card hover:border-brand-300 hover:text-ink"
+            >
+              <ListChecks className="h-4 w-4" />
+            </a>
+          ) : (
+            <span
+              title="Assets tab needs a monday.com link (auto-fills when selecting a monday result)"
+              className="inline-flex items-center justify-center rounded-lg border border-line bg-subtle p-1.5 text-muted opacity-40 cursor-not-allowed"
+            >
+              <ListChecks className="h-4 w-4" />
             </span>
           )}
           {initial && (

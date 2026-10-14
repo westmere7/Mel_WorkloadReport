@@ -21,9 +21,16 @@ export default function App() {
           no store mount, no sidebar/header. */}
       <Route path="/showcase/:id" element={<ShowcaseViewerPage />} />
 
-      {/* monday.com Item View (iframe in a monday item card) — asset checklist, no chrome.
-          DEMO: in-memory data only, no store. */}
-      <Route path="/embed/item" element={<MondayItemViewPage />} />
+      {/* monday.com Item View — the item's "Assets" tab (iframe in a monday item card,
+          or ?itemId= standalone). Store only (live task data), no app chrome. */}
+      <Route
+        path="/embed/item"
+        element={
+          <StoreProvider>
+            <MondayItemViewPage />
+          </StoreProvider>
+        }
+      />
 
       {/* Everything else runs inside the app shell (store + chrome). */}
       <Route element={<StoreShell />}>

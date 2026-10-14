@@ -48,6 +48,18 @@ interface SearchResponse {
   error?: string
 }
 
+/** monday item id from an item link (…/boards/<board>/pulses/<item>), or null. */
+export function mondayItemIdFromUrl(url: string | null | undefined): string | null {
+  const m = url?.trim().match(/\/pulses\/(\d+)\/?(?:[?#].*)?$/)
+  return m ? m[1] : null
+}
+
+/** The item's "Assets" tab page (monday Item View), opened standalone for this item. */
+export function assetsTabUrl(mondayUrl: string | null | undefined): string | null {
+  const id = mondayItemIdFromUrl(mondayUrl)
+  return id ? `/embed/item?itemId=${id}` : null
+}
+
 /**
  * Show the lookup button only when it can actually work: Supabase is the backend
  * (Edge Functions live there) AND the integration is switched on for this build

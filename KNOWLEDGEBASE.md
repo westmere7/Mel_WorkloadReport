@@ -1424,24 +1424,56 @@ only MODEL output is audited, and there the sign-copying rule is a real protecti
 
 ---
 
-## 26. monday.com Item View (`/embed/item`) — asset checklist ⚠️ DEMO
+## 26. monday.com Item View (`/embed/item`) — "Assets" tab ⚠️ DEMO
 
 A private monday app (Developer Center → **Item View** feature, external URL
-`https://<vercel-domain>/embed/item`) adds an **Assets** tab to each monday item card,
-where the team creates deliverables and checks them off. `src/pages/MondayItemView.tsx`,
-routed in `App.tsx` OUTSIDE the app shell (no store, no Layout).
+`https://<vercel-domain>/embed/item`) adds an **Assets** tab to each monday item card.
+Not installed yet (needs IT approval) — demoed standalone at
+`/embed/item?itemId=<monday item id>` (e.g. `2827224155` = 26.0831.A).
+`src/pages/MondayItemView.tsx` + `mondayItemView.css`; routed in `App.tsx` OUTSIDE the
+app shell, inside `StoreProvider` only (live task data, no Layout).
 
-- **⚠️ DEMO, UNWIRED:** in-memory seed data (`demoAssets()`, due dates relative to today),
-  lost on reload; Reset button re-seeds. Nothing is read from / written to Supabase or
-  monday. Asset types + people are hard-coded demo lists, not `settings`.
-- UI: progress card (done / working / to-do bar, monday status colours), quick-add row
-  (name + type + owner + due, Enter adds), filter tabs, groups per asset type with
-  per-group progress + collapse. Rows: round check-off, click-to-rename, status pill
-  (native select overlay; hidden < 460px), owner avatar (select overlay), due date
-  (`showPicker`, red when overdue), hover delete (always visible on touch).
-- Theme follows monday via `monday-sdk-js` `listen('context')` (light → light,
-  dark/black → dark), not persisted; `?theme=dark` for testing outside monday.
-- ⚠️ Don't use `crypto.randomUUID` here — undefined in a non-secure frame (crashed the
-  iframe test); ids come from a module counter.
-- Next (not built): persist assets (own table keyed by monday item id, or monday
-  subitems), use the item's real name/id from context, real asset types/people.
+- **Asset LINES, not units:** each line is a batch — name · asset type · (function, when
+  the task has several) · person in charge · quantity · status · due · notes. NO per-unit done count (too granular) — a line's
+  status alone drives progress (units = qty of lines in each status).
+  A FLAT list; the stored array order IS the display order (drag reorders it). The `#` shown is just the line's
+  POSITION down the page (ungrouped first, then each group) — always 1…N, renumbers on
+  move/delete.
+- **DEMO seed (`DEMO_SEED = true`):** an item's first open in a browser fills it with
+  sample lines covering the dashboard's counts (`demoBoard`: names per type, random
+  person in charge from `task.people`, random status/due). A dashed "Demo data" bar
+  offers Shuffle sample lines / Clear all. Turn off once lines are stored for real.
+- **User groups are blind:** "New group" creates a free-named, coloured group unrelated to
+  asset types; lines move in/out via the Group field. Ungrouped lines sit on top
+  (headerless until a group exists, then "No group"). Deleting a group keeps its lines.
+- **Dashboard = read-only reference.** The linked task (matched by `mondayUrl` →
+  `mondayItemIdFromUrl` in `lib/monday.ts`) supplies types + counts, shown in the progress
+  card as "in lines / on the dashboard" per type (red when lines exceed it, "not on
+  dashboard" for extra types). Never capped, never written back.
+- **⚠️ Lines + groups are tab-only, in localStorage** (`mwr.itemAssets.v3.<itemId>`, shape
+  `{ lines, groups, nextNo }`) — per browser, not shared. Real use needs a table keyed
+  by monday item id (or monday subitems).
+- Each row has a round check-off (`.mv-check`): tap → Done, tap again → Not started.
+- **Compact summary** on top: "N/M done · %", an 8px battery bar and a one-line
+  non-done count; the per-type comparison, people strip and code/dates sit in a
+  **Details** fold (closed by default, remembered in `mwr.itemAssets.detailsOpen`).
+- **Drag to reorder / move:** a grip handle per row (whenever there are 2+ lines or any
+  group) starts a pointer-event drag — works with touch (`touch-action: none` on the
+  handle). The drop SPOT is section (`data-drop` = group id | `__none`) + "before the first
+  row (`data-line`) whose midpoint is below the pointer"; a zero-height blue insertion line
+  marks it (zero height so rows don't shift under the pointer). Another section also
+  highlights and the ghost says "→ group". `placeLine` re-sections + re-positions in the
+  array; landing where it was is a no-op. Edges auto-scroll; "No group" stays visible as
+  a target while dragging. The Group field in the sheet is the keyboard equivalent.
+- **monday look:** Figtree + Poppins (`@fontsource`), Vibe colours as literal values
+  (`mv-` classes, no app tokens), monday status colours, group colour strips, bottom
+  sheet on phones / dialog ≥640px. Forces LIGHT (removes `.dark` while mounted).
+  `:where(.mv button)` reset keeps component colours winning — a plain `.mv button`
+  reset turned the status labels dark.
+- **Standalone only:** a preview banner + monday-like item header (title, Updates / Files
+  / Activity Log / **Assets** tabs). Inside monday (iframe) monday draws that itself and
+  the item id comes from `monday-sdk-js` `listen('context')`.
+- **Entry point:** the task form footer has a `ListChecks` icon (next to the monday logo)
+  opening `assetsTabUrl(mondayUrl)` in a new tab; greyed out without a monday link.
+- Don't use `crypto.randomUUID` here (undefined in non-secure frames); ids are
+  time + counter.
