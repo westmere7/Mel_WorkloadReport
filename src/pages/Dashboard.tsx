@@ -848,8 +848,9 @@ export function Dashboard() {
       {/* Left: workload (fills height) above the two campaign charts, side by side.
           Right: the mix donuts above the full-height squads-demand distribution. */}
       <div className="grid min-h-0 flex-1 items-stretch gap-4 lg:grid-cols-2">
-        {/* Compact middle row; remaining space belongs to the campaign chart. */}
-        <div className="grid min-h-0 grid-rows-[320px_minmax(300px,1fr)] gap-4">
+        {/* Workload row (376px — matches the donut cards opposite so the rows line up);
+            remaining space belongs to the campaign chart. */}
+        <div className="grid min-h-0 grid-rows-[376px_minmax(300px,1fr)] gap-4">
           <Card className="flex min-h-0 flex-1 flex-col">
             <CardHeader
               // The period lives in the title, so the chart doesn't need a pill
@@ -965,7 +966,7 @@ export function Dashboard() {
         {/* RIGHT column */}
         <div className="flex min-h-0 flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Card className="flex h-80 min-h-0 flex-col">
+            <Card className="flex h-[376px] min-h-0 flex-col">
               <CardHeader
                 title="Asset mix"
                 className="shrink-0"
@@ -997,7 +998,7 @@ export function Dashboard() {
                 sourceLabel={String(srcYear)}
               />
             </Card>
-            <Card className="flex h-80 min-h-0 flex-col">
+            <Card className="flex h-[376px] min-h-0 flex-col">
               <CardHeader
                 title="Work type mix"
                 className="shrink-0"
