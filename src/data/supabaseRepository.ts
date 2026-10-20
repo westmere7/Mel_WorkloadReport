@@ -1,4 +1,3 @@
-import type { AdvisorCacheEntry } from '../lib/advisor/cache'
 import { AssetLinesNotSetUpError, normalizeBoard, type AssetBoard } from '../lib/assetLines'
 import { normalizeCustomHolidays } from '../lib/holidays'
 import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
@@ -26,8 +25,6 @@ import {
 import { rowToTask, taskInputToRow, taskToRow } from './mappers'
 
 const SETTINGS_ID = 'app'
-/** The advisor cache holds exactly one row — the analysis covers the whole record. */
-const ADVISOR_CACHE_ID = 'current'
 /** Public Storage bucket for task images (created by supabase/schema.sql). */
 const IMAGE_BUCKET = 'task-images'
 /** Private Storage bucket for year-snapshot JSON blobs (created by supabase/schema.sql). */
@@ -193,12 +190,6 @@ function isMissingCustomHolidaysColumn(err: unknown): boolean {
 function isMissingChartGroupsColumn(err: unknown): boolean {
   const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
   return msg.includes('chart_groups') && (msg.includes('column') || msg.includes('schema cache'))
-}
-
-/** True if a Supabase error is complaining about a missing `advisor_prompt` column (pre-migration). */
-function isMissingAdvisorPromptColumn(err: unknown): boolean {
-  const msg = ((err as { message?: string } | null)?.message ?? '').toLowerCase()
-  return msg.includes('advisor_prompt') && (msg.includes('column') || msg.includes('schema cache'))
 }
 
 /** True if a Supabase error is complaining about a missing `asset_rates_log` column (pre-migration). */
@@ -712,7 +703,6 @@ export class SupabaseRepository implements Repository {
       squadKeywords: normalizeKeywordMap(data.squad_keywords),
       campaignKeywords: normalizeKeywordMap(data.campaign_keywords),
       chartGroups: normalizeChartGroups(data.chart_groups),
-      advisorPrompt: typeof data.advisor_prompt === 'string' ? data.advisor_prompt : '',
       customHolidays: normalizeCustomHolidays(data.custom_holidays),
     }
   }
@@ -743,7 +733,6 @@ export class SupabaseRepository implements Repository {
       chart_groups: settings.chartGroups,
       asset_rates: settings.assetRates,
       asset_rates_log: settings.assetRatesLog ?? [],
-      advisor_prompt: settings.advisorPrompt,
       custom_holidays: settings.customHolidays ?? [],
     }
     let { data, error } = await upsert(payload)
@@ -772,10 +761,6 @@ export class SupabaseRepository implements Repository {
     }
     if (error && isMissingAssetRatesColumn(error)) {
       delete payload.asset_rates
-      ;({ data, error } = await upsert(payload))
-    }
-    if (error && isMissingAdvisorPromptColumn(error)) {
-      delete payload.advisor_prompt
       ;({ data, error } = await upsert(payload))
     }
     if (error && isMissingMondayBoardsColumn(error)) {
@@ -826,8 +811,6 @@ export class SupabaseRepository implements Repository {
         ? normalizeKeywordMap(data.campaign_keywords)
         : settings.campaignKeywords,
       chartGroups: data.chart_groups ? normalizeChartGroups(data.chart_groups) : settings.chartGroups,
-      advisorPrompt:
-        typeof data.advisor_prompt === 'string' ? data.advisor_prompt : settings.advisorPrompt,
     }
   }
 
@@ -893,45 +876,6 @@ export class SupabaseRepository implements Repository {
   }
 
   // ── Showcases ─────────────────────────────────────────────────
-  // Advisor (cached briefing) ────────────────────────────────────
-  async getAdvisorCache(): Promise<AdvisorCacheEntry | null> {
-    const { data, error } = await getSupabase()
-      .from('advisor_cache')
-      .select('*')
-      .eq('id', ADVISOR_CACHE_ID)
-      .maybeSingle()
-    if (error) {
-      // Pre-migration: no table yet. The advisor still works, it just regenerates
-      // every time — degrade quietly rather than breaking the page.
-      if (isMissingRelation(error)) return null
-      throw error
-    }
-    if (!data) return null
-    return {
-      fingerprint: data.fingerprint,
-      text: data.text,
-      source: data.source === 'fallback' ? 'fallback' : 'model',
-      model: data.model ?? undefined,
-      generatedAt: data.generated_at,
-      generatedBy: data.generated_by,
-    }
-  }
-
-  async saveAdvisorCache(entry: AdvisorCacheEntry): Promise<void> {
-    const { error } = await getSupabase().from('advisor_cache').upsert({
-      id: ADVISOR_CACHE_ID,
-      fingerprint: entry.fingerprint,
-      text: entry.text,
-      source: entry.source,
-      model: entry.model ?? null,
-      generated_by: entry.generatedBy ?? null,
-      generated_at: entry.generatedAt,
-    })
-    // A briefing that can't be cached is still a briefing — the caller already holds
-    // the text. Swallow the pre-migration case only.
-    if (error && !isMissingRelation(error)) throw error
-  }
-
   async listShowcases(): Promise<ShowcaseMeta[]> {
     // Exclude `config` so the list stays light.
     const { data, error } = await getSupabase()

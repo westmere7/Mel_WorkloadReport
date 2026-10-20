@@ -260,13 +260,6 @@ export interface AppSettings {
   campaignKeywords: Record<string, string[]>
   /** Dashboard chart display groups (bundle asset / work types into one slice). */
   chartGroups: ChartGroups
-  /**
-   * Voice brief for the Advisor's narration (Settings -> Advisor). Controls only
-   * HOW the analysis is written -- every finding and every number in it is computed
-   * in `src/lib/advisor/findings.ts`, and the Edge Function appends accuracy rules
-   * this text cannot override. Empty string means "use the built-in default".
-   */
-  advisorPrompt: string
   /** Team-defined holidays and closures (Settings → Holidays). See CustomHoliday. */
   customHolidays: CustomHoliday[]
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Archive, ArrowRightLeft, CalendarDays, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Settings2, Sparkles, Tag, Timer, Trash2, Users, X } from 'lucide-react'
+import { AlertTriangle, Archive, ArrowRightLeft, CalendarDays, Check, ChevronDown, Download, ExternalLink, Loader2, Lock, Pencil, Plus, RotateCcw, Settings2, Tag, Timer, Trash2, Users, X } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
@@ -18,8 +18,6 @@ import {
   parseKeywords,
   formatDurationDays,
   DEFAULT_SIZE_DURATIONS,
-  DEFAULT_ADVISOR_PROMPT,
-  ADVISOR_PROMPT_MAX,
 } from '../constants'
 import { cx, formatDate, toMessage } from '../lib/format'
 import { isMondayLookupEnabled } from '../lib/monday'
@@ -29,9 +27,6 @@ import {
   setDashboardPrefs,
   useDashboardPrefs,
 } from '../lib/dashboardPrefs'
-import { buildFindings } from '../lib/advisor/findings'
-import { buildAdvisorInput } from '../lib/advisor/scope'
-import { narrate, type Narration } from '../lib/advisor/narrate'
 import { ChartGroupsModal } from '../components/ChartGroupsModal'
 import { AssetRatesModal } from '../components/AssetRatesModal'
 import { useScrollFade } from '../lib/useScrollFade'
@@ -74,11 +69,6 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Dashboard display preferences (collapsible) — includes chart groups,
-          deep-linked from the dashboard panels' gear icons (#chart-groups). */}
-      <DashboardPrefsCard />
-      <HolidaysCard />
-
       {/* Groups — collapsible section holding every editable reference list */}
       <CollapsibleSection
         title="Groups"
@@ -153,30 +143,14 @@ export function SettingsPage() {
         </div>
       </CollapsibleSection>
 
-      {/* monday.com boards (lookup builds only) + year snapshots — side by side */}
-      {isMondayLookupEnabled() ? (
-        <div className="grid items-start gap-5 lg:grid-cols-2">
-          <MondayBoardsCard />
-          <SnapshotsCard />
-        </div>
-      ) : (
-        <SnapshotsCard />
-      )}
+      {/* Dashboard display preferences (collapsible) — includes chart groups,
+          deep-linked from the dashboard panels' gear icons (#chart-groups). */}
+      <DashboardPrefsCard />
+      <HolidaysCard />
 
-      {/* Advisor — last before the version. It's set apart and still closed by
-          default: editing the brief carries real risk of a worse briefing, so it
-          shouldn't be the first thing in reach on a page people open to manage
-          squads and campaigns. */}
-      <CollapsibleSection
-        title="Advisor"
-        subtitle="Reads every task on record and writes a plain-English briefing — where the team's effort actually goes, what has shifted year on year, and when the peaks land."
-        storageKey="mwr.settings.advisorOpen"
-        defaultOpen={false}
-        icon={Sparkles}
-        highlight
-      >
-        <AdvisorCard />
-      </CollapsibleSection>
+      {/* monday.com boards (lookup builds only) + year snapshots — collapsed by default */}
+      {isMondayLookupEnabled() && <MondayBoardsCard />}
+      <SnapshotsCard />
 
       {/* Version & changelog */}
       <VersionCard />
@@ -230,11 +204,12 @@ function MondayBoardsCard() {
   }
 
   return (
-    <Card>
-      <CardHeader
-        title="monday.com boards"
-        subtitle="Boards the New Task auto-fill searches — it looks through all of them at once. Paste a board id or its URL."
-      />
+    <CollapsibleSection
+      title="monday.com boards"
+      subtitle="Boards the New Task auto-fill searches — it looks through all of them at once. Paste a board id or its URL."
+      storageKey="mwr.settings.mondayBoardsOpen"
+      defaultOpen={false}
+    >
       <div className="mb-3 flex gap-2">
         <input
           className="input font-mono"
@@ -316,7 +291,7 @@ function MondayBoardsCard() {
           </div>
         )}
       </Modal>
-    </Card>
+    </CollapsibleSection>
   )
 }
 
@@ -496,16 +471,17 @@ function SnapshotsCard() {
     : null
 
   return (
-    <Card>
-      <CardHeader
-        title="Year snapshots"
-        subtitle="Freeze the full workload state (tasks, settings & demo images) into a self-contained JSON you can revert to, download, or delete."
-        action={
-          <button className="btn-primary" onClick={openCreate} disabled={Boolean(busy)}>
-            <Archive className="h-4 w-4" /> Create snapshot
-          </button>
-        }
-      />
+    <CollapsibleSection
+      title="Year snapshots"
+      subtitle="Freeze the full workload state (tasks, settings & demo images) into a self-contained JSON you can revert to, download, or delete."
+      storageKey="mwr.settings.snapshotsOpen"
+      defaultOpen={false}
+    >
+      <div className="mb-3 flex justify-end">
+        <button className="btn-primary" onClick={openCreate} disabled={Boolean(busy)}>
+          <Archive className="h-4 w-4" /> Create snapshot
+        </button>
+      </div>
 
       {error && !createOpen && !revertTarget && (
         <p className="mb-3 rounded-lg bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
@@ -747,7 +723,7 @@ function SnapshotsCard() {
           The saved JSON and its embedded images are removed. This cannot be undone.
         </p>
       </Modal>
-    </Card>
+    </CollapsibleSection>
   )
 }
 
@@ -889,272 +865,6 @@ function TimingEffortCard() {
       </div>
       <AssetRatesModal open={ratesOpen} onClose={() => setRatesOpen(false)} />
     </Card>
-  )
-}
-
-/**
- * Turn a `narrate()` rejection into something a manager can act on.
- *
- * The raw strings are diagnostic (audit verdicts, HTTP bodies from Gemini) and read
- * as noise to anyone who didn't write them — but the distinction that matters is
- * "your brief caused this" vs "the service did", so map to that and keep the raw
- * text available underneath.
- */
-function rejectionHint(reasons: string[]): string {
-  const all = reasons.join(' | ').toLowerCase()
-  if (all.includes('unsupported numbers'))
-    return 'The draft produced figures that are not in the data, so it was discarded. Ask for fewer invented comparisons, or tell it to quote only the numbers it is given.'
-  if (all.includes('named people'))
-    return 'The draft named a person. The analysis is never given names, so it made one up — discarded.'
-  if (all.includes('too short') || all.includes('too long'))
-    return 'The length came back outside the brief. Check what word count your brief asks for.'
-  if (all.includes('bullet') || all.includes('heading'))
-    return 'It came back as bullet points or headings rather than prose. The briefing has to be flowing paragraphs.'
-  if (all.includes('429') || all.includes('quota'))
-    return "Gemini's free quota is exhausted for now. Nothing is wrong with the brief — try again later."
-  if (all.includes('404') || all.includes('no longer available'))
-    return 'The configured model is unavailable. This needs a GEMINI_MODEL change, not a brief change.'
-  if (all.includes('not set on the function'))
-    return 'No Gemini API key is configured on the server, so only the plain fallback is available.'
-  if (all.includes('disabled') || all.includes('not configured'))
-    return 'Generated analysis is switched off in this build, so this preview shows the plain fallback wording.'
-  return 'The model result was refused, so the plain fallback is shown instead.'
-}
-
-/**
- * Advisor — the editable voice brief behind the generated analysis.
- *
- * Only the WRITING is configurable here. Which findings exist, which numbers they
- * carry and how they rank is computed in `src/lib/advisor/findings.ts`, and the Edge
- * Function appends accuracy rules after this text that it cannot override — so a
- * bad edit can make the briefing read badly, but it can't make it read falsely.
- */
-function AdvisorCard() {
-  const { settings, saveSettings, tasks } = useStore()
-  const stored = settings.advisorPrompt ?? ''
-  const [draft, setDraft] = useState(stored)
-  const [saving, setSaving] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [testError, setTestError] = useState<string | null>(null)
-  const [preview, setPreview] = useState<{
-    narration: Narration
-    scope: string
-    findings: number
-  } | null>(null)
-
-  // Re-sync after a save or an update from another browser.
-  useEffect(() => {
-    setDraft(settings.advisorPrompt ?? '')
-  }, [settings.advisorPrompt])
-
-  const trimmed = draft.trim()
-  // Blank is stored as blank on purpose: it means "follow the built-in default", so
-  // later improvements to that default reach teams who never customised it. Text
-  // identical to the default is stored the same way — which is why "dirty" compares
-  // what would actually be SAVED, not what's in the box. Otherwise "Load default"
-  // offers a Save that changes nothing.
-  const usingDefault = trimmed === '' || trimmed === DEFAULT_ADVISOR_PROMPT.trim()
-  const effective = usingDefault ? '' : trimmed
-  const dirty = effective !== stored.trim()
-  const tooLong = trimmed.length > ADVISOR_PROMPT_MAX
-
-  const save = async () => {
-    if (!dirty || tooLong) return
-    setSaving(true)
-    try {
-      await saveSettings({ ...settings, advisorPrompt: effective })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  /**
-   * Generate a briefing from the box's CURRENT text — not from what's saved — so a
-   * brief can be judged before it's committed. Nothing is stored either way.
-   */
-  const runTest = async () => {
-    setTesting(true)
-    setTestError(null)
-    try {
-      const input = buildAdvisorInput(tasks, settings)
-      const findings = buildFindings(input)
-      const narration = await narrate({
-        findings,
-        scopeLabel: input.scopeLabel,
-        effortOn: input.useEffort,
-        people: settings.people,
-        prompt: draft,
-      })
-      setPreview({ narration, scope: input.scopeLabel, findings: findings.length })
-    } catch (e) {
-      setTestError(toMessage(e))
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="rounded-lg border border-line bg-card/40 p-3">
-        <h4 className="text-sm font-semibold text-ink">What you&rsquo;re editing here</h4>
-        <p className="mt-1 text-xs leading-relaxed text-muted">
-          The Advisor reads <strong className="text-ink">every task on record</strong> — all years, all
-          functions — and works out the findings itself. It doesn&rsquo;t follow the year, function or
-          Assets/Effort selection on the dashboard, so two people always get the same analysis.
-        </p>
-        <p className="mt-2 text-xs leading-relaxed text-muted">
-          This brief controls only <strong className="text-ink">how that analysis is written</strong> —
-          length, tone, what to lead with. Every figure still comes from the computed findings, and any
-          number that isn&rsquo;t one of them is rejected before you see it. Rules about accuracy are
-          added after your text and can&rsquo;t be overridden here.
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-amber-300/70 bg-amber-50/70 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
-        <h4 className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-200">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-          Edit with care
-        </h4>
-        <p className="mt-1 text-xs leading-relaxed text-amber-900/80 dark:text-amber-200/80">
-          A poorly worded brief skews the analysis. It can&rsquo;t change the figures — those are
-          computed and checked — but it can make the briefing lead with something trivial, bury the
-          caveats, overstate a small movement, or get thrown out entirely and fall back to plain
-          sentences. <strong>Use Test analysis below before saving</strong>, and if a briefing reads
-          worse than it did, Clear the box to go back to the built-in brief.
-        </p>
-      </div>
-
-      <label className="block text-xs font-semibold uppercase tracking-wide text-muted" htmlFor="advisor-prompt">
-        Voice brief
-      </label>
-      <textarea
-        id="advisor-prompt"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        rows={14}
-        spellCheck={false}
-        placeholder={DEFAULT_ADVISOR_PROMPT}
-        className="w-full rounded-lg border border-line bg-card px-3 py-2 font-mono text-xs leading-relaxed text-ink outline-none focus:border-rmit-navy dark:focus:border-navy-300"
-      />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className={cx('text-xs', tooLong ? 'font-semibold text-rmit-red' : 'text-faint')}>
-          {tooLong
-            ? `${trimmed.length.toLocaleString()} characters — trim to ${ADVISOR_PROMPT_MAX.toLocaleString()} or fewer`
-            : usingDefault
-              ? 'Using the built-in brief. Leave the box empty to keep following it as it improves.'
-              : `Customised · ${trimmed.length.toLocaleString()} characters`}
-        </p>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setDraft(DEFAULT_ADVISOR_PROMPT)}
-            className="btn-outline h-9 px-3 text-sm"
-            title="Load the built-in brief into the box so you can edit from it"
-          >
-            Load default
-          </button>
-          <button
-            type="button"
-            onClick={() => setDraft('')}
-            disabled={trimmed === ''}
-            className="btn-outline h-9 px-3 text-sm disabled:cursor-default disabled:opacity-40"
-            title="Clear the box — the Advisor falls back to the built-in brief"
-          >
-            Clear
-          </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={!dirty || saving || tooLong}
-            className="btn-primary h-9 px-4 text-sm disabled:cursor-default disabled:opacity-40"
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </div>
-
-      {/* Test analysis — runs the real pipeline against the real data using the text
-          in the box, saved or not. This is the only way to judge a brief: the output
-          is prose, so it has to be read. */}
-      <div className="border-t border-line pt-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0">
-            <h4 className="text-sm font-semibold text-ink">Test analysis</h4>
-            <p className="mt-0.5 text-xs text-muted">
-              Generates a briefing from the text above — including unsaved edits. Nothing is stored.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={runTest}
-            disabled={testing || tooLong}
-            className="btn-primary h-9 shrink-0 px-4 text-sm disabled:cursor-default disabled:opacity-40"
-          >
-            {testing ? (
-              <span className="flex items-center gap-1.5">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Generating…
-              </span>
-            ) : preview ? (
-              'Test again'
-            ) : (
-              'Test analysis'
-            )}
-          </button>
-        </div>
-
-        {testError && (
-          <p className="mt-3 rounded-lg border border-rmit-red/40 bg-brand-50 px-3 py-2 text-xs text-rmit-red dark:bg-brand-500/10">
-            {testError}
-          </p>
-        )}
-
-        {preview && (
-          <div className="mt-3 space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <Badge tone={preview.narration.source === 'model' ? 'teal' : 'gold'}>
-                {preview.narration.source === 'model' ? 'Generated' : 'Fallback wording'}
-              </Badge>
-              <span className="text-faint">
-                {preview.findings} findings · {preview.scope}
-                {preview.narration.model ? ` · ${preview.narration.model}` : ''}
-              </span>
-            </div>
-
-            {/* Two runs of the same brief won't match word for word. That's the point —
-                what to judge is whether it reads naturally and leads with the right thing. */}
-            <div className="space-y-2 rounded-lg border border-line bg-card/40 p-3 text-sm leading-relaxed text-ink">
-              {preview.narration.text
-                .split(/\n{2,}/)
-                .filter(Boolean)
-                .map((para, i) => (
-                  <p key={i}>{para}</p>
-                ))}
-            </div>
-
-            {preview.narration.source === 'fallback' && preview.narration.rejected?.length && (
-              <div className="rounded-lg border border-amber-300/70 bg-amber-50/70 p-3 dark:border-amber-500/30 dark:bg-amber-500/10">
-                <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-200">
-                  {rejectionHint(preview.narration.rejected)}
-                </p>
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-xs text-amber-900/70 dark:text-amber-200/70">
-                    Technical detail
-                  </summary>
-                  <ul className="mt-1 space-y-1">
-                    {preview.narration.rejected.map((r, i) => (
-                      <li key={i} className="break-words font-mono text-[11px] leading-relaxed text-amber-900/70 dark:text-amber-200/70">
-                        {r}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
   )
 }
 

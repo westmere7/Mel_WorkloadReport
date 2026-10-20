@@ -164,6 +164,9 @@
   flex-direction: column;
   gap: 16px;
 }
+.mv.is-embedded .mv-body {
+  padding: 20px 24px 24px;
+}
 .mv-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1314,6 +1317,43 @@
 }
 .mv-note-btn.is-on {
   color: var(--mv-primary);
+}
+
+/* footer: a small Light/Dark switch */
+.mv-footer {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px 16px;
+}
+.mv.is-embedded .mv-footer {
+  padding: 0 24px 24px;
+}
+.mv-theme-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--mv-border);
+  border-radius: 16px;
+}
+.mv-theme-opt {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--mv-text-2);
+  cursor: pointer;
+}
+.mv-theme-opt:hover {
+  color: var(--mv-text);
+}
+.mv-theme-opt.is-on {
+  background: var(--mv-selected);
+  color: var(--mv-text);
 }
 
 /* ── States ── */

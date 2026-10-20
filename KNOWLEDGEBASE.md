@@ -209,11 +209,12 @@ happens** (see §6).
 - **Showcase** (`src/pages/Showcase.tsx` wizard + `src/pages/ShowcaseViewer.tsx` public player +
   `src/showcase/` engine + `src/lib/showcase.ts` contract): animated shareable year-in-review —
   see §17.
-- **Settings** (`src/pages/Settings.tsx`), top→bottom: a **Dashboard** card (chart-display
-  toggles); a collapsible **"Groups"** `CollapsibleSection` (open state persisted in
-  localStorage `mwr.settings.groupsOpen`) — itself a **master `Card`** whose nested editor
-  cards use `className="bg-subtle"` so they read as tiles inside the panel (same big-panel /
-  smaller-panels-inside look as the Dashboard card); the **Year snapshots** card (§16); and a
+- **Settings** (`src/pages/Settings.tsx`), top→bottom — every section a collapsible
+  `CollapsibleSection` (open state in localStorage `mwr.settings.*Open`): **Groups** (open by
+  default; a master `Card` whose nested editor cards use `className="bg-subtle"` so they
+  read as tiles inside the panel), **Dashboard** (chart-display toggles + chart groups),
+  **Holidays & closures**, **monday.com boards** (lookup builds only) and **Year snapshots**
+  (§16; Create button inside the body) — the last two closed by default; then the
   **Version** card (current `v{__APP_VERSION__}` + a collapsed-by-default "What's new" toggle
   showing the latest release notes only — data in `src/lib/changelog.ts` `APP_VERSION`/`CHANGELOG`;
   to release, bump package.json + prepend an entry). Settings/controls render as tinted `PrefRow`s (`bg-subtle`, `font-medium` title)
@@ -1088,191 +1089,16 @@ deep links, the CSV `People` column, and `analytics.assetsByPerson()` which stil
 feeds the Showcase's **"Busiest people"** stat. A stale
 `showTasksByPerson: true` in localStorage is inert.
 
-## 23. Advisor (generated analysis) ⚠️ v0.9.0
+## 23. Advisor — REMOVED
 
-Turns the dashboard's data into a written briefing. The design goal is **prose you
-can trust**: a model chooses the words, never the facts.
-
-**The pipeline**
-
-```
-findings.ts (TypeScript, deterministic)   ← decides WHAT is true
-      ↓  aggregate facts only
-scope.ts        ← decides WHAT IS LOOKED AT (the whole record)
-      ↓
-narrate.ts      ← sends it, then AUDITS the reply
-      ↓
-supabase/functions/advisor  ← holds the Gemini key; only rephrases
-```
-
-**Why the audit is the load-bearing part.** Prose is unverifiable in general, but
-"every figure in the output must appear verbatim in the facts we supplied" is a
-*total* check — a model that invents a trend has to invent a number to state it, and
-that fails. `auditNumbers` whitelists the fact strings; `auditForbidden` asserts no
-person is named; `auditShape` rejects bullet-point walls. Failing any of them retries,
-then falls back to `fallbackNarration()` — deterministic, robotic, always correct. The
-feature degrades, never breaks, and works with no API key at all.
-
-**Scope: the whole record, deliberately.** `buildAdvisorInput()` ignores the
-dashboard's year, function filter and Assets/Effort toggle. An analysis that changed
-when someone flipped a switch would be a view, not a finding, and two people looking
-at the same data would be told different things. `useEffort` therefore follows
-*whether any output rate exists*, not the toggle.
-
-**Findings are computed client-side on purpose.** The Edge Function is only a key
-holder and a phrasing service. It cannot compute, so it cannot be wrong about the
-data — and `looksAggregate()` rejects any payload carrying record-shaped values, so
-the function can't be repurposed as a general LLM proxy.
-
-**The editable prompt is only half the prompt.** Settings → Advisor edits the *voice
-brief*. The function appends `ACCURACY_RULES` after it, worded to outrank it, so a bad
-edit can make the briefing read badly but not falsely. Blank = follow
-`DEFAULT_ADVISOR_PROMPT`, so improvements to the default reach teams that never
-customised theirs. Keep `DEFAULT_ADVISOR_PROMPT` (src/constants.ts) and `DEFAULT_VOICE`
-(the function) in step.
-
-- Column: `settings.advisor_prompt text not null default ''` + the usual
-  strip-and-retry in `saveSettings` (see §12), so it works pre-migration.
-- Enable with `VITE_ADVISOR=1` **and** a `GEMINI_API_KEY` secret on the function.
-  `isAdvisorEnabled()` gates the client path.
-- No UI yet beyond Settings: a dedicated Advisor page is planned, which will quote
-  the figures and charts next to each finding.
-
-### Gotchas & lessons learned
-
-- ⚠️ **Facts must be ATOMIC.** The gate whitelists whole fact strings, so a combined
-  `"2026 vs 2025"` leaves each bare year looking invented. Store `recentYear` and
-  `previousYear` separately. This is why every fact is a single value.
-- ⚠️ **The token pattern eats sentence punctuation.** `[\d,.]*` matches "2026," in
-  "…in 2026, effort grew…", which then isn't whitelisted and rejects a faithful
-  sentence. `auditNumbers` trims a TRAILING `[.,]+` only — internal separators
-  (`1,796`, `−2.0%`) must survive.
-- ⚠️ **`valueByMonth` buckets by month-of-year and ignores the year.** Fed the whole
-  record it yields *seasonal* totals, so "the busiest month" is a claim about the
-  annual cycle. `coverage.years > 1` switches the wording; don't let it read as one
-  particular February.
-- ⚠️ **Never compare a part-finished year with a complete one.** Seven months of 2026
-  against all of 2025 reads as a collapse in output that never happened. `yearPair()`
-  clips both sides to today's day-of-year (as the dashboard's YTD compare does) and
-  sets `partial`, which makes the claims disclose what they compared.
-- ⚠️ **The year pair is "two most recent years WITH DATA", not latest and latest−1** —
-  a gap year would otherwise silence every change rule.
-- ⚠️ **supabase-js hides a non-2xx function body.** `functions.invoke` reports only
-  "Edge Function returned a non-2xx status code"; the real error is on
-  `error.context` as a `Response`. `errorDetail()` digs it out — without it, every
-  upstream failure looks identical and is undiagnosable.
-- ⚠️ **A pinned Gemini model is a time bomb.** Google retires superseded models two
-  ways that both look like our bug: older generations keep answering but with
-  free-tier `limit: 0` (surfaces as `429 RESOURCE_EXHAUSTED`, reads as "out of
-  quota"), and retired ones return `404 … no longer available to new users`. Default
-  to the rolling alias `gemini-flash-latest`; override via the `GEMINI_MODEL` secret,
-  which needs no redeploy.
-- ⚠️ **Thinking tokens come out of `maxOutputTokens`.** Current flash models reason by
-  default, so a tight budget returns a truncated fragment (`finishReason
-  MAX_TOKENS`) that looks like a bad generation. `THINKING_VARIANTS` walks
-  `thinkingBudget: 0` → `thinkingLevel: 'low'` → nothing, advancing only on a 400,
-  because a model that dislikes the field replies `INVALID_ARGUMENT` naming no field
-  — sniffing the message doesn't work.
-- Don't retry a rate limit instantly; `RETRY_DELAY_MS` exists so one 429 doesn't
-  become two.
-- `GEMINI_API_KEY` must never be a `VITE_` var — those are baked into the client
-  bundle and readable by anyone.
-
-### Cached briefing (phase 3)
-
-Reading NEVER generates. That's a hard rule: the free tier allows **20 requests a
-day**, so a page generating on mount would exhaust it in a handful of views.
-`useAdvisor()` loads the stored briefing; only `regenerate()` spends a call, and only
-editors may call it (`canEdit`) since the quota is shared by the whole team.
-
-- One row: `advisor_cache` with `id = 'current'`. The analysis covers the whole
-  record, so there is only ever one current briefing — nothing to key it by.
-- **Staleness is derived, never flagged.** The row stores `fingerprint`, a hash of the
-  findings and the voice brief it was written from; the app recomputes and compares.
-  Adding a task, editing a rate or changing the brief therefore marks the briefing out
-  of date automatically, with nothing to remember to invalidate.
-- The fingerprint covers ids, **claims** and facts. Claims matter because their wording
-  is sent upstream and shapes the prose, so improving a rule's phrasing in a deploy
-  should invalidate briefings written under the old one. `severity` is excluded: it only
-  affects listing order, which the narrator is told to ignore.
-- FNV-1a, not a crypto digest, because `crypto.subtle` is async and this only needs to
-  be compared. A collision costs a stale briefing, nothing more.
-- Pre-migration tolerant: no table → `getAdvisorCache()` returns null and
-  `saveAdvisorCache()` is a no-op, so the advisor still works and simply regenerates.
-- `saveAdvisorCache` failing does NOT discard the text — the call has already been
-  spent, and losing the briefing on top of that is the worse outcome.
-
-**Verified properties of the fingerprint** (`window.__advisor.cache.fingerprintOf` in
-dev): deterministic across reloads; changes on a fact value, a claim rewording, an
-added finding, or a different brief; unchanged by severity; blank brief and `undefined`
-hash identically (both mean "follow the default").
-
-### The Advisor page & the built-in analyst (phase 4)
-
-`/advisor` — public route (reading needs no sign-in; generating stays editor-only via
-`useAdvisor`), nav entry between Help and Showcase. Layout is data-first by design:
-totals strip → one card per finding with its chart NEXT TO the claim → the written
-briefing last, as the synthesis.
-
-**Evidence.** `Finding.evidence` carries the raw series each rule already computes
-(three shapes: `months`, `bars` incl. signed, `pairs`). Raw numbers are safe here
-because evidence never leaves the browser — `narrate()` strips findings to
-`{id, severity, claim, facts}` before anything is sent upstream, and the Edge
-Function's aggregate guard rejects numeric values anyway. Charts are hand-rolled
-div/flex bars (`components/advisor/EvidenceChart.tsx`), NOT Recharts: they're
-annotations beside a sentence, they inherit the theme for free, and every value is
-printed — no hover needed.
-
-**The built-in analyst** (`lib/advisor/compose.ts`) replaced the robotic
-`fallbackNarration`. It composes a full 3-paragraph briefing from findings alone —
-lead → connected supports → planning implication + caveat — with hand-written variant
-sentences chosen by a PRNG seeded from the findings, so same data → same words
-(cache-stable) and different data → different shapes. Correct by construction: every
-figure interpolates from `facts`. The UI labels authorship explicitly: teal
-"AI-written · <model> · checked against the data" vs gold "Written without AI ·
-composed by the app, every figure exact". Note compose verbalises signs ("slipped
-2.0%" for `−2.0%`), so composed prose won't pass `auditNumbers` — it doesn't need to;
-only MODEL output is audited, and there the sign-copying rule is a real protection
-(it catches a direction lie).
-
-### Gotchas & lessons learned (phase 4)
-
-- ⚠️ **StrictMode kills load-once ref guards.** `if (loaded.current) return;
-  loaded.current = true` in a fetch effect = first mount's result lands in a dead
-  closure (cleanup ran), second mount is blocked by the ref → `loading` never
-  clears. Symptom: permanent skeleton in dev. Let the effect run per mount; a
-  duplicate GET is the cheap side.
-- ⚠️ **Percentage bar heights need a definite parent height.** `items-end` on the
-  row made each flex column shrink to content, so `height: N%` bars collapsed to ~0
-  for unlabelled months — the chart looked plausible because the two highlighted
-  months still rendered. Let columns stretch (no `items-end` on the row) and push
-  bars down with `justify-end` on the column.
-- One `useAdvisor()` instance per page — a second call in a child means two cache
-  loads and disconnected generating/stale state. Pass `AdvisorState` down as a prop.
-- Chart labels must round like the facts (`signedPct`: 1dp under 10, integers
-  above), or the bar says +33.3% while the chip says +33%.
-
-### Testing gotchas (phase 4)
-
-- Composed narration without spending quota: `__advisor.narrate({ maxAttempts: 0 })`
-  skips the model loop entirely and returns the composed text with `attempts: 0`.
-- Briefing-card states are testable without the DB: Playwright-route
-  `**/rest/v1/advisor_cache**` and fulfill with `[row]` — MUST include
-  `access-control-allow-origin: *` (fulfilled responses still face CORS) or the
-  fetch silently fails and the card shows its empty state.
-- `page.screenshot({ fullPage: true })` captures only the viewport here — the app
-  shell scrolls in an inner container, so body height = viewport. Screenshot cards
-  via `locator.screenshot()` instead.
-
-### Testing gotchas
-
-- `window.__advisor` (dev only) exposes `{ findings, scopeLabel, useEffort, enabled,
-  narrate(over?), audit(text) }`. `narrate()` takes an override, so a voice brief can
-  be tried from the console without saving it or redeploying.
-- Prove view-independence by fingerprinting `findings` before and after toggling
-  mode/compare/function — the JSON must be identical.
-- A cross-check that the whole-record year pair is right: its `assetsChange` /
-  `effortChange` must equal what the dashboard's YTD compare mode shows.
+The Advisor (generated plain-English briefing: `pages/Advisor.tsx`, `lib/advisor/*`,
+`components/advisor/*`, the `advisor` Edge Function, Settings → Advisor brief, the
+dashboard's `window.__advisor` hook, `advisorPrompt` setting, advisor cache repo methods,
+WIP-bar CSS) was removed entirely. `schema.sql` no longer creates `advisor_cache` or
+`settings.advisor_prompt`; existing DB objects are left in place (harmless, unused) — drop
+them by hand if wanted. The deployed `advisor` Edge Function + its secrets can be deleted
+in the Supabase dashboard. `/advisor` falls through to the dashboard. Old changelog
+entries still mention it (history).
 
 ## 24. Per-card full screen ⚠️
 
@@ -1495,6 +1321,10 @@ app shell, inside `StoreProvider` only (live tasks, no Layout).
   ("15 Sep – 2 Nov"); a prominent **Asset tracker** button (opens `board.tracker`, an
   https link to e.g. the online Excel tracker; dashed "+ Asset tracker" when unset); ⋯
   menu: Copy link, Edit asset tracker link, Change task.
+- **Theme switch:** a small Light/Dark (sun/moon) switch in the page footer; the pick is
+  per viewer (`mwr.itemAssets.theme`) and wins over monday's context / `?theme=`.
+- **Embedded inset:** inside an iframe (monday widget) the root gets `is-embedded` → `.mv-body`
+  padding 20px 24px (monday's widget panel gives no inset of its own).
 - **Look:** monday light/dark/night variable sets (`mv-theme-*`), Figtree + Poppins,
   compact summary + Details (package per type, who's doing what — a shared line counts for
   each owner); rows show stacked avatars (2, then +N), status pill, type, function when

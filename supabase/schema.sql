@@ -161,14 +161,6 @@ alter table public.settings
 alter table public.settings
   add column if not exists asset_rates_log jsonb not null default '[]'::jsonb;
 
--- Advisor voice brief: free text controlling HOW the generated analysis reads
--- (length, tone, what to lead with). Empty string = follow the app's built-in
--- default, so later improvements to it reach teams that never customised theirs.
--- It cannot affect WHAT the analysis says: the findings and every number in them
--- are computed client-side, and the `advisor` Edge Function appends accuracy rules
--- after this text that outrank it.
-alter table public.settings
-  add column if not exists advisor_prompt text not null default '';
 -- Team-defined holidays / closures for the Calendar page (Settings → Holidays):
 -- [{ id, name, start, end, scope: 'melbourne' | 'vietnam' | 'all' }]
 alter table public.settings
@@ -357,30 +349,6 @@ create policy "anon delete snapshots" on storage.objects
 -- `expires_at` is enforced lazily client-side: the viewer shows "expired" and
 -- the wizard's list purges expired rows. null = keep forever. Anon read is
 -- required — showcase links are public by design.
--- Advisor briefing cache. Exactly ONE row (id = 'current'): the analysis covers the
--- whole record, so there is only ever one current briefing. Stored rather than
--- regenerated on view because Gemini's free tier allows 20 requests a DAY, and
--- because one stored text means every reader gets the same words.
---
--- `fingerprint` is a hash of the findings (ids + facts) and the voice brief they were
--- written from. The app compares it against a freshly computed one to decide whether
--- the briefing is out of date — so adding a task or editing a rate marks it stale
--- automatically, with nothing to remember to invalidate.
-create table if not exists public.advisor_cache (
-  id            text primary key default 'current',
-  fingerprint   text not null,
-  text          text not null,
-  source        text not null default 'model',
-  model         text,
-  generated_by  text,
-  generated_at  timestamptz not null default now()
-);
-
-alter table public.advisor_cache enable row level security;
-drop policy if exists "anon full access to advisor_cache" on public.advisor_cache;
-create policy "anon full access to advisor_cache" on public.advisor_cache
-  for all using (true) with check (true);
-
 create table if not exists public.showcases (
   id          uuid primary key default gen_random_uuid(),
   title       text not null default '',

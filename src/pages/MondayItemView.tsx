@@ -12,10 +12,12 @@ import {
   Link2,
   Loader2,
   Minus,
+  Moon,
   MoreHorizontal,
   Pencil,
   Plus,
   StickyNote,
+  Sun,
   X,
 } from 'lucide-react'
 import mondaySdk from 'monday-sdk-js'
@@ -72,6 +74,8 @@ type Status = LineStatus
 const CONTEXT_TIMEOUT_MS = 4000
 const RECENT_KEY = 'mwr.itemAssets.recent'
 const DETAILS_KEY = 'mwr.itemAssets.detailsOpen'
+/** A viewer's own Light/Dark pick (footer switch) — wins over monday's / the link's theme. */
+const THEME_KEY = 'mwr.itemAssets.theme'
 
 // monday's own status labels + colours.
 const STATUS: Record<Status, { label: string; color: string }> = {
@@ -222,7 +226,22 @@ export function MondayItemViewPage() {
   const chosen = paramItemId ?? paramTaskId ?? contextId ?? pickedTaskId
   // monday's own theme (app context) wins over ?theme=; default light.
   const [mondayTheme, setMondayTheme] = useState<string | null>(null)
-  const theme = toTheme(mondayTheme ?? params.get('theme'))
+  const [userTheme, setUserThemeState] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(THEME_KEY)
+    } catch {
+      return null
+    }
+  })
+  const setUserTheme = (t: MondayTheme) => {
+    setUserThemeState(t)
+    try {
+      localStorage.setItem(THEME_KEY, t)
+    } catch {
+      /* storage blocked — the switch still works for this visit */
+    }
+  }
+  const theme = toTheme(userTheme ?? mondayTheme ?? params.get('theme'))
 
   // This page uses its own monday palette: drop the app's dark class while
   // mounted, and paint html/body in the theme colour (no light flash on overscroll).
@@ -325,7 +344,8 @@ export function MondayItemViewPage() {
   }
 
   return (
-    <div className={`mv mv-theme-${theme}`}>
+    // Inside a monday widget (iframe) the panel gives no inset of its own — `is-embedded` adds one.
+    <div className={`mv mv-theme-${theme}${standalone ? '' : ' is-embedded'}`}>
       {standalone && (
         <>
           <div className="mv-preview-banner">Preview: how this tab appears inside a monday.com item</div>
@@ -348,6 +368,32 @@ export function MondayItemViewPage() {
         </>
       )}
       {body}
+      <footer className="mv-footer">
+        <div className="mv-theme-switch" role="radiogroup" aria-label="Theme">
+          {(
+            [
+              ['light', 'Light', Sun],
+              ['dark', 'Dark', Moon],
+            ] as const
+          ).map(([value, label, Icon]) => {
+            const on = value === 'dark' ? theme !== 'light' : theme === 'light'
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                aria-label={`${label} theme`}
+                title={`${label} theme`}
+                className={`mv-theme-opt${on ? ' is-on' : ''}`}
+                onClick={() => setUserTheme(value)}
+              >
+                <Icon size={14} />
+              </button>
+            )
+          })}
+        </div>
+      </footer>
     </div>
   )
 }
