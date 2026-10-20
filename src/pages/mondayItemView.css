@@ -400,10 +400,10 @@
   min-width: 0;
 }
 .mv-row-title {
-  display: block;
+  display: flex;
+  align-items: center;
+  min-width: 0;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .mv-row-title.is-done {
   color: var(--mv-text-2);
@@ -829,19 +829,67 @@
 }
 
 /* drag to group */
-.mv-handle {
+/* select checkbox (square — the round one on the right marks "done") */
+.mv-pick {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 40px;
-  margin-left: -6px;
+  width: 18px;
+  height: 18px;
+  margin-left: -4px;
   flex-shrink: 0;
-  color: var(--mv-ui-border);
-  cursor: grab;
-  touch-action: none;
+  border: 1.5px solid var(--mv-ui-border);
+  border-radius: 4px;
+  background: var(--mv-surface);
+  color: #fff;
+  cursor: pointer;
 }
-.mv-handle:hover {
-  color: var(--mv-text-2);
+.mv-pick:hover {
+  border-color: var(--mv-primary);
+}
+.mv-pick.is-on {
+  border-color: var(--mv-primary);
+  background: var(--mv-primary);
+}
+.mv-row.is-selected {
+  background: var(--mv-selected);
+}
+/* the whole line drags: keep long-press menus / text selection out of the way */
+.mv-row.can-drag {
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+/* bulk actions for selected lines — stays in view at the bottom */
+.mv-bulk {
+  position: sticky;
+  bottom: 12px;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--mv-border);
+  border-radius: 8px;
+  background: var(--mv-surface);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+.mv-bulk-count {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mv .mv-bulk-select {
+  width: auto;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  font-size: 13px;
+}
+.mv .mv-bulk-btn {
+  height: 32px;
+  font-size: 13px;
+}
+.mv-bulk .mv-text-btn {
+  margin: 0;
 }
 .mv-body.is-dragging,
 .mv-body.is-dragging * {
@@ -947,10 +995,44 @@
   color: var(--mv-text-2);
   font-weight: 500;
 }
+.mv-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* count: a small badge beside the type */
 .mv-qty {
-  margin-left: 6px;
-  color: var(--mv-text-2);
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 10px;
+  background: var(--mv-grey);
+  color: var(--mv-text);
+  font-size: 12px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+/* due date: a quiet chip with a calendar icon — red when overdue */
+.mv-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--mv-border);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--mv-text-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.mv-due.is-overdue {
+  border-color: transparent;
+  background: var(--mv-danger-hover);
+  color: var(--mv-negative);
+  font-weight: 600;
 }
 /* monday status label: solid colour, white text */
 .mv-status {
@@ -963,10 +1045,6 @@
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
-}
-.mv-overdue {
-  color: var(--mv-negative);
-  font-weight: 500;
 }
 .mv-toolbar {
   display: flex;

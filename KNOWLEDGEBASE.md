@@ -1307,11 +1307,19 @@ app shell, inside `StoreProvider` only (live tasks, no Layout).
   (`patchLine`), so two people editing different fields of one line both win. Verified on
   Supabase: different lines, same line/different fields, simultaneous adds (36+4+2 → 42).
   Realtime echo of own saves dropped via `rev`/`by` (per-page `CLIENT_ID`).
-- **Lines:** name · asset type · function · people in charge (`owners: string[]`, legacy
-  `owner` read as `[owner]`) · asset count · status (Not started / In progress / Done —
-  "Stuck" retired, reads as In progress) · due · notes. FLAT list in stored order; `#` =
-  position. User groups are blind (free names/colours); drag (grip, pointer events,
-  touch, insertion line, auto-scroll) to reorder or move between groups.
+- **Lines:** asset type (= the line's title; there's no separate name — `name` is kept equal
+  to the type) · function · people in charge (`owners: string[]`, legacy `owner` read as
+  `[owner]`) · asset count (grey ×N badge) · status (Not started / In progress / Done —
+  "Stuck" retired, reads as In progress) · due (calendar chip, red when overdue) · notes.
+  FLAT list in stored order; `#` = position. User groups are blind (free names/colours).
+- **Select + bulk:** a square tick box per line (`.mv-pick` — NOT `.mv-select`, which is the
+  dropdown style; reusing it broke both) → sticky bulk bar: N selected · Move to… · Status… ·
+  Delete (two taps) · All/None · ✕. Each bulk action is one `apply` op over the selection.
+- **Drag the whole line** (no handle): mouse after 5px movement (a click still opens the
+  editor — a drag swallows the following click); touch after a 400ms hold (an earlier move
+  = scroll; `touchmove` is preventDefault'ed while dragging; long-press callout off).
+  Dragging a ticked line while several are ticked moves the whole selection into the
+  target group. Insertion line, group highlight, edge auto-scroll as before.
 - **Editor sheet** (kept calm — no explanatory text): Asset name; Asset type + Function;
   Person in charge = small toggle chips, multi-select (task people + "+N more"); Asset
   count stepper (no native spinners) + Status dropdown filled with the status colour

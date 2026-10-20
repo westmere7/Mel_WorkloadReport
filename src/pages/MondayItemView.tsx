@@ -3,12 +3,12 @@ import { useSearchParams } from 'react-router-dom'
 import {
   ArrowLeftRight,
   Check,
+  CalendarDays,
   ChevronDown,
   Copy,
   ExternalLink,
   FileSpreadsheet,
   FolderPlus,
-  GripVertical,
   Link2,
   Loader2,
   Minus,
@@ -537,6 +537,8 @@ type GroupSheet = { group: LineGroup; isNew: boolean } | null
 const NO_GROUP = '__none'
 interface DragState {
   id: string
+  /** Every line being moved (the dragged one, or the whole selection). */
+  ids: string[]
   label: string
   /** Section the line started in. */
   from: string
@@ -798,7 +800,7 @@ function AssetsTab({
   const blankLine = (groupId: string | null): AssetLine => ({
     id: newId(),
     groupId,
-    name: '',
+    name: pkg[0]?.type ?? typesFor(fns[0] ?? null)[0] ?? 'Others',
     type: pkg[0]?.type ?? typesFor(fns[0] ?? null)[0] ?? 'Others',
     fn: pkg[0]?.fn ?? fns[0] ?? null,
     owners: [],
@@ -842,10 +844,45 @@ function AssetsTab({
     }
   }
 
+  // ── Selection (checkbox per line) + bulk actions ──
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const selectedIds = lines.filter((l) => selected.has(l.id)).map((l) => l.id)
+  const toggleSelect = (id: string) => {
+    setConfirmDelete(false)
+    setSelected((cur) => {
+      const next = new Set(cur)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const clearSelection = () => {
+    setSelected(new Set())
+    setConfirmDelete(false)
+  }
+  /** Apply a per-line change to every selected line (null = delete), then clear. */
+  const bulk = (fn: (l: AssetLine) => AssetLine | null) => {
+    const ids = new Set(selectedIds)
+    void apply((b) => ({
+      ...b,
+      lines: b.lines.flatMap((l) => {
+        if (!ids.has(l.id)) return [l]
+        const r = fn(l)
+        return r ? [r] : []
+      }),
+    }))
+    clearSelection()
+  }
+  const moveSelected = (target: string) => bulk((l) => ({ ...l, groupId: target === NO_GROUP ? null : target }))
+  const statusSelected = (st: Status) => bulk((l) => ({ ...l, status: st, pool: st === 'notStarted' ? l.pool : undefined }))
+
   // ── Drag to reorder / move between groups (pointer events, so touch works) ──
+  // The whole line drags: with a mouse once it moves 5px (a plain click still
+  // opens the editor); on touch after a ~0.4s hold (a swipe still scrolls).
   // Sections carry data-drop = group id | NO_GROUP and rows data-line = id; the
   // drop spot is "before the first row whose midpoint is below the pointer".
-  // The Group field in the line sheet stays the keyboard-accessible way to move.
+  // Dragging a selected line while several are selected moves the whole selection.
   const [drag, setDragState] = useState<DragState | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const setDrag = (d: DragState | null) => {
@@ -855,22 +892,73 @@ function AssetsTab({
   const dragging = drag !== null
   const canDrag = !readOnly && (lines.length > 1 || groups.length > 0)
   // The drop handler runs inside a window listener: read the latest lines via a ref.
-  const latest = useRef({ lines, groups, apply })
-  latest.current = { lines, groups, apply }
+  const latest = useRef({ lines, groups, apply, clearSelection })
+  latest.current = { lines, groups, apply, clearSelection }
 
-  const startDrag = (line: AssetLine, from: string) => (e: React.PointerEvent) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    e.preventDefault()
-    setDrag({ id: line.id, label: `${line.name} × ${line.qty}`, from, x: e.clientX, y: e.clientY, over: null })
+  // A press that may turn into a drag; a drag swallows the click that follows it.
+  const press = useRef<{ line: AssetLine; from: string; x: number; y: number; touch: boolean; timer: number } | null>(null)
+  const suppressClick = useRef(false)
+  const beginDrag = (line: AssetLine, from: string, x: number, y: number) => {
+    const ids = selected.has(line.id) && selectedIds.length > 1 ? selectedIds : [line.id]
+    suppressClick.current = true
+    setDrag({ id: line.id, ids, label: ids.length > 1 ? `${ids.length} lines` : `${line.type} × ${line.qty}`, from, x, y, over: null })
   }
+  const beginRef = useRef(beginDrag)
+  beginRef.current = beginDrag
+
+  const onRowPointerDown = (line: AssetLine, from: string) => (e: React.PointerEvent) => {
+    suppressClick.current = false
+    if (!canDrag || (e.pointerType === 'mouse' && e.button !== 0)) return
+    if ((e.target as HTMLElement).closest('.mv-pick, .mv-check')) return
+    const p = { line, from, x: e.clientX, y: e.clientY, touch: e.pointerType !== 'mouse', timer: 0 }
+    if (p.touch)
+      p.timer = window.setTimeout(() => {
+        if (press.current !== p) return
+        press.current = null
+        navigator.vibrate?.(12)
+        beginRef.current(p.line, p.from, p.x, p.y)
+      }, 400)
+    press.current = p
+  }
+
+  // Watch a press: mouse → drag after 5px; touch → moving early means a scroll.
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      const p = press.current
+      if (!p) return
+      const dist = Math.hypot(e.clientX - p.x, e.clientY - p.y)
+      if (p.touch) {
+        if (dist > 8) {
+          window.clearTimeout(p.timer)
+          press.current = null
+        }
+      } else if (dist > 5) {
+        press.current = null
+        beginRef.current(p.line, p.from, e.clientX, e.clientY)
+      }
+    }
+    const release = () => {
+      if (press.current) window.clearTimeout(press.current.timer)
+      press.current = null
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', release)
+    window.addEventListener('pointercancel', release)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', release)
+      window.removeEventListener('pointercancel', release)
+    }
+  }, [])
 
   useEffect(() => {
     if (!dragging) return
     const dropAt = (x: number, y: number): DropSpot | null => {
       const sec = document.elementFromPoint(x, y)?.closest('[data-drop]') as HTMLElement | null
       if (!sec?.dataset.drop) return null
+      const moving = dragRef.current?.ids ?? []
       const next = [...sec.querySelectorAll<HTMLElement>('[data-line]')]
-        .filter((r) => r.dataset.line !== dragRef.current?.id)
+        .filter((r) => !moving.includes(r.dataset.line ?? ''))
         .find((r) => {
           const b = r.getBoundingClientRect()
           return y < b.top + b.height / 2
@@ -886,8 +974,15 @@ function AssetsTab({
       const spot = e.type === 'pointerup' ? dropAt(e.clientX, e.clientY) : null
       if (d && spot) {
         const { lines: ls, groups: gs, apply: run } = latest.current
-        // Only drop when it actually moves; then re-apply the move to the latest board.
-        if (placeLine(ls, gs, d.id, spot)) void run((b) => ({ ...b, lines: placeLine(b.lines, b.groups, d.id, spot) ?? b.lines }))
+        if (d.ids.length > 1) {
+          // A selection moves together into the target group (keeping its order).
+          const target = spot.section === NO_GROUP ? null : spot.section
+          void run((b) => ({ ...b, lines: b.lines.map((l) => (d.ids.includes(l.id) ? { ...l, groupId: target } : l)) }))
+          latest.current.clearSelection()
+        } else if (placeLine(ls, gs, d.id, spot)) {
+          // Only drop when it actually moves; then re-apply the move to the latest board.
+          void run((b) => ({ ...b, lines: placeLine(b.lines, b.groups, d.id, spot) ?? b.lines }))
+        }
       }
       setDrag(null)
     }
@@ -907,11 +1002,14 @@ function AssetsTab({
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
+    const noScroll = (e: TouchEvent) => e.preventDefault()
+    window.addEventListener('touchmove', noScroll, { passive: false })
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', end)
     window.addEventListener('pointercancel', end)
     return () => {
       cancelAnimationFrame(raf)
+      window.removeEventListener('touchmove', noScroll)
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', end)
       window.removeEventListener('pointercancel', end)
@@ -1172,38 +1270,49 @@ function AssetsTab({
                       {showInsert && drag?.over?.before === l.id && insertLine}
                       <div
                         data-line={l.id}
-                        className={`mv-row${drag?.id === l.id ? ' is-dragged' : ''}${l.pool ? ' is-pool' : ''}`}
+                        className={`mv-row${drag?.ids.includes(l.id) ? ' is-dragged' : ''}${l.pool ? ' is-pool' : ''}${selected.has(l.id) ? ' is-selected' : ''}${canDrag ? ' can-drag' : ''}`}
+                        onPointerDown={onRowPointerDown(l, key)}
+                        onContextMenu={(e) => canDrag && e.preventDefault()}
                       >
-                        {canDrag && (
-                          <span
-                            className="mv-handle"
-                            onPointerDown={startDrag(l, key)}
-                            title="Drag to reorder or move to a group"
-                            aria-hidden
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={selected.has(l.id)}
+                            aria-label={`Select #${position.get(l.id)} ${l.type}`}
+                            className={`mv-pick${selected.has(l.id) ? ' is-on' : ''}`}
+                            onClick={() => toggleSelect(l.id)}
                           >
-                            <GripVertical size={16} />
-                          </span>
+                            {selected.has(l.id) && <Check size={12} strokeWidth={3} />}
+                          </button>
                         )}
                         <button
                           type="button"
                           className="mv-row-main"
-                          onClick={() => !readOnly && setLineSheet({ line: l, isNew: false })}
+                          onClick={() => {
+                            if (suppressClick.current) {
+                              suppressClick.current = false
+                              return
+                            }
+                            if (!readOnly) setLineSheet({ line: l, isNew: false })
+                          }}
                           disabled={readOnly}
                         >
                           <span className="mv-no">#{position.get(l.id)}</span>
                           <Avatars names={l.owners} />
                           <span className="mv-row-text">
                             <span className={`mv-row-title${complete ? ' is-done' : ''}`}>
-                              {l.name}
-                              <span className="mv-qty">× {l.qty}</span>
+                              <span className="mv-row-name">{l.type}</span>
+                              <span className="mv-qty" title={`${l.qty} ${l.qty === 1 ? 'asset' : 'assets'}`}>
+                                ×{l.qty}
+                              </span>
                             </span>
                             <span className="mv-row-sub">
                               {l.pool ? <span className="mv-pool-tag">Unassigned</span> : <StatusPill status={l.status} />}
-                              {(!l.pool || l.name !== l.type) && <span className="mv-type">{l.type}</span>}
                               {multiFn && l.fn && <span className="mv-type">{l.fn}</span>}
                               {l.due && (
-                                <span className={overdue ? 'mv-overdue' : undefined}>
-                                  {overdue ? 'Overdue · ' : 'Due '}
+                                <span className={`mv-due${overdue ? ' is-overdue' : ''}`} title={overdue ? 'Overdue' : 'Due date'}>
+                                  <CalendarDays size={12} />
                                   {shortDate(l.due)}
                                 </span>
                               )}
@@ -1217,7 +1326,7 @@ function AssetsTab({
                           className={`mv-check${complete ? ' is-done' : ''}`}
                           disabled={readOnly}
                           onClick={() => patchLine(l.id, { status: complete ? 'notStarted' : 'done', pool: undefined })}
-                          aria-label={`#${position.get(l.id)} ${l.name}: ${complete ? 'mark not done' : 'mark done'}`}
+                          aria-label={`#${position.get(l.id)} ${l.type}: ${complete ? 'mark not done' : 'mark done'}`}
                           title={complete ? 'Mark not done' : 'Mark done'}
                         >
                           <Check size={16} strokeWidth={3} />
@@ -1253,6 +1362,59 @@ function AssetsTab({
           {drag.over && drag.over.section !== drag.from && (
             <span className="mv-ghost-to">→ {groupName(drag.over.section)}</span>
           )}
+        </div>
+      )}
+
+      {selectedIds.length > 0 && (
+        <div className="mv-bulk" role="toolbar" aria-label="Selected lines">
+          <span className="mv-bulk-count">{selectedIds.length} selected</span>
+          <select
+            className="mv-input mv-select mv-bulk-select"
+            aria-label="Move selected lines to a group"
+            value=""
+            onChange={(e) => e.target.value && moveSelected(e.target.value)}
+          >
+            <option value="">Move to…</option>
+            <option value={NO_GROUP}>No group</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="mv-input mv-select mv-bulk-select"
+            aria-label="Set status of selected lines"
+            value=""
+            onChange={(e) => e.target.value && statusSelected(e.target.value as Status)}
+          >
+            <option value="">Status…</option>
+            {STATUS_ORDER.map((st) => (
+              <option key={st} value={st}>
+                {STATUS[st].label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="mv-btn mv-btn-danger mv-bulk-btn"
+            onClick={() => (confirmDelete ? bulk(() => null) : setConfirmDelete(true))}
+          >
+            {confirmDelete ? `Delete ${selectedIds.length}?` : 'Delete'}
+          </button>
+          <span className="mv-spacer" />
+          <button
+            type="button"
+            className="mv-text-btn"
+            onClick={() =>
+              selectedIds.length === lines.length ? clearSelection() : setSelected(new Set(lines.map((l) => l.id)))
+            }
+          >
+            {selectedIds.length === lines.length ? 'None' : 'All'}
+          </button>
+          <button type="button" className="mv-icon-btn" aria-label="Clear selection" onClick={clearSelection}>
+            <X size={18} />
+          </button>
         </div>
       )}
 
@@ -1536,8 +1698,6 @@ function AssetSheet({
   onClose: () => void
 }) {
   const [line, setLine] = useState<AssetLine>(initial)
-  const [touched, setTouched] = useState(false)
-  const nameMissing = !line.name.trim()
   const types = typesFor(line.fn)
   // Notes stay out of the way until asked for (footer icon) — or already written.
   const [notesOpen, setNotesOpen] = useState(!!initial.notes.trim())
@@ -1546,10 +1706,9 @@ function AssetSheet({
   const set = (patch: Partial<AssetLine>) => setLine((l) => ({ ...l, ...patch }))
   const setQty = (n: number) => set({ qty: Math.max(1, Math.round(n) || 1) })
 
+  // A line is named by its asset type (there's no separate name any more).
   const save = () => {
-    setTouched(true)
-    if (nameMissing) return
-    const out = { ...line, name: line.name.trim(), notes: line.notes.trim() }
+    const out = { ...line, name: line.type, notes: line.notes.trim() }
     onSave({ ...out, pool: initial.pool && isPoolShaped(out) ? true : undefined })
   }
 
@@ -1590,21 +1749,6 @@ function AssetSheet({
         </>
       }
     >
-      <div>
-        <label className="mv-field-label" htmlFor="mv-name">
-          Asset name
-        </label>
-        <input
-          id="mv-name"
-          className={`mv-input${touched && nameMissing ? ' is-error' : ''}`}
-          value={line.name}
-          onChange={(e) => set({ name: e.target.value })}
-          placeholder="e.g. Facebook carousel set"
-          autoFocus={isNew}
-        />
-        {touched && nameMissing && <p className="mv-error">Give the asset a name.</p>}
-      </div>
-
       <div className="mv-field-row">
         <div>
           <label className="mv-field-label" htmlFor="mv-type">
