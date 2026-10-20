@@ -1314,7 +1314,8 @@ app shell, inside `StoreProvider` only (live tasks, no Layout).
   touch, insertion line, auto-scroll) to reorder or move between groups.
 - **Editor sheet** (kept calm — no explanatory text): Asset name; Asset type + Function;
   Person in charge = small toggle chips, multi-select (task people + "+N more"); Asset
-  count stepper (no native spinners) + Status dropdown filled with the status colour;
+  count stepper (no native spinners) + Status dropdown filled with the status colour
+  (DARK text `#323338` on status fills, pills too — white was ~1.6–2.2:1, now ≥5.7:1);
   Due date; Notes hidden behind a sticky-note-with-plus icon in the footer (open when a
   note exists). Footer: Delete · note icon · Cancel · Save. (Split was built and removed.)
 - **Task bar = one row:** task name (always, 17px Poppins) over monday mark · code · short dates

@@ -959,7 +959,7 @@
   height: 20px;
   padding: 0 8px;
   border-radius: 4px;
-  color: #fff;
+  color: #323338; /* dark text: ≥6.6:1 on all three status fills */
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -1043,9 +1043,9 @@
 /* Status dropdown: filled with the status colour, like a monday status cell */
 .mv .mv-status-select {
   border-color: transparent;
-  color: #fff;
-  font-weight: 500;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  color: #323338; /* dark text: ≥6.6:1 on all three status fills (white was ~1.6–2.2:1) */
+  font-weight: 600;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23323338' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
   background-repeat: no-repeat !important;
   background-position: right 10px center !important;
 }
