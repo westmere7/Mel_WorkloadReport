@@ -1053,19 +1053,153 @@
   text-decoration: underline;
 }
 
-.mv-demo-bar {
+/* ── Generic link: pick a task ── */
+.mv-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 520px;
+  margin: 8px auto 0;
+  width: 100%;
+}
+.mv-picker-title {
+  margin: 0;
+  font-family: Poppins, Figtree, sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+}
+.mv-picker-form {
+  display: flex;
+  gap: 8px;
+}
+.mv-picker-wait {
+  font-size: 12px;
+}
+.mv-recent {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--mv-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.mv-recent-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--mv-border);
+  background: var(--mv-surface);
+  text-align: left;
+  cursor: pointer;
+}
+.mv-recent-item:last-child {
+  border-bottom: 0;
+}
+.mv-recent-item:hover {
+  background: var(--mv-grey);
+}
+.mv-recent-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Task bar (which task, copy link, change) ── */
+.mv-tracker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 2px;
+}
+.mv-tracker .mv-text-btn {
+  margin: 0;
+  padding: 0;
+  text-decoration: none;
+}
+.mv .mv-muted-btn {
+  color: var(--mv-text-2);
+}
+.mv-taskbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.mv-taskbar-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mv-taskbar-name {
+  margin: 0;
+  font-family: Poppins, Figtree, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mv-taskbar-actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px 12px;
+  flex-shrink: 0;
+}
+.mv-taskbar-actions .mv-text-btn {
+  margin: 0;
+}
+.mv .mv-inline-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 4px 16px;
-  padding: 8px 12px;
-  border: 1px dashed var(--mv-ui-border);
+  gap: 4px;
+}
+.mv-banner {
+  padding: 10px 12px;
   border-radius: 8px;
+  background: var(--mv-selected);
+  color: var(--mv-text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.mv-banner.is-error {
+  background: var(--mv-danger-hover);
+}
+.mv-banner code {
+  font-size: 12px;
+}
+.mv-saving {
   font-size: 12px;
   color: var(--mv-text-2);
 }
-.mv-demo-bar .mv-text-btn {
-  margin: 0;
+.mv-pool-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px dashed var(--mv-ui-border);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--mv-text-2);
+  white-space: nowrap;
+}
+.mv-row.is-pool .mv-row-title {
+  color: var(--mv-text-2);
+}
+.mv-row-main:disabled {
+  cursor: default;
+}
+.mv-check:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.mv-field-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--mv-text-2);
 }
 
 /* ── States ── */

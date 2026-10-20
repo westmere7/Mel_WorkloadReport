@@ -2,6 +2,7 @@ import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
 import type { ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
 import type { AdvisorCacheEntry } from '../lib/advisor/cache'
+import type { AssetBoard } from '../lib/assetLines'
 
 /**
  * Storage-agnostic contract for the app's data.
@@ -95,4 +96,13 @@ export interface Repository {
    * task form stay in sync live. Returns an unsubscribe function.
    */
   subscribeSettings(onChange: () => void): () => void
+
+  // ── Asset lines (monday "Assets" tab) ─────────────────────────
+  /** A task's asset-lines board, or null if none saved yet.
+   *  Throws AssetLinesNotSetUpError before the table exists (schema.sql not re-run). */
+  getAssetBoard(taskId: string): Promise<AssetBoard | null>
+  /** Save (upsert) a task's asset-lines board. */
+  saveAssetBoard(taskId: string, board: AssetBoard): Promise<void>
+  /** Live updates of one task's board (null when its row is deleted). */
+  subscribeAssetBoard(taskId: string, onChange: (board: AssetBoard | null) => void): () => void
 }

@@ -1,62 +1,58 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Check, ChevronDown, FolderPlus, GripVertical, Loader2, Minus, MoreHorizontal, Plus, X } from 'lucide-react'
+import { Check, ChevronDown, Copy, ExternalLink, FolderPlus, GripVertical, Loader2, Minus, MoreHorizontal, Plus, X } from 'lucide-react'
 import mondaySdk from 'monday-sdk-js'
 import '@fontsource/figtree/400.css'
 import '@fontsource/figtree/500.css'
 import '@fontsource/figtree/600.css'
 import '@fontsource/poppins/500.css'
 import './mondayItemView.css'
-import { useStore } from '../data/store'
-import { formatDate } from '../lib/format'
+import { createRepository, useStore } from '../data/store'
+import { formatDate, toMessage } from '../lib/format'
 import { mondayItemIdFromUrl } from '../lib/monday'
-import type { AppSettings, Task } from '../types'
+import {
+  AssetLinesNotSetUpError,
+  EMPTY_BOARD,
+  basisOf,
+  basisOfLines,
+  countsFromLines,
+  isPoolShaped,
+  lineKey,
+  packageOf,
+  poolEffect,
+  rebalance,
+  reconcile,
+  taskFunctions,
+  type AssetBoard,
+  type AssetLine,
+  type LineGroup,
+  type LineStatus,
+} from '../lib/assetLines'
+import type { AppSettings, Task, TaskInput } from '../types'
 
 /*
  * monday.com Item View — /embed/item. The "Assets" tab of a monday item: the
- * team's asset LINES (a batch: # · name · type · quantity · person in charge ·
- * status · due · notes) and their progress. No per-unit done count — status only.
+ * task's asset LINES (batches: # · name · type · quantity · person in charge ·
+ * status · due · notes), live and shared.
  *
- * - Lines are a flat list, numbered by position (# runs 1…N down the page). Users may add their OWN groups (free names,
- *   unrelated to asset types) and move lines into them; ungrouped lines sit on top.
- * - The linked dashboard task (matched by its monday link) is READ LIVE for its
- *   asset types and counts, shown as a comparison card. The tab never writes to
- *   the dashboard.
- * - Lines + groups are tab-only, saved per item in this browser's localStorage
- *   for the demo — the dashboard doesn't track who does which asset.
- * - Item id: monday's SDK context inside an item card; `?itemId=` when opened as a
- *   normal page (demo). Standalone, it also draws a monday-like item-card header.
+ * Two links:
+ * - GENERIC `/embed/item` → enter a monday item ID (or paste its link / the task
+ *   code); recently opened tasks are one tap away. (A plain monday Embed widget
+ *   can't tell us which item it's on — the installed app will, via SDK context.)
+ * - TASK-SPECIFIC `/embed/item?itemId=<id>` → opens that task straight away
+ *   (the task form's checklist icon, and "Copy link" here).
+ *
+ * Lines live in Supabase (`task_asset_lines`, one board per task) and update live.
+ * They always add up to the task's dashboard counts — see lib/assetLines.ts for
+ * the pool-first rules. Edits here that go beyond the unassigned stock change
+ * the dashboard's counts (with an edit-log entry); dashboard edits re-balance here.
  */
 
-type Status = 'notStarted' | 'working' | 'stuck' | 'done'
+type Status = LineStatus
 
-interface AssetLine {
-  id: string
-  groupId: string | null
-  name: string
-  type: string
-  fn: string | null
-  owner: string | null
-  qty: number
-  status: Status
-  due: string | null
-  notes: string
-}
-
-interface LineGroup {
-  id: string
-  name: string
-  color: string
-}
-
-interface Board {
-  /** Display order: lines show in array order within their section (drag reorders it). */
-  lines: AssetLine[]
-  groups: LineGroup[]
-}
-
-const STORAGE_PREFIX = 'mwr.itemAssets.v3.'
 const CONTEXT_TIMEOUT_MS = 4000
+const RECENT_KEY = 'mwr.itemAssets.recent'
+const DETAILS_KEY = 'mwr.itemAssets.detailsOpen'
 
 // monday's own status labels + colours.
 const STATUS: Record<Status, { label: string; color: string }> = {
@@ -66,11 +62,7 @@ const STATUS: Record<Status, { label: string; color: string }> = {
   done: { label: 'Done', color: '#00c875' },
 }
 const STATUS_ORDER: Status[] = ['notStarted', 'working', 'stuck', 'done']
-/** Same order as the battery segments. */
-const LEGEND_ORDER: Status[] = ['done', 'working', 'stuck', 'notStarted']
 const SHORT_LABEL: Record<Status, string> = { done: 'done', working: 'working', stuck: 'stuck', notStarted: 'not started' }
-const DETAILS_KEY = 'mwr.itemAssets.detailsOpen'
-const UNPLANNED = 'var(--mv-empty)'
 const UNGROUPED_COLOR = 'var(--mv-ui-border)'
 
 /** monday's themes. Light is the default; dark/black (night) come from monday's
@@ -83,146 +75,39 @@ const GROUP_COLORS = ['#579bfc', '#a25ddc', '#ff642e', '#037f4c', '#ff158a', '#0
 const AVATAR_COLORS = ['#ff7575', '#579bfc', '#a25ddc', '#00a9a5', '#e2445c', '#037f4c', '#ff642e', '#784bd1', '#0086c0']
 
 let idSeq = 0
-const newId = () => `${Date.now().toString(36)}${(++idSeq).toString(36)}`
-const planKey = (fn: string | null, type: string) => `${fn ?? ''}::${type}`
+const newId = () => `${Date.now().toString(36)}${(++idSeq).toString(36)}${Math.random().toString(36).slice(2, 6)}`
+/** This page load — lets us ignore the realtime echo of our own saves. */
+const CLIENT_ID = newId()
 
-const EMPTY_BOARD: Board = { lines: [], groups: [] }
+const keyOf = (l: AssetLine) => lineKey(l.fn, l.type)
+const findTaskByItem = (tasks: Task[], itemId: string) => tasks.find((t) => mondayItemIdFromUrl(t.mondayUrl) === itemId)
 
-/** The saved board, or null when this item has never been opened in this browser. */
-function loadBoard(itemId: string): Board | null {
+/** A monday item id from what someone typed: the number itself, or a pasted item link. */
+function parseItemInput(raw: string): string | null {
+  const s = raw.trim()
+  return mondayItemIdFromUrl(s) ?? (/^\d{6,}$/.test(s) ? s : null)
+}
+
+interface RecentTask {
+  itemId: string
+  code: string
+  name: string
+}
+function loadRecent(): RecentTask[] {
   try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + itemId)
-    return raw ? { ...EMPTY_BOARD, ...(JSON.parse(raw) as Board) } : null
+    const list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as RecentTask[]
+    return Array.isArray(list) ? list : []
   } catch {
-    return null
+    return []
   }
 }
-
-// ── DEMO ONLY ───────────────────────────────────────────────────────────────
-// First open of an item fills it with sample lines covering the dashboard's
-// counts, each with a RANDOM person in charge from the task's people. Set to
-// false (and drop the demo controls) once lines are stored for real.
-const DEMO_SEED = true
-
-const DEMO_NAMES: Record<string, string[]> = {
-  'Static Designs': ['Instagram feed posts', 'Facebook carousel cards', 'Story frames', 'LinkedIn posts', 'EDM headers'],
-  'Display ads': ['GDN banner suite', 'Programmatic MREC set', 'Retargeting banners'],
-  'Videos (Short form)': ['TikTok cutdowns', 'Reels 15s', 'YouTube Shorts'],
-  'Videos (30s+)': ['Hero video 60s', 'Testimonial edit'],
-  'GIF / Motion': ['Animated social tiles', 'Motion banners'],
-}
-
-const pick = <T,>(list: T[]): T => list[Math.floor(Math.random() * list.length)]
-const randInt = (min: number, max: number) => min + Math.floor(Math.random() * (max - min + 1))
-
-/** Split n into k random positive parts. */
-function splitCount(n: number, k: number): number[] {
-  const parts = Array.from({ length: k }, () => 1)
-  for (let i = k; i < n; i++) parts[randInt(0, k - 1)]++
-  return parts
-}
-
-function isoBetween(fromISO: string, toISO: string): string {
-  const a = new Date(`${fromISO}T00:00:00`).getTime()
-  const b = new Date(`${toISO}T00:00:00`).getTime()
-  const d = new Date(a + Math.random() * Math.max(0, b - a))
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function demoBoard(task: Task): Board {
-  const people = task.people.length ? task.people : [null]
-  const lines: AssetLine[] = []
-  const today = new Date()
-  const from = new Date(today.getTime() - 7 * 86_400_000).toISOString().slice(0, 10)
-  const to = task.endDate && task.endDate > from ? task.endDate : new Date(today.getTime() + 21 * 86_400_000).toISOString().slice(0, 10)
-  for (const s of dashboardSlices(task)) {
-    for (const [type, count] of Object.entries(s.breakdown)) {
-      if (!count) continue
-      const names = DEMO_NAMES[type] ?? [`${type} batch`]
-      const k = count <= 2 ? 1 : Math.min(names.length, count >= 50 ? 4 : count >= 10 ? 3 : 2)
-      splitCount(count, k).forEach((qty, i) => {
-        const r = Math.random()
-        const status: Status = r < 0.35 ? 'done' : r < 0.65 ? 'working' : r < 0.72 ? 'stuck' : 'notStarted'
-        lines.push({
-          id: newId(),
-          groupId: null,
-          name: names[i % names.length] + (i >= names.length ? ` ${Math.floor(i / names.length) + 1}` : ''),
-          type,
-          fn: s.fn,
-          owner: pick(people),
-          qty,
-          status,
-          due: isoBetween(from, to),
-          notes: '',
-        })
-      })
-    }
-  }
-  return { lines, groups: [] }
-}
-// ────────────────────────────────────────────────────────────────────────────
-
-function saveBoard(itemId: string, board: Board) {
+function pushRecent(t: RecentTask) {
   try {
-    localStorage.setItem(STORAGE_PREFIX + itemId, JSON.stringify(board))
+    const next = [t, ...loadRecent().filter((r) => r.itemId !== t.itemId)].slice(0, 6)
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next))
   } catch {
-    /* storage blocked (private mode / partitioned frame) — keep in memory */
+    /* storage blocked — recents are a convenience only */
   }
-}
-
-
-function fnIndex(settings: AppSettings, name: string | null) {
-  const i = name ? settings.functions.findIndex((f) => f.name === name) : -1
-  return i < 0 ? Number.MAX_SAFE_INTEGER : i
-}
-
-/** The dashboard's asset counts per recording function (legacy task: one slice). */
-function dashboardSlices(task: Task): { fn: string | null; breakdown: Record<string, number> }[] {
-  const fd = task.functionData
-  const slices = fd
-    ? Object.entries(fd)
-        .filter(([, e]) => e && e.assetTotal > 0)
-        .map(([fn, e]) => ({ fn: fn as string | null, breakdown: e.assetBreakdown }))
-    : []
-  return slices.length ? slices : [{ fn: null, breakdown: task.assetBreakdown }]
-}
-
-interface PlanRow {
-  key: string
-  fn: string | null
-  type: string
-  /** Count on the dashboard (0 = type not on the dashboard). */
-  planned: number
-}
-
-/** Dashboard types (function + asset-type order), then any extra types lines use. */
-function planRows(task: Task, settings: AppSettings, lines: AssetLine[]): PlanRow[] {
-  const typeOrder = (t: string) => {
-    const i = settings.assetTypes.indexOf(t)
-    return i < 0 ? Number.MAX_SAFE_INTEGER : i
-  }
-  const rows = new Map<string, PlanRow>()
-  for (const s of dashboardSlices(task).sort((a, b) => fnIndex(settings, a.fn) - fnIndex(settings, b.fn)))
-    Object.keys(s.breakdown)
-      .filter((t) => (s.breakdown[t] ?? 0) > 0)
-      .sort((a, b) => typeOrder(a) - typeOrder(b))
-      .forEach((type) => rows.set(planKey(s.fn, type), { key: planKey(s.fn, type), fn: s.fn, type, planned: s.breakdown[type] }))
-  for (const l of lines) {
-    const key = planKey(l.fn, l.type)
-    if (!rows.has(key)) rows.set(key, { key, fn: l.fn, type: l.type, planned: 0 })
-  }
-  return [...rows.values()]
-}
-
-/** Units by status for a set of lines, plus the dashboard units no line covers yet. */
-function units(lines: AssetLine[], planned: number) {
-  const u = { done: 0, working: 0, stuck: 0, notStarted: 0, unplanned: 0, inLines: 0 }
-  for (const l of lines) {
-    u[l.status] += l.qty
-    u.inLines += l.qty
-  }
-  u.unplanned = Math.max(0, planned - u.inLines)
-  return u
 }
 
 function avatarColor(name: string) {
@@ -286,12 +171,16 @@ function useEscape(onClose: () => void) {
 }
 
 export function MondayItemViewPage() {
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const paramItemId = params.get('itemId')
   const standalone = typeof window !== 'undefined' && window.self === window.top
   const { loading, error, tasks, settings } = useStore()
-  const [itemId, setItemId] = useState<string | null>(paramItemId)
-  const [waiting, setWaiting] = useState(!paramItemId && !standalone)
+  // Where the item id comes from: the task-specific link, monday's app context,
+  // or the generic link's ID box (only that one can be changed in place).
+  const [contextId, setContextId] = useState<string | null>(null)
+  const [pickedId, setPickedId] = useState<string | null>(null)
+  const [contextWaiting, setContextWaiting] = useState(false)
+  const itemId = paramItemId ?? contextId ?? pickedId
   // monday's own theme (app context) wins over ?theme=; default light.
   const [mondayTheme, setMondayTheme] = useState<string | null>(null)
   const theme = toTheme(mondayTheme ?? params.get('theme'))
@@ -312,31 +201,43 @@ export function MondayItemViewPage() {
     return () => els.forEach((el) => (el.style.backgroundColor = ''))
   }, [theme])
 
-  // Inside monday (installed app), monday sends the open item + its theme.
-  // A plain embed never answers — then ?itemId= / ?theme= are all we have.
+  // Inside monday (installed app), monday sends the open item + its theme. A plain
+  // embed never answers — the ID box shows meanwhile, so nobody waits on it.
   useEffect(() => {
     if (standalone) return
-    const timer = paramItemId ? 0 : window.setTimeout(() => setWaiting(false), CONTEXT_TIMEOUT_MS)
+    setContextWaiting(true)
+    const timer = window.setTimeout(() => setContextWaiting(false), CONTEXT_TIMEOUT_MS)
     const unlisten = mondaySdk().listen('context', (res) => {
       const ctx = res.data as { itemId?: number; theme?: string }
       if (ctx.theme) setMondayTheme(ctx.theme)
-      if (!paramItemId && ctx.itemId) setItemId(String(ctx.itemId))
+      if (ctx.itemId) setContextId(String(ctx.itemId))
       window.clearTimeout(timer)
-      setWaiting(false)
+      setContextWaiting(false)
     })
     return () => {
       window.clearTimeout(timer)
       if (typeof unlisten === 'function') unlisten()
     }
-  }, [paramItemId, standalone])
+  }, [standalone])
 
-  const task = useMemo(
-    () => (itemId ? tasks.find((t) => mondayItemIdFromUrl(t.mondayUrl) === itemId) ?? null : null),
-    [tasks, itemId],
-  )
+  const task = useMemo(() => (itemId ? findTaskByItem(tasks, itemId) ?? null : null), [tasks, itemId])
+
+  // Remember opened tasks for the generic link's "Recent" list.
+  useEffect(() => {
+    if (task && itemId) pushRecent({ itemId, code: task.code, name: task.name })
+  }, [task, itemId])
+
+  const changeTask = () => {
+    setPickedId(null)
+    if (paramItemId) {
+      const next = new URLSearchParams(params)
+      next.delete('itemId')
+      setParams(next, { replace: true })
+    }
+  }
 
   let body: React.ReactNode
-  if (waiting || loading) {
+  if (loading) {
     body = (
       <div className="mv-state">
         <Loader2 className="mv-spin" size={24} />
@@ -351,22 +252,32 @@ export function MondayItemViewPage() {
       </div>
     )
   } else if (!itemId) {
-    body = (
-      <div className="mv-state">
-        <strong>Open this from a monday.com item</strong>
-        This tab shows the assets of the monday item it’s opened from.
-      </div>
-    )
+    body = <TaskPicker tasks={tasks} waiting={contextWaiting} onPick={setPickedId} />
   } else if (!task) {
     body = (
       <div className="mv-state">
         <strong>Not on the Workload dashboard yet</strong>
-        No dashboard task is linked to this item. Register it on the dashboard (monday auto-fill links it) and its
-        assets appear here.
+        No dashboard task is linked to monday item {itemId}.
+        {!contextId && (
+          <button type="button" className="mv-text-btn" onClick={changeTask}>
+            Enter a different ID
+          </button>
+        )}
       </div>
     )
   } else {
-    body = <AssetsTab key={itemId} itemId={itemId} task={task} settings={settings} />
+    body = (
+      <AssetsTab
+        key={task.id}
+        itemId={itemId}
+        task={task}
+        settings={settings}
+        theme={theme}
+        showName={!standalone}
+        // In the installed app the item is fixed by monday; elsewhere it can change.
+        onChangeTask={contextId ? undefined : changeTask}
+      />
+    )
   }
 
   return (
@@ -397,7 +308,78 @@ export function MondayItemViewPage() {
   )
 }
 
+/** The generic link's start screen: enter a monday item ID (or link / task code). */
+function TaskPicker({
+  tasks,
+  waiting,
+  onPick,
+}: {
+  tasks: Task[]
+  /** Still listening for monday's app context (installed app). */
+  waiting: boolean
+  onPick: (itemId: string) => void
+}) {
+  const [value, setValue] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const recent = useMemo(() => loadRecent().filter((r) => findTaskByItem(tasks, r.itemId)), [tasks])
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const raw = value.trim()
+    if (!raw) return setError('Enter the monday item ID.')
+    const byCode = tasks.find((t) => t.code && t.code.toLowerCase() === raw.toLowerCase() && mondayItemIdFromUrl(t.mondayUrl))
+    const id = byCode ? mondayItemIdFromUrl(byCode.mondayUrl) : parseItemInput(raw)
+    if (!id) return setError('Not a monday item ID.')
+    if (!findTaskByItem(tasks, id)) return setError(`No dashboard task is linked to item ${id}.`)
+    setError(null)
+    onPick(id)
+  }
+
+  return (
+    <div className="mv-body">
+      <div className="mv-picker">
+        <h2 className="mv-picker-title">Show a task’s assets</h2>
+        <p className="mv-hint">
+          The monday item ID (end of the item’s link), the link itself, or the task code.
+        </p>
+        <form className="mv-picker-form" onSubmit={submit}>
+          <input
+            className={`mv-input${error ? ' is-error' : ''}`}
+            aria-label="monday item ID"
+            placeholder="e.g. 2827224155"
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value)
+              setError(null)
+            }}
+            autoFocus
+          />
+          <button type="submit" className="mv-btn mv-btn-primary">
+            Open
+          </button>
+        </form>
+        {error && <p className="mv-error">{error}</p>}
+        {waiting && <p className="mv-hint mv-picker-wait">Checking monday…</p>}
+        {recent.length > 0 && (
+          <>
+            <p className="mv-subhead">Recent</p>
+            <div className="mv-recent">
+              {recent.map((r) => (
+                <button key={r.itemId} type="button" className="mv-recent-item" onClick={() => onPick(r.itemId)}>
+                  {r.code && <span className="mv-code">{r.code}</span>}
+                  <span className="mv-recent-name">{r.name}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 type LineSheet = { line: AssetLine; isNew: boolean } | null
+type GroupSheet = { group: LineGroup; isNew: boolean } | null
 
 /** Drop-target key for the ungrouped section. */
 const NO_GROUP = '__none'
@@ -422,35 +404,56 @@ function sectionOf(l: AssetLine, groups: LineGroup[]): string {
   return l.groupId && groups.some((g) => g.id === l.groupId) ? l.groupId : NO_GROUP
 }
 
-/** Move a line to a drop spot: re-section it and re-position it in the list order. */
-function placeLine(b: Board, id: string, spot: DropSpot): Board {
-  const line = b.lines.find((l) => l.id === id)
-  if (!line) return b
+/** Move a line to a drop spot: re-section it and re-position it. Null = no change. */
+function placeLine(lines: AssetLine[], groups: LineGroup[], id: string, spot: DropSpot): AssetLine[] | null {
+  const line = lines.find((l) => l.id === id)
+  if (!line) return null
   const moved = { ...line, groupId: spot.section === NO_GROUP ? null : spot.section }
-  const rest = b.lines.filter((l) => l.id !== id)
+  const rest = lines.filter((l) => l.id !== id)
   let at = spot.before ? rest.findIndex((l) => l.id === spot.before) : -1
   if (at < 0) {
     // End of the section: right after its last line (or the end of the list).
     let last = -1
     rest.forEach((l, i) => {
-      if (sectionOf(l, b.groups) === spot.section) last = i
+      if (sectionOf(l, groups) === spot.section) last = i
     })
     at = last < 0 ? rest.length : last + 1
   }
-  if (at === b.lines.indexOf(line) && moved.groupId === line.groupId) return b // landed where it was
+  if (at === lines.indexOf(line) && moved.groupId === line.groupId) return null // landed where it was
   rest.splice(at, 0, moved)
-  return { ...b, lines: rest }
+  return rest
 }
-type GroupSheet = { group: LineGroup; isNew: boolean } | null
 
-function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; settings: AppSettings }) {
-  const [board, setBoardState] = useState<Board>(() => {
-    const saved = loadBoard(itemId)
-    if (saved) return saved
-    const initial = DEMO_SEED ? demoBoard(task) : EMPTY_BOARD
-    saveBoard(itemId, initial)
-    return initial
-  })
+function AssetsTab({
+  itemId,
+  task,
+  settings,
+  theme,
+  showName,
+  onChangeTask,
+}: {
+  itemId: string
+  task: Task
+  settings: AppSettings
+  theme: MondayTheme
+  /** Show the task name (standalone, the preview header already does). */
+  showName: boolean
+  onChangeTask?: () => void
+}) {
+  const { updateTask } = useStore()
+  const repo = useMemo(createRepository, [])
+  const [board, setBoardState] = useState<AssetBoard>(EMPTY_BOARD)
+  const boardRef = useRef(board)
+  const setBoard = (b: AssetBoard) => {
+    boardRef.current = b
+    setBoardState(b)
+  }
+  const [loaded, setLoaded] = useState(false)
+  const [setupMissing, setSetupMissing] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [inflight, setInflight] = useState(0)
+  const [copied, setCopied] = useState(false)
+
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   // Details fold — a per-viewer convenience, remembered in this browser.
   const [detailsOpen, setDetailsOpen] = useState(() => {
@@ -471,36 +474,129 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
     })
   const [lineSheet, setLineSheet] = useState<LineSheet>(null)
   const [groupSheet, setGroupSheet] = useState<GroupSheet>(null)
-  const { lines, groups } = board
+  const [trackerOpen, setTrackerOpen] = useState(false)
 
-  const setBoard = (fn: (b: Board) => Board) =>
-    setBoardState((prev) => {
-      const next = fn(prev)
-      saveBoard(itemId, next)
-      return next
+  // ── Load the board + follow live changes from every other viewer ──
+  useEffect(() => {
+    let alive = true
+    repo
+      .getAssetBoard(task.id)
+      .then((b) => {
+        if (alive && b && b.rev >= boardRef.current.rev) setBoard(b)
+      })
+      .catch((err) => {
+        if (!alive) return
+        if (err instanceof AssetLinesNotSetUpError) setSetupMissing(true)
+        else setSaveError(toMessage(err))
+      })
+      .finally(() => alive && setLoaded(true))
+    const off = repo.subscribeAssetBoard(task.id, (b) => {
+      if (!b) return
+      if (b.by === CLIENT_ID && b.rev <= boardRef.current.rev) return // echo of our own save
+      setBoard(b)
     })
+    return () => {
+      alive = false
+      off()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repo, task.id])
 
-  const plan = useMemo(() => planRows(task, settings, lines), [task, settings, lines])
-  const fns = useMemo(() => dashboardSlices(task).map((s) => s.fn), [task])
+  // Lines as shown: the saved board when it matches the dashboard's counts, else
+  // re-balanced to them (a dashboard edit, or a task nobody has split yet).
+  const taskBasis = basisOf(task)
+  const lines = useMemo(
+    () => (inflight > 0 || board.basis === taskBasis ? board.lines : reconcile(board.lines, task, settings)),
+    [inflight, board, taskBasis, task, settings],
+  )
+  const { groups } = board
+  // No editing until the board has loaded (and we know saving works).
+  const readOnly = setupMissing || !loaded
+
+  const save = async (b: AssetBoard) => {
+    try {
+      await repo.saveAssetBoard(task.id, b)
+      setSaveError(null)
+    } catch (err) {
+      if (err instanceof AssetLinesNotSetUpError) setSetupMissing(true)
+      setSaveError(toMessage(err))
+    }
+  }
+
+  // A dashboard edit changed the counts: store the re-balanced lines once, so
+  // every viewer (and the next one) starts from the same board.
+  useEffect(() => {
+    if (!loaded || readOnly || inflight > 0 || board.basis === taskBasis) return
+    if (board.rev === 0) return // never saved — the derived lines need no row until someone edits
+    const b = { ...board, lines: reconcile(board.lines, task, settings), basis: taskBasis, rev: board.rev + 1, by: CLIENT_ID }
+    setBoard(b)
+    void save(b)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, readOnly, inflight, board, taskBasis])
+
+  /**
+   * Apply an edit: balance it pool-first, show it at once, push changed counts to
+   * the dashboard task (edit log included), then save the board.
+   */
+  const commit = async (nextLines: AssetLine[], nextGroups: LineGroup[], touchedId: string | null) => {
+    if (readOnly) return
+    const balanced = rebalance(lines, nextLines, touchedId)
+    const basis = basisOfLines(balanced)
+    const b: AssetBoard = { ...boardRef.current, lines: balanced, groups: nextGroups, basis, rev: boardRef.current.rev + 1, by: CLIENT_ID }
+    setBoard(b)
+    setInflight((n) => n + 1)
+    try {
+      if (basis !== taskBasis) {
+        const { id: _id, createdAt: _c, updatedAt: _u, createdBy: _b, ...input } = task
+        await updateTask(task.id, { ...input, ...countsFromLines(balanced, task) } as TaskInput)
+      }
+      await save(b)
+    } catch (err) {
+      setSaveError(toMessage(err))
+    } finally {
+      setInflight((n) => n - 1)
+    }
+  }
+
+  /** Set or clear the tracker link (no effect on lines or counts). */
+  const saveTracker = (url: string | null) => {
+    if (readOnly) return
+    const b: AssetBoard = { ...boardRef.current, lines, tracker: url, rev: boardRef.current.rev + 1, by: CLIENT_ID }
+    if (boardRef.current.basis !== taskBasis) b.basis = taskBasis // lines shown are already balanced
+    setBoard(b)
+    void save(b)
+  }
+
+  const upsertLine = (line: AssetLine) =>
+    commit(
+      lines.some((l) => l.id === line.id) ? lines.map((l) => (l.id === line.id ? line : l)) : [...lines, line],
+      groups,
+      line.id,
+    )
+  const removeLine = (id: string) => commit(lines.filter((l) => l.id !== id), groups, id)
+  const upsertGroup = (group: LineGroup) =>
+    commit(lines, groups.some((g) => g.id === group.id) ? groups.map((g) => (g.id === group.id ? group : g)) : [...groups, group], null)
+  // Deleting a group keeps its lines — they move back to "No group".
+  const removeGroup = (id: string) =>
+    commit(
+      lines.map((l) => (l.groupId === id ? { ...l, groupId: null } : l)),
+      groups.filter((g) => g.id !== id),
+      null,
+    )
+
+  const pkg = useMemo(() => packageOf(task, settings), [task, settings])
+  const fns = useMemo(() => taskFunctions(task), [task])
   const multiFn = fns.filter(Boolean).length > 1
 
   const overall = useMemo(() => {
-    const t = { done: 0, working: 0, stuck: 0, notStarted: 0, unplanned: 0, total: 0, planned: 0 }
-    for (const p of plan) {
-      const u = units(
-        lines.filter((l) => planKey(l.fn, l.type) === p.key),
-        p.planned,
-      )
-      t.done += u.done
-      t.working += u.working
-      t.stuck += u.stuck
-      t.notStarted += u.notStarted
-      t.unplanned += u.unplanned
-      t.total += Math.max(p.planned, u.inLines)
-      t.planned += p.planned
+    const t = { done: 0, working: 0, stuck: 0, notStarted: 0, unassigned: 0, total: 0 }
+    for (const l of lines) {
+      t[l.status] += l.qty
+      t.total += l.qty
+      if (l.pool) t.unassigned += l.qty
     }
     return t
-  }, [plan, lines])
+  }, [lines])
 
   const people = useMemo(() => {
     const map = new Map<string, { qty: number; done: number; lines: number }>()
@@ -518,34 +614,18 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
   const pct = overall.total ? Math.round((overall.done / overall.total) * 100) : 0
   const seg = (n: number) => `${overall.total ? (n / overall.total) * 100 : 0}%`
 
-  const upsertLine = (line: AssetLine) =>
-    setBoard((b) =>
-      b.lines.some((l) => l.id === line.id)
-        ? { ...b, lines: b.lines.map((l) => (l.id === line.id ? line : l)) }
-        : { ...b, lines: [...b.lines, line] },
-    )
-  const removeLine = (id: string) => setBoard((b) => ({ ...b, lines: b.lines.filter((l) => l.id !== id) }))
-  const upsertGroup = (group: LineGroup) =>
-    setBoard((b) => ({
-      ...b,
-      groups: b.groups.some((g) => g.id === group.id)
-        ? b.groups.map((g) => (g.id === group.id ? group : g))
-        : [...b.groups, group],
-    }))
-  // Deleting a group keeps its lines — they move back to "No group".
-  const removeGroup = (id: string) =>
-    setBoard((b) => ({
-      ...b,
-      groups: b.groups.filter((g) => g.id !== id),
-      lines: b.lines.map((l) => (l.groupId === id ? { ...l, groupId: null } : l)),
-    }))
+  /** Asset types offered for a function: its configured list, plus whatever the task already has. */
+  const typesFor = (fn: string | null) => {
+    const configured = (fn && settings.functions.find((f) => f.name === fn)?.assetTypes) || settings.assetTypes
+    return [...new Set([...pkg.filter((p) => p.fn === fn).map((p) => p.type), ...configured])]
+  }
 
   const blankLine = (groupId: string | null): AssetLine => ({
     id: newId(),
     groupId,
     name: '',
-    type: plan[0]?.type ?? settings.assetTypes[0] ?? 'Others',
-    fn: fns[0] ?? null,
+    type: pkg[0]?.type ?? typesFor(fns[0] ?? null)[0] ?? 'Others',
+    fn: pkg[0]?.fn ?? fns[0] ?? null,
     owner: null,
     qty: 1,
     status: 'notStarted',
@@ -575,6 +655,18 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
       return next
     })
 
+  const copyLink = async () => {
+    const url = `${window.location.origin}/embed/item?itemId=${itemId}${theme === 'light' ? '' : `&theme=${theme}`}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      // Clipboard can be blocked inside an embed — let them copy it by hand.
+      window.prompt('Copy this task’s Assets link:', url)
+    }
+  }
+
   // ── Drag to reorder / move between groups (pointer events, so touch works) ──
   // Sections carry data-drop = group id | NO_GROUP and rows data-line = id; the
   // drop spot is "before the first row whose midpoint is below the pointer".
@@ -586,9 +678,10 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
     setDragState(d)
   }
   const dragging = drag !== null
-  const canDrag = lines.length > 1 || groups.length > 0
-
-  const moveLine = (id: string, spot: DropSpot) => setBoard((b) => placeLine(b, id, spot))
+  const canDrag = !readOnly && (lines.length > 1 || groups.length > 0)
+  // The drop handler runs inside a window listener: read the latest lines via a ref.
+  const latest = useRef({ lines, groups, commit })
+  latest.current = { lines, groups, commit }
 
   const startDrag = (line: AssetLine, from: string) => (e: React.PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -616,7 +709,11 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
     const end = (e: PointerEvent) => {
       const d = dragRef.current
       const spot = e.type === 'pointerup' ? dropAt(e.clientX, e.clientY) : null
-      if (d && spot) moveLine(d.id, spot)
+      if (d && spot) {
+        const { lines: ls, groups: gs, commit: apply } = latest.current
+        const next = placeLine(ls, gs, d.id, spot)
+        if (next) void apply(next, gs, null)
+      }
       setDrag(null)
     }
     // Auto-scroll while holding near the top/bottom edge (long lists, phones).
@@ -644,8 +741,6 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
       window.removeEventListener('pointerup', end)
       window.removeEventListener('pointercancel', end)
     }
-    // moveLine/setDrag only touch state setters + the ref.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragging])
 
   const spotIsNoop = (d: DragState, rows: AssetLine[]) => {
@@ -659,6 +754,66 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
 
   return (
     <div className={`mv-body${dragging ? ' is-dragging' : ''}`}>
+      {/* Which task this is — and the two ways to get here. */}
+      <div className="mv-taskbar">
+        <div className="mv-taskbar-main">
+          {showName && <p className="mv-taskbar-name">{task.name}</p>}
+          <div className="mv-meta">
+            {task.code && <span className="mv-code">{task.code}</span>}
+            <span>
+              {formatDate(task.startDate)} – {formatDate(task.endDate)}
+            </span>
+            <span className="mv-live" title="Changes from the dashboard and other viewers appear live">
+              Live
+            </span>
+          </div>
+          {board.tracker ? (
+            <div className="mv-tracker">
+              <a className="mv-text-btn mv-inline-btn" href={board.tracker} target="_blank" rel="noopener noreferrer">
+                Asset tracker
+                <ExternalLink size={13} />
+              </a>
+              {!readOnly && (
+                <button type="button" className="mv-text-btn mv-muted-btn" onClick={() => setTrackerOpen(true)}>
+                  Edit
+                </button>
+              )}
+            </div>
+          ) : (
+            !readOnly && (
+              <div className="mv-tracker">
+                <button type="button" className="mv-text-btn mv-inline-btn" onClick={() => setTrackerOpen(true)}>
+                  <Plus size={13} />
+                  Add tracker link
+                </button>
+              </div>
+            )
+          )}
+        </div>
+        <div className="mv-taskbar-actions">
+          <button type="button" className="mv-text-btn mv-inline-btn" onClick={copyLink} title="Copy this task’s Assets link">
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? 'Copied' : 'Copy link'}
+          </button>
+          {onChangeTask && (
+            <button type="button" className="mv-text-btn" onClick={onChangeTask}>
+              Change task
+            </button>
+          )}
+        </div>
+      </div>
+
+      {setupMissing && (
+        <div className="mv-banner" role="status">
+          <strong>Read-only:</strong> run <code>supabase/schema.sql</code> in Supabase to enable saving.
+        </div>
+      )}
+      {saveError && !setupMissing && (
+        <div className="mv-banner is-error" role="alert">
+          <strong>Couldn’t save.</strong> {saveError}
+        </div>
+      )}
+
       {/* Compact summary — the lines below are the point; details fold away. */}
       <section className="mv-summary" aria-label="Asset progress">
         <div className="mv-summary-top">
@@ -666,6 +821,7 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
             <b>{overall.done}</b>/{overall.total} done
           </span>
           <span className="mv-summary-pct">{pct}%</span>
+          {inflight > 0 && <span className="mv-saving">Saving…</span>}
           <button
             type="button"
             className="mv-text-btn mv-details-toggle"
@@ -679,7 +835,7 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
         <div
           className="mv-battery"
           role="img"
-          aria-label={`${overall.done} done, ${overall.working} working on it, ${overall.stuck} stuck, ${overall.notStarted} not started, ${overall.unplanned} not in a line yet`}
+          aria-label={`${overall.done} done, ${overall.working} working on it, ${overall.stuck} stuck, ${overall.notStarted} not started`}
         >
           <span style={{ width: seg(overall.done), background: STATUS.done.color }} />
           <span style={{ width: seg(overall.working), background: STATUS.working.color }} />
@@ -687,58 +843,39 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
           <span style={{ width: seg(overall.notStarted), background: STATUS.notStarted.color }} />
         </div>
         <div className="mv-legend">
-          {LEGEND_ORDER.filter((s) => s !== 'done' && overall[s] > 0).map((s) => (
-            <span key={s} title={STATUS[s].label}>
-              <i style={{ background: STATUS[s].color }} />
-              {overall[s]} {SHORT_LABEL[s]}
-            </span>
-          ))}
-          {overall.unplanned > 0 && (
-            <span title="On the dashboard but not in a line yet">
-              <i style={{ background: UNPLANNED }} />
-              {overall.unplanned} not in a line
-            </span>
-          )}
+          {(['working', 'stuck', 'notStarted'] as Status[])
+            .filter((s) => overall[s] > 0)
+            .map((s) => (
+              <span key={s} title={STATUS[s].label}>
+                <i style={{ background: STATUS[s].color }} />
+                {overall[s]} {SHORT_LABEL[s]}
+                {s === 'notStarted' && overall.unassigned > 0 && ` (${overall.unassigned} unassigned)`}
+              </span>
+            ))}
         </div>
 
         {detailsOpen && (
           <div className="mv-details">
-            <div className="mv-meta">
-              {task.code && <span className="mv-code">{task.code}</span>}
-              <span>
-                {formatDate(task.startDate)} – {formatDate(task.endDate)}
-              </span>
-              <span className="mv-live" title="Asset types and counts update live from the Workload dashboard">
-                Live from dashboard
-              </span>
-            </div>
-
-            {/* Lines vs the dashboard's counts, per asset type */}
-            <div className="mv-plan" aria-label="Lines compared with the dashboard">
-              {plan.map((p) => {
-                const inLines = lines.filter((l) => planKey(l.fn, l.type) === p.key).reduce((n, l) => n + l.qty, 0)
-                const over = p.planned > 0 && inLines > p.planned
+            {/* The task's package per asset type, with how much is done */}
+            <div className="mv-plan" aria-label="Asset package">
+              {pkg.map((p) => {
+                const done = lines.filter((l) => keyOf(l) === p.key && l.status === 'done').reduce((n, l) => n + l.qty, 0)
                 return (
                   <div key={p.key} className="mv-plan-row">
                     <span className="mv-plan-name">
                       {p.type}
                       {multiFn && p.fn && <span className="mv-plan-fn"> · {p.fn}</span>}
                     </span>
-                    <span className={`mv-plan-count${over ? ' mv-warn' : ''}`}>
-                      {p.planned ? `${inLines}/${p.planned}` : `${inLines} · not on dashboard`}
+                    <span className="mv-plan-count">
+                      {done}/{p.count} done
                     </span>
                     <span className="mv-plan-bar">
-                      <span
-                        style={{
-                          width: `${p.planned ? Math.min(100, (inLines / p.planned) * 100) : 100}%`,
-                          background: over ? STATUS.stuck.color : '#579bfc',
-                        }}
-                      />
+                      <span style={{ width: `${(done / p.count) * 100}%`, background: STATUS.done.color }} />
                     </span>
                   </div>
                 )
               })}
-              <p className="mv-plan-note">Assets in lines / on the dashboard</p>
+              <p className="mv-plan-note">Asset package (dashboard)</p>
             </div>
 
             {people.length > 0 && (
@@ -758,27 +895,29 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
         )}
       </section>
 
-      <div className="mv-toolbar">
-        <button
-          type="button"
-          className="mv-btn mv-btn-primary"
-          onClick={() => setLineSheet({ line: blankLine(null), isNew: true })}
-        >
-          <Plus size={16} />
-          New asset
-        </button>
-        <button
-          type="button"
-          className="mv-btn mv-btn-secondary"
-          onClick={() => setGroupSheet({ group: blankGroup(), isNew: true })}
-        >
-          <FolderPlus size={16} />
-          New group
-        </button>
-        <span className="mv-toolbar-note">
-          {lines.length} {lines.length === 1 ? 'line' : 'lines'}
-        </span>
-      </div>
+      {!readOnly && (
+        <div className="mv-toolbar">
+          <button
+            type="button"
+            className="mv-btn mv-btn-primary"
+            onClick={() => setLineSheet({ line: blankLine(null), isNew: true })}
+          >
+            <Plus size={16} />
+            New asset
+          </button>
+          <button
+            type="button"
+            className="mv-btn mv-btn-secondary"
+            onClick={() => setGroupSheet({ group: blankGroup(), isNew: true })}
+          >
+            <FolderPlus size={16} />
+            New group
+          </button>
+          <span className="mv-toolbar-note">
+            {lines.length} {lines.length === 1 ? 'line' : 'lines'}
+          </span>
+        </div>
+      )}
 
       {/* Lines: ungrouped first, then the user's groups */}
       {sections.map(({ group, rows }) => {
@@ -817,7 +956,7 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
                     {qtyUnits > 0 && ` · ${doneUnits}/${qtyUnits} done`}
                   </span>
                 </button>
-                {group && (
+                {group && !readOnly && (
                   <button
                     type="button"
                     className="mv-icon-btn"
@@ -836,67 +975,78 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
                   const overdue = !complete && !!l.due && l.due < todayISO()
                   return (
                     <Fragment key={l.id}>
-                    {showInsert && drag?.over?.before === l.id && insertLine}
-                    <div data-line={l.id} className={`mv-row${drag?.id === l.id ? ' is-dragged' : ''}`}>
-                      {canDrag && (
-                        <span
-                          className="mv-handle"
-                          onPointerDown={startDrag(l, key)}
-                          title="Drag to reorder or move to a group"
-                          aria-hidden
+                      {showInsert && drag?.over?.before === l.id && insertLine}
+                      <div
+                        data-line={l.id}
+                        className={`mv-row${drag?.id === l.id ? ' is-dragged' : ''}${l.pool ? ' is-pool' : ''}`}
+                      >
+                        {canDrag && (
+                          <span
+                            className="mv-handle"
+                            onPointerDown={startDrag(l, key)}
+                            title="Drag to reorder or move to a group"
+                            aria-hidden
+                          >
+                            <GripVertical size={16} />
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="mv-row-main"
+                          onClick={() => !readOnly && setLineSheet({ line: l, isNew: false })}
+                          disabled={readOnly}
                         >
-                          <GripVertical size={16} />
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        className="mv-row-main"
-                        onClick={() => setLineSheet({ line: l, isNew: false })}
-                      >
-                        <span className="mv-no">#{position.get(l.id)}</span>
-                        <Avatar name={l.owner} />
-                        <span className="mv-row-text">
-                          <span className={`mv-row-title${complete ? ' is-done' : ''}`}>
-                            {l.name}
-                            <span className="mv-qty">× {l.qty}</span>
+                          <span className="mv-no">#{position.get(l.id)}</span>
+                          <Avatar name={l.owner} />
+                          <span className="mv-row-text">
+                            <span className={`mv-row-title${complete ? ' is-done' : ''}`}>
+                              {l.name}
+                              <span className="mv-qty">× {l.qty}</span>
+                            </span>
+                            <span className="mv-row-sub">
+                              {l.pool ? <span className="mv-pool-tag">Unassigned</span> : <StatusPill status={l.status} />}
+                              {(!l.pool || l.name !== l.type) && <span className="mv-type">{l.type}</span>}
+                              {multiFn && l.fn && <span className="mv-type">{l.fn}</span>}
+                              {l.due && (
+                                <span className={overdue ? 'mv-overdue' : undefined}>
+                                  {overdue ? 'Overdue · ' : 'Due '}
+                                  {shortDate(l.due)}
+                                </span>
+                              )}
+                            </span>
                           </span>
-                          <span className="mv-row-sub">
-                            <StatusPill status={l.status} />
-                            <span className="mv-type">{l.type}</span>
-                            {l.due && (
-                              <span className={overdue ? 'mv-overdue' : undefined}>
-                                {overdue ? 'Overdue · ' : 'Due '}
-                                {shortDate(l.due)}
-                              </span>
-                            )}
-                          </span>
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={complete}
-                        className={`mv-check${complete ? ' is-done' : ''}`}
-                        onClick={() => upsertLine({ ...l, status: complete ? 'notStarted' : 'done' })}
-                        aria-label={`#${position.get(l.id)} ${l.name}: ${complete ? 'mark not done' : 'mark done'}`}
-                        title={complete ? 'Mark not done' : 'Mark done'}
-                      >
-                        <Check size={16} strokeWidth={3} />
-                      </button>
-                    </div>
+                        </button>
+                        <button
+                          type="button"
+                          role="checkbox"
+                          aria-checked={complete}
+                          className={`mv-check${complete ? ' is-done' : ''}`}
+                          disabled={readOnly}
+                          onClick={() => upsertLine({ ...l, status: complete ? 'notStarted' : 'done', pool: undefined })}
+                          aria-label={`#${position.get(l.id)} ${l.name}: ${complete ? 'mark not done' : 'mark done'}`}
+                          title={complete ? 'Mark not done' : 'Mark done'}
+                        >
+                          <Check size={16} strokeWidth={3} />
+                        </button>
+                      </div>
                     </Fragment>
                   )
                 })}
                 {showInsert && drag?.over?.before === null && rows.length > 0 && insertLine}
                 {!rows.length && dragging && <div className="mv-drop-hint">Drop here</div>}
-                <button
-                  type="button"
-                  className="mv-add-row"
-                  onClick={() => setLineSheet({ line: blankLine(group?.id ?? null), isNew: true })}
-                >
-                  <Plus size={16} />
-                  <span>{group ? `Add line to ${group.name}` : 'Add asset line'}</span>
-                </button>
+                {!rows.length && !dragging && !group && (
+                  <div className="mv-drop-hint">No assets on this task yet.</div>
+                )}
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="mv-add-row"
+                    onClick={() => setLineSheet({ line: blankLine(group?.id ?? null), isNew: true })}
+                  >
+                    <Plus size={16} />
+                    <span>{group ? `Add line to ${group.name}` : 'Add asset line'}</span>
+                  </button>
+                )}
               </div>
             )}
           </section>
@@ -912,52 +1062,43 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
         </div>
       )}
 
-      {DEMO_SEED && (
-        <div className="mv-demo-bar">
-          <span>Demo data</span>
-          <button type="button" className="mv-text-btn" onClick={() => setBoard(() => demoBoard(task))}>
-            Shuffle sample lines
-          </button>
-          <button type="button" className="mv-text-btn" onClick={() => setBoard(() => EMPTY_BOARD)}>
-            Clear all
-          </button>
-        </div>
-      )}
-
-      <p className="mv-footnote">
-        The dashboard’s asset types and counts update live and are shown for comparison. Asset lines, groups, people
-        in charge and progress are kept in this tab only and don’t change the dashboard.
-      </p>
+      <p className="mv-footnote">Quantities sync live with the Workload dashboard.</p>
 
       {lineSheet && (
         <AssetSheet
           initial={lineSheet.line}
           isNew={lineSheet.isNew}
           position={position.get(lineSheet.line.id)}
-          assetTypes={[...new Set([...plan.map((p) => p.type), ...settings.assetTypes])]}
+          lines={lines}
+          typesFor={typesFor}
           fns={multiFn ? (fns.filter(Boolean) as string[]) : []}
           groups={groups}
           taskPeople={task.people}
           teamPeople={settings.people}
-          plannedFor={(fn, type) => plan.find((p) => p.key === planKey(fn, type))?.planned ?? 0}
-          inLinesFor={(fn, type, exceptId) =>
-            lines
-              .filter((l) => planKey(l.fn, l.type) === planKey(fn, type) && l.id !== exceptId)
-              .reduce((n, l) => n + l.qty, 0)
-          }
           onSave={(line) => {
-            upsertLine(line)
+            void upsertLine(line)
             setLineSheet(null)
           }}
           onDelete={
             lineSheet.isNew
               ? undefined
               : () => {
-                  removeLine(lineSheet.line.id)
+                  void removeLine(lineSheet.line.id)
                   setLineSheet(null)
                 }
           }
           onClose={() => setLineSheet(null)}
+        />
+      )}
+
+      {trackerOpen && (
+        <TrackerSheet
+          initial={board.tracker}
+          onSave={(url) => {
+            saveTracker(url)
+            setTrackerOpen(false)
+          }}
+          onClose={() => setTrackerOpen(false)}
         />
       )}
 
@@ -967,14 +1108,14 @@ function AssetsTab({ itemId, task, settings }: { itemId: string; task: Task; set
           isNew={groupSheet.isNew}
           lineCount={lines.filter((l) => l.groupId === groupSheet.group.id).length}
           onSave={(g) => {
-            upsertGroup(g)
+            void upsertGroup(g)
             setGroupSheet(null)
           }}
           onDelete={
             groupSheet.isNew
               ? undefined
               : () => {
-                  removeGroup(groupSheet.group.id)
+                  void removeGroup(groupSheet.group.id)
                   setGroupSheet(null)
                 }
           }
@@ -1025,13 +1166,12 @@ function AssetSheet({
   initial,
   isNew,
   position,
-  assetTypes,
+  lines,
+  typesFor,
   fns,
   groups,
   taskPeople,
   teamPeople,
-  plannedFor,
-  inLinesFor,
   onSave,
   onDelete,
   onClose,
@@ -1040,14 +1180,14 @@ function AssetSheet({
   isNew: boolean
   /** The line's # in the list (existing lines only). */
   position?: number
-  assetTypes: string[]
+  /** The lines as shown — to explain what an edit does to the pool/dashboard. */
+  lines: AssetLine[]
+  typesFor: (fn: string | null) => string[]
   /** Functions to choose from (empty = single-function task, no picker). */
   fns: string[]
   groups: LineGroup[]
   taskPeople: string[]
   teamPeople: string[]
-  plannedFor: (fn: string | null, type: string) => number
-  inLinesFor: (fn: string | null, type: string, exceptId: string) => number
   onSave: (line: AssetLine) => void
   onDelete?: () => void
   onClose: () => void
@@ -1056,12 +1196,31 @@ function AssetSheet({
   const [touched, setTouched] = useState(false)
   const rest = teamPeople.filter((p) => !taskPeople.includes(p))
   const [showRest, setShowRest] = useState(!!initial.owner && rest.includes(initial.owner))
-  const planned = plannedFor(line.fn, line.type)
-  const others = inLinesFor(line.fn, line.type, line.id)
   const nameMissing = !line.name.trim()
+  const types = typesFor(line.fn)
 
   const set = (patch: Partial<AssetLine>) => setLine((l) => ({ ...l, ...patch }))
   const setQty = (n: number) => set({ qty: Math.max(1, Math.round(n) || 1) })
+
+  // Still the untouched unassigned stock? Then edits to it are taken literally.
+  const stillPool = !!initial.pool && isPoolShaped(line)
+  const qtyNote = (() => {
+    const k = keyOf(line)
+    if (stillPool) {
+      const d = line.qty - initial.qty
+      return d === 0
+        ? 'Unassigned stock. Assign someone to make it a line.'
+        : `${d > 0 ? '+' : '−'}${Math.abs(d)} on the dashboard.`
+    }
+    const before = !isNew && !initial.pool && keyOf(initial) === k ? initial.qty : 0
+    const d = line.qty - before
+    if (d === 0) return ''
+    if (d < 0) return `${-d} back to unassigned.`
+    const { fromPool, toDashboard } = poolEffect(lines, k, d)
+    if (!toDashboard) return `From unassigned (${d}).`
+    if (fromPool > 0) return `${fromPool} from unassigned, +${toDashboard} on the dashboard.`
+    return `+${toDashboard} on the dashboard.`
+  })()
 
   const chip = (name: string) => (
     <button
@@ -1079,12 +1238,13 @@ function AssetSheet({
   const save = () => {
     setTouched(true)
     if (nameMissing) return
-    onSave({ ...line, name: line.name.trim(), notes: line.notes.trim() })
+    const out = { ...line, name: line.name.trim(), notes: line.notes.trim() }
+    onSave({ ...out, pool: initial.pool && isPoolShaped(out) ? true : undefined })
   }
 
   return (
     <Sheet
-      title={isNew || !position ? 'New asset' : `Edit asset · #${position}`}
+      title={isNew || !position ? 'New asset' : initial.pool ? `Unassigned ${initial.type}` : `Edit asset · #${position}`}
       onClose={onClose}
       footer={
         <>
@@ -1129,7 +1289,7 @@ function AssetSheet({
             value={line.type}
             onChange={(e) => set({ type: e.target.value })}
           >
-            {assetTypes.map((t) => (
+            {(types.includes(line.type) ? types : [line.type, ...types]).map((t) => (
               <option key={t}>{t}</option>
             ))}
           </select>
@@ -1195,9 +1355,9 @@ function AssetSheet({
       <div>
         <label className="mv-field-label" htmlFor="mv-qty">
           Quantity
-          <span>{planned ? `${others} of ${planned} already in other lines` : 'This type isn’t on the dashboard'}</span>
         </label>
         <Stepper id="mv-qty" value={line.qty} min={1} onChange={setQty} />
+        {qtyNote && <p className="mv-field-note">{qtyNote}</p>}
       </div>
 
       <div>
@@ -1219,7 +1379,6 @@ function AssetSheet({
           ))}
         </div>
       </div>
-
 
       <div>
         <label className="mv-field-label" htmlFor="mv-due">
@@ -1246,6 +1405,77 @@ function AssetSheet({
           onChange={(e) => set({ notes: e.target.value })}
           placeholder="Sizes, specs, links…"
         />
+      </div>
+
+      {onDelete && (
+        <p className="mv-field-note">
+          {initial.pool ? `Delete: −${initial.qty} on the dashboard.` : `Delete: ${initial.qty} back to unassigned.`}
+        </p>
+      )}
+    </Sheet>
+  )
+}
+
+function TrackerSheet({
+  initial,
+  onSave,
+  onClose,
+}: {
+  initial: string | null
+  onSave: (url: string | null) => void
+  onClose: () => void
+}) {
+  const [url, setUrl] = useState(initial ?? '')
+  const [touched, setTouched] = useState(false)
+  const value = url.trim()
+  const invalid = !!value && !/^https:\/\/\S+$/i.test(value)
+
+  const save = () => {
+    setTouched(true)
+    if (invalid) return
+    onSave(value || null)
+  }
+
+  return (
+    <Sheet
+      title="Asset tracker"
+      onClose={onClose}
+      footer={
+        <>
+          {initial && (
+            <button type="button" className="mv-btn mv-btn-danger" onClick={() => onSave(null)}>
+              Remove
+            </button>
+          )}
+          <span className="mv-spacer" />
+          <button type="button" className="mv-btn mv-btn-tertiary" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="mv-btn mv-btn-primary" onClick={save}>
+            Save
+          </button>
+        </>
+      }
+    >
+      <div>
+        <label className="mv-field-label" htmlFor="mv-tracker">
+          Link
+        </label>
+        <input
+          id="mv-tracker"
+          type="url"
+          className={`mv-input${touched && invalid ? ' is-error' : ''}`}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
+          placeholder="https://rmit.sharepoint.com/…"
+          autoFocus
+        />
+        {touched && invalid ? (
+          <p className="mv-error">Paste the full link, starting with https://</p>
+        ) : (
+          <p className="mv-field-note">The task’s online sheet, e.g. its Excel asset tracker.</p>
+        )}
       </div>
     </Sheet>
   )
@@ -1333,7 +1563,7 @@ function GroupSheetView({
       </div>
       {!isNew && lineCount > 0 && (
         <p className="mv-hint">
-          Deleting this group keeps its {lineCount} {lineCount === 1 ? 'line' : 'lines'}; they move to “No group”.
+          Deleting keeps its {lineCount} {lineCount === 1 ? 'line' : 'lines'} (moved to No group).
         </p>
       )}
     </Sheet>

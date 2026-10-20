@@ -4,6 +4,7 @@ import type { Repository } from './repository'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
 import type { ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
 import type { AdvisorCacheEntry } from '../lib/advisor/cache'
+import { normalizeBoard, type AssetBoard } from '../lib/assetLines'
 import {
   DEFAULT_SETTINGS,
   canonicalAssetName,
@@ -55,6 +56,16 @@ function uid(): string {
  * localStorage-backed repository. Seeds sample data on first run so the
  * app is immediately usable, and works fully offline.
  */
+const ASSET_BOARDS_KEY = 'mwr.assetBoards'
+
+function readAssetBoards(): Record<string, unknown> {
+  try {
+    return JSON.parse(localStorage.getItem(ASSET_BOARDS_KEY) ?? '{}') as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
+
 export class LocalRepository implements Repository {
   readonly backend = 'local' as const
   readonly supportsImages = false
@@ -147,6 +158,26 @@ export class LocalRepository implements Repository {
     // Cross-tab updates: fires when another tab writes the tasks key.
     const handler = (e: StorageEvent) => {
       if (e.key === TASKS_KEY) onChange()
+    }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }
+
+  async getAssetBoard(taskId: string): Promise<AssetBoard | null> {
+    const all = readAssetBoards()
+    return all[taskId] ? normalizeBoard(all[taskId]) : null
+  }
+
+  async saveAssetBoard(taskId: string, board: AssetBoard): Promise<void> {
+    localStorage.setItem(ASSET_BOARDS_KEY, JSON.stringify({ ...readAssetBoards(), [taskId]: board }))
+  }
+
+  subscribeAssetBoard(taskId: string, onChange: (board: AssetBoard | null) => void): () => void {
+    // Cross-tab updates only (same browser) — the local backend has no server.
+    const handler = (e: StorageEvent) => {
+      if (e.key !== ASSET_BOARDS_KEY) return
+      const raw = readAssetBoards()[taskId]
+      onChange(raw ? normalizeBoard(raw) : null)
     }
     window.addEventListener('storage', handler)
     return () => window.removeEventListener('storage', handler)

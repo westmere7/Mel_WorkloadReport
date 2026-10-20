@@ -1424,63 +1424,56 @@ only MODEL output is audited, and there the sign-copying rule is a real protecti
 
 ---
 
-## 26. monday.com Item View (`/embed/item`) — "Assets" tab ⚠️ DEMO
+## 26. monday.com Item View (`/embed/item`) — "Assets" tab ⚠️ DEMO ON REAL DATA
 
-A private monday app (Developer Center → **Item View** feature, external URL
-`https://<vercel-domain>/embed/item`) adds an **Assets** tab to each monday item card.
-Not installed yet (needs IT approval) — demoed standalone at
-`/embed/item?itemId=<monday item id>` (e.g. `2827224155` = 26.0831.A).
-`src/pages/MondayItemView.tsx` + `mondayItemView.css`; routed in `App.tsx` OUTSIDE the
-app shell, inside `StoreProvider` only (live task data, no Layout).
+The "Assets" tab of a monday item: the task's asset LINES, live and shared. Still a demo
+until IT approves the private monday app (Item View feature) — meanwhile it runs on the
+REAL database via plain monday Embed widgets. `src/pages/MondayItemView.tsx` +
+`mondayItemView.css`, logic in `src/lib/assetLines.ts`; routed in `App.tsx` OUTSIDE the
+app shell, inside `StoreProvider` only (live tasks, no Layout).
 
-- **Asset LINES, not units:** each line is a batch — name · asset type · (function, when
-  the task has several) · person in charge · quantity · status · due · notes. NO per-unit done count (too granular) — a line's
-  status alone drives progress (units = qty of lines in each status).
-  A FLAT list; the stored array order IS the display order (drag reorders it). The `#` shown is just the line's
-  POSITION down the page (ungrouped first, then each group) — always 1…N, renumbers on
-  move/delete.
-- **DEMO seed (`DEMO_SEED = true`):** an item's first open in a browser fills it with
-  sample lines covering the dashboard's counts (`demoBoard`: names per type, random
-  person in charge from `task.people`, random status/due). A dashed "Demo data" bar
-  offers Shuffle sample lines / Clear all. Turn off once lines are stored for real.
-- **User groups are blind:** "New group" creates a free-named, coloured group unrelated to
-  asset types; lines move in/out via the Group field. Ungrouped lines sit on top
-  (headerless until a group exists, then "No group"). Deleting a group keeps its lines.
-- **Dashboard = read-only reference.** The linked task (matched by `mondayUrl` →
-  `mondayItemIdFromUrl` in `lib/monday.ts`) supplies types + counts, shown in the progress
-  card as "in lines / on the dashboard" per type (red when lines exceed it, "not on
-  dashboard" for extra types). Never capped, never written back.
-- **⚠️ Lines + groups are tab-only, in localStorage** (`mwr.itemAssets.v3.<itemId>`, shape
-  `{ lines, groups, nextNo }`) — per browser, not shared. Real use needs a table keyed
-  by monday item id (or monday subitems).
-- Each row has a round check-off (`.mv-check`): tap → Done, tap again → Not started.
-- **Compact summary** on top: "N/M done · %", an 8px battery bar and a one-line
-  non-done count; the per-type comparison, people strip and code/dates sit in a
-  **Details** fold (closed by default, remembered in `mwr.itemAssets.detailsOpen`).
-- **Drag to reorder / move:** a grip handle per row (whenever there are 2+ lines or any
-  group) starts a pointer-event drag — works with touch (`touch-action: none` on the
-  handle). The drop SPOT is section (`data-drop` = group id | `__none`) + "before the first
-  row (`data-line`) whose midpoint is below the pointer"; a zero-height blue insertion line
-  marks it (zero height so rows don't shift under the pointer). Another section also
-  highlights and the ghost says "→ group". `placeLine` re-sections + re-positions in the
-  array; landing where it was is a no-op. Edges auto-scroll; "No group" stays visible as
-  a target while dragging. The Group field in the sheet is the keyboard equivalent.
-- **monday look:** Figtree + Poppins (`@fontsource`), Vibe colours as literal values
-  (`mv-` classes, no app tokens), monday status colours, group colour strips, bottom
-  sheet on phones / dialog ≥640px. Removes the app's `.dark` class while mounted and
-  uses its own palette: **themes** light (default) · dark · black (monday "night"), as
-  `.mv-theme-*` variable sets (`--mv-surface`, `--mv-text`, …; no literal whites).
-  Theme source: monday's SDK context `theme` (installed app) → else `?theme=dark|black`
-  → else light. html/body are painted the theme colour; dark/black set `color-scheme: dark`.
-- **Plain monday Embed widget ≠ app:** an embed is just an iframe — monday never answers
-  the SDK, so no item id / theme arrive. It works only with `?itemId=` (+ `?theme=`) in
-  each widget's URL. Auto item id + theme need the installed Item View app.
-  `:where(.mv button)` reset keeps component colours winning — a plain `.mv button`
-  reset turned the status labels dark.
-- **Standalone only:** a preview banner + monday-like item header (title, Updates / Files
-  / Activity Log / **Assets** tabs). Inside monday (iframe) monday draws that itself and
-  the item id comes from `monday-sdk-js` `listen('context')`.
-- **Entry point:** the task form footer has a `ListChecks` icon (next to the monday logo)
-  opening `assetsTabUrl(mondayUrl)` in a new tab; greyed out without a monday link.
-- Don't use `crypto.randomUUID` here (undefined in non-secure frames); ids are
-  time + counter.
+- **Two links.** GENERIC `/embed/item` → "Show a task's assets": enter the monday item ID
+  (also accepts a pasted item link or the task code), verified against tasks'
+  `mondayUrl`; a "Recent" list (`mwr.itemAssets.recent`) re-opens tasks in one tap.
+  TASK-SPECIFIC `/embed/item?itemId=<id>` opens straight away (task form footer
+  `ListChecks` icon via `assetsTabUrl`, and the tab's **Copy link**). "Change task" goes
+  back to the ID box (not offered when monday's app context supplies the item).
+- **Plain Embed widget ≠ app:** an embed never gets monday's SDK context (no item id /
+  theme) — hence the ID box. The installed app will supply `itemId` + `theme` itself.
+- **Storage:** table `task_asset_lines` (task_id PK → tasks, `board` jsonb, realtime
+  publication) — `Repository.getAssetBoard / saveAssetBoard / subscribeAssetBoard`
+  (Local: `mwr.assetBoards` + storage events). Board = `{ lines, groups, basis, rev, by }`;
+  `rev`/`by` (per-page `CLIENT_ID`) drop the echo of your own save (board also carries
+  `tracker`). Missing table →
+  `AssetLinesNotSetUpError` → tab is READ-ONLY with a banner. Editing is also off until
+  the board has loaded. Not in year snapshots.
+- **Invariant: Σ line qty per (function, type) === the task's dashboard count.**
+  - The **unassigned pool** = one `pool` line per (function, type). A task nobody has
+    split shows its package as pool lines (derived, deterministic `pool:` ids — no row is
+    written until someone edits).
+  - **Tab edits are pool-first** (`rebalance`): carving out / growing a line takes from the
+    pool; only the excess raises the dashboard count. Shrinking / deleting a line returns
+    it to the pool (count unchanged). Editing or deleting the pool line itself changes
+    the count. Assigning / renaming / ticking a pool line turns it into a real line.
+    Count changes go through `store.updateTask` with `countsFromLines` (function slices +
+    combined roll-up, same rule as TaskForm) → normal edit-log entries.
+  - **Dashboard edits** are absorbed by `reconcile`: more → pool grows (new types get a
+    pool line); fewer → pool first, then not-started, stuck, working, done last. A board
+    whose `basis` ≠ `basisOf(task)` is shown reconciled and re-saved once.
+  - Legacy ↔ single-function upgrades keep lines (fn remapped when unambiguous).
+  - Pure + unit-tested shape: see the scratch tests pattern (esbuild bundle → node).
+- **Asset tracker link:** optional `board.tracker` (https URL, e.g. the task's online Excel
+  tracker) shown as "Asset tracker ↗" under the task meta; add/edit/remove via a sheet.
+  Saved with the board (shared + live), no migration of its own.
+- **Lines:** name · asset type (function's asset types) · (function on multi-function
+  tasks) · person in charge · quantity · status · due · notes. FLAT list in stored array
+  order; `#` = position down the page. User groups are blind (free names, colours);
+  drag (grip handle, pointer events, touch-friendly, insertion line, auto-scroll) to
+  reorder or move between groups; the Group field is the keyboard equivalent.
+- **Look:** monday light/dark/night (`?theme=dark|black`, or monday context), Figtree +
+  Poppins, `mv-` classes on theme variables; compact summary with Details (package per
+  type + who's doing what); round check-off per line; pool rows show "Unassigned".
+- ⚠️ **No sign-in gate here** — anyone with the link can edit lines and (via the pool
+  rules) the task's asset counts. Same permissive RLS as the rest of the app.
+- Don't use `crypto.randomUUID` (undefined in non-secure frames); a plain `.mv button`
+  reset overrides component colours — use `:where(.mv button)`.

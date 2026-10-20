@@ -1,4 +1,5 @@
 import type { AdvisorCacheEntry } from '../lib/advisor/cache'
+import { AssetLinesNotSetUpError, normalizeBoard, type AssetBoard } from '../lib/assetLines'
 import { normalizeCustomHolidays } from '../lib/holidays'
 import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
 import type { Repository } from './repository'
@@ -503,6 +504,40 @@ export class SupabaseRepository implements Repository {
     const channel = getSupabase()
       .channel('public:settings')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => onChange())
+      .subscribe()
+    return () => {
+      void getSupabase().removeChannel(channel)
+    }
+  }
+
+  async getAssetBoard(taskId: string): Promise<AssetBoard | null> {
+    const { data, error } = await getSupabase()
+      .from('task_asset_lines')
+      .select('board')
+      .eq('task_id', taskId)
+      .maybeSingle()
+    if (error) throw isMissingRelation(error) ? new AssetLinesNotSetUpError() : error
+    return data ? normalizeBoard(data.board) : null
+  }
+
+  async saveAssetBoard(taskId: string, board: AssetBoard): Promise<void> {
+    const { error } = await getSupabase()
+      .from('task_asset_lines')
+      .upsert({ task_id: taskId, board, updated_at: new Date().toISOString() })
+    if (error) throw isMissingRelation(error) ? new AssetLinesNotSetUpError() : error
+  }
+
+  subscribeAssetBoard(taskId: string, onChange: (board: AssetBoard | null) => void): () => void {
+    const channel = getSupabase()
+      .channel(`public:task_asset_lines:${taskId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'task_asset_lines', filter: `task_id=eq.${taskId}` },
+        (payload) => {
+          const row = payload.new as { board?: unknown } | null
+          onChange(row && 'board' in row ? normalizeBoard(row.board) : null)
+        },
+      )
       .subscribe()
     return () => {
       void getSupabase().removeChannel(channel)

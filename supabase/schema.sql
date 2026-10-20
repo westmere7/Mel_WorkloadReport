@@ -398,3 +398,31 @@ alter table public.showcases enable row level security;
 drop policy if exists "anon full access to showcases" on public.showcases;
 create policy "anon full access to showcases" on public.showcases
   for all using (true) with check (true);
+
+-- ── Asset lines (monday "Assets" tab) ──────────────────────────────
+-- One row per task: its asset lines (batches with a person in charge + status)
+-- and user groups, as a jsonb board. Line totals always equal the task's asset
+-- counts (the tab keeps them in step). Deleted with the task. Idempotent.
+create table if not exists public.task_asset_lines (
+  task_id     uuid primary key references public.tasks(id) on delete cascade,
+  board       jsonb not null default '{"lines":[],"groups":[]}'::jsonb,
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.task_asset_lines enable row level security;
+drop policy if exists "anon full access to task_asset_lines" on public.task_asset_lines;
+create policy "anon full access to task_asset_lines" on public.task_asset_lines
+  for all using (true) with check (true);
+
+-- Broadcast changes so every open Assets tab updates live.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'task_asset_lines'
+  ) then
+    alter publication supabase_realtime add table public.task_asset_lines;
+  end if;
+end $$;
