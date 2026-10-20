@@ -1438,11 +1438,19 @@ function Sheet({
 /** Several avatars, overlapped (monday's people column): up to 2, then "+N". */
 function Avatars({ names, size = 28 }: { names: string[]; size?: number }) {
   const profiles = useProfiles()
-  if (!names.length) return <Avatar name={null} size={size} />
+  // A fixed slot sized for two overlapped avatars, so the text beside it starts in
+  // the same place whether a line has nobody, one person or several.
+  const slot = { width: size * 2 - 8 }
+  if (!names.length)
+    return (
+      <span className="mv-avatars" style={slot}>
+        <Avatar name={null} size={size} />
+      </span>
+    )
   const shown = names.length > 2 ? names.slice(0, 1) : names
   const extra = names.length - shown.length
   return (
-    <span className="mv-avatars" title={names.map((n) => shownName(profiles, n)).join(', ')}>
+    <span className="mv-avatars" style={slot} title={names.map((n) => shownName(profiles, n)).join(', ')}>
       {shown.map((n) => (
         <Avatar key={n} name={n} size={size} />
       ))}
