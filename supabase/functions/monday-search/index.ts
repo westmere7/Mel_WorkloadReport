@@ -30,6 +30,10 @@
 // Response (JSON):       { "configured": true, "items": [{ id, name, code,
 //                          startDate, endDate, size, mondayPeopleIds }] }
 //                        or { "configured": false } when the token is missing.
+//
+// Profiles mode (Assets tab avatars): { "users": ["12345", "67890"] }
+//   → { "configured": true, "users": [{ id, name, photo }] }  (photo = monday's small
+//   thumbnail URL, or null). Same token; cached warm for MONDAY_USERS_TTL ms (default 10 min).
 
 // @ts-nocheck  (Deno runtime globals; not typechecked by the app's tsc.)
 
@@ -43,6 +47,8 @@ const MAX_ITEMS_PER_BOARD = 1000 // safety cap per board (≤2 pages); avoids de
 // TTL so repeat lookups skip monday entirely. Persists only while the Edge
 // instance stays warm; tune/disable with MONDAY_CACHE_TTL (ms, 0 = off).
 const boardCache = new Map<string, { at: number; items: Array<Record<string, unknown>> }>()
+// Warm-instance cache of monday user profiles (name + photo), keyed by user id.
+const userCache = new Map<string, { at: number; user: { id: string; name: string; photo: string | null } }>()
 
 function cors(): Record<string, string> {
   return {
@@ -97,15 +103,46 @@ Deno.serve(async (req: Request) => {
 
   let query = ''
   let bodyBoards: string[] = []
+  let userIds: string[] | null = null
   try {
     const body = await req.json()
     query = String(body?.query ?? '').trim()
+    // Profiles mode: monday user ids → name + photo (Assets tab avatars).
+    if (Array.isArray(body?.users)) {
+      userIds = [...new Set(body.users.map((u: unknown) => String(u ?? '').trim()).filter((u: string) => /^\d+$/.test(u)))].slice(0, 200)
+    }
     // The app (Settings) sends the board ids to search; sanitise to strings.
     if (Array.isArray(body?.boardIds)) {
       bodyBoards = body.boardIds.map((b: unknown) => String(b ?? '').trim()).filter(Boolean)
     }
   } catch {
     return json({ error: 'Bad request body.' }, 400)
+  }
+  if (userIds) {
+    const ttl = Number(Deno.env.get('MONDAY_USERS_TTL') ?? 600000)
+    const now = Date.now()
+    const missing = userIds.filter((id) => !(ttl > 0 && userCache.has(id) && now - userCache.get(id)!.at < ttl))
+    if (missing.length) {
+      try {
+        const res = await fetch(MONDAY_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: token, 'API-Version': '2024-01' },
+          body: JSON.stringify({
+            query: 'query ($ids: [ID!]) { users(ids: $ids) { id name photo_thumb_small } }',
+            variables: { ids: missing },
+          }),
+        })
+        const out = await res.json()
+        if (out?.errors?.length) return json({ configured: true, error: out.errors[0]?.message ?? 'monday error' })
+        for (const u of out?.data?.users ?? []) {
+          const user = { id: String(u.id), name: String(u.name ?? ''), photo: u.photo_thumb_small ? String(u.photo_thumb_small) : null }
+          userCache.set(user.id, { at: now, user })
+        }
+      } catch (e) {
+        return json({ configured: true, error: String((e as Error)?.message ?? e) })
+      }
+    }
+    return json({ configured: true, users: userIds.map((id) => userCache.get(id)?.user).filter(Boolean) })
   }
   if (!query) return json({ configured: true, items: [] })
 

@@ -1322,6 +1322,14 @@ app shell, inside `StoreProvider` only (live tasks, no Layout).
   ("15 Sep – 2 Nov"); a prominent **Asset tracker** button (opens `board.tracker`, an
   https link to e.g. the online Excel tracker; dashed "+ Asset tracker" when unset); ⋯
   menu: Copy link, Edit asset tracker link, Change task.
+- **monday avatars + names:** people mapped to a monday user (`settings.peopleMondayIds`,
+  Settings → People) show their monday photo and full name on avatars, PIC chips and the
+  who's-doing-what list. `fetchMondayProfiles` (`lib/monday.ts`) calls `monday-search` in
+  PROFILES MODE (`{ users: [ids] }` → `{ users: [{ id, name, photo }] }`, token server-side,
+  warm cache `MONDAY_USERS_TTL`); cached per browser for 24h (`mwr.mondayProfiles`); if the
+  deployed function predates profiles mode it backs off for 1h. Lines still store the app's
+  short names (dashboard keys) — only the DISPLAY changes. Fallback = initials + short names.
+  Needs `VITE_MONDAY_LOOKUP=1` + the redeployed function.
 - **Theme switch:** a small Light/Dark (sun/moon) switch in the page footer; the pick is
   per viewer (`mwr.itemAssets.theme`) and wins over monday's context / `?theme=`.
 - **Embedded inset:** inside an iframe (monday widget) the root gets `is-embedded` → `.mv-body`

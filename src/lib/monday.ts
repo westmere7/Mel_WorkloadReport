@@ -190,3 +190,71 @@ export function resolvePeopleFromMonday(
   }
   return out
 }
+
+// ── monday user profiles (Assets tab avatars) ─────────────────────────────────
+
+export interface MondayProfile {
+  name: string
+  /** monday's small thumbnail URL, or null when the user has no photo. */
+  photo: string | null
+}
+
+const PROFILE_CACHE_KEY = 'mwr.mondayProfiles'
+const PROFILE_TTL_MS = 24 * 60 * 60 * 1000
+/** When the deployed function predates profiles mode, don't ask again for an hour. */
+const PROFILE_UNSUPPORTED_KEY = 'mwr.mondayProfiles.unsupportedAt'
+const PROFILE_RETRY_MS = 60 * 60 * 1000
+
+/**
+ * Names + photos for monday user ids, via the `monday-search` Edge Function's
+ * profiles mode (the token stays server-side). Cached in this browser for a day.
+ * Resolves to null when unavailable — lookup not enabled, the function predates
+ * profiles mode, or any error — so callers simply keep their initials fallback.
+ */
+export async function fetchMondayProfiles(ids: string[]): Promise<Record<string, MondayProfile> | null> {
+  const wanted = [...new Set(ids.filter((id) => /^\d+$/.test(id)))].sort()
+  if (!wanted.length || !isMondayLookupEnabled()) return null
+  try {
+    const at = Number(localStorage.getItem(PROFILE_UNSUPPORTED_KEY) ?? 0)
+    if (at && Date.now() - at < PROFILE_RETRY_MS) return null
+  } catch {
+    /* ignore */
+  }
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY)
+    const cached = raw ? (JSON.parse(raw) as { at: number; profiles: Record<string, MondayProfile> }) : null
+    if (cached && Date.now() - cached.at < PROFILE_TTL_MS && wanted.every((id) => id in cached.profiles)) {
+      return cached.profiles
+    }
+  } catch {
+    /* unreadable cache — fetch fresh */
+  }
+  try {
+    const { data, error } = await getSupabase().functions.invoke<{
+      configured?: boolean
+      users?: { id: string; name: string; photo: string | null }[]
+    }>('monday-search', { body: { users: wanted } })
+    if (error || !data) return null
+    if (!Array.isArray(data.users)) {
+      // Function not redeployed with profiles mode yet — back off for a while.
+      try {
+        localStorage.setItem(PROFILE_UNSUPPORTED_KEY, String(Date.now()))
+      } catch {
+        /* ignore */
+      }
+      return null
+    }
+    const profiles: Record<string, MondayProfile> = {}
+    for (const u of data.users) profiles[String(u.id)] = { name: u.name, photo: u.photo ?? null }
+    // Remember asked-for ids monday doesn't know too, so they don't trigger refetches.
+    for (const id of wanted) profiles[id] ??= { name: '', photo: null }
+    try {
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ at: Date.now(), profiles }))
+    } catch {
+      /* storage blocked — fine, we just fetch again next time */
+    }
+    return profiles
+  } catch {
+    return null
+  }
+}

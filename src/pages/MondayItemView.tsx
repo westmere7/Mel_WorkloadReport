@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ArrowLeftRight,
@@ -28,7 +28,7 @@ import '@fontsource/poppins/500.css'
 import './mondayItemView.css'
 import { createRepository, useStore } from '../data/store'
 import { toMessage } from '../lib/format'
-import { assetsTabUrl, mondayItemIdFromUrl } from '../lib/monday'
+import { assetsTabUrl, fetchMondayProfiles, mondayItemIdFromUrl, type MondayProfile } from '../lib/monday'
 import {
   AssetLinesNotSetUpError,
   EMPTY_BOARD,
@@ -147,7 +147,28 @@ function initials(name: string) {
   return (parts.length > 1 ? parts[0][0] + parts[1][0] : parts[0].slice(0, 2)).toUpperCase()
 }
 
+/** monday profiles (full name + photo) keyed by the app's person name — empty until
+ *  loaded, and for anyone without a monday ID; then initials + short names are used. */
+const ProfilesContext = createContext<Record<string, MondayProfile>>({})
+const useProfiles = () => useContext(ProfilesContext)
+const shownName = (profiles: Record<string, MondayProfile>, name: string) => profiles[name]?.name || name
+
 function Avatar({ name, size = 28 }: { name: string | null; size?: number }) {
+  const profile = useProfiles()[name ?? '']
+  const [broken, setBroken] = useState(false)
+  if (name && profile?.photo && !broken)
+    return (
+      <img
+        className="mv-avatar mv-avatar-img"
+        src={profile.photo}
+        alt=""
+        title={profile.name || name}
+        referrerPolicy="no-referrer"
+        style={{ width: size, height: size }}
+        onError={() => setBroken(true)}
+        aria-hidden
+      />
+    )
   if (!name)
     return (
       <span
@@ -163,10 +184,10 @@ function Avatar({ name, size = 28 }: { name: string | null; size?: number }) {
     <span
       className="mv-avatar"
       style={{ width: size, height: size, fontSize: size * 0.4, backgroundColor: avatarColor(name) }}
-      title={name}
+      title={profile?.name || name}
       aria-hidden
     >
-      {initials(name)}
+      {initials(profile?.name || name)}
     </span>
   )
 }
@@ -242,6 +263,25 @@ export function MondayItemViewPage() {
     }
   }
   const theme = toTheme(userTheme ?? mondayTheme ?? params.get('theme'))
+
+  // Real monday avatars + names for people mapped to a monday user (Settings → People).
+  const [profiles, setProfiles] = useState<Record<string, MondayProfile>>({})
+  useEffect(() => {
+    const ids = settings.peopleMondayIds ?? {}
+    let alive = true
+    void fetchMondayProfiles(settings.people.map((p) => ids[p]).filter(Boolean)).then((res) => {
+      if (!alive || !res) return
+      const byName: Record<string, MondayProfile> = {}
+      for (const person of settings.people) {
+        const prof = ids[person] ? res[ids[person]] : undefined
+        if (prof && (prof.name || prof.photo)) byName[person] = prof
+      }
+      setProfiles(byName)
+    })
+    return () => {
+      alive = false
+    }
+  }, [settings.people, settings.peopleMondayIds])
 
   // This page uses its own monday palette: drop the app's dark class while
   // mounted, and paint html/body in the theme colour (no light flash on overscroll).
@@ -345,6 +385,7 @@ export function MondayItemViewPage() {
 
   return (
     // Inside a monday widget (iframe) the panel gives no inset of its own — `is-embedded` adds one.
+    <ProfilesContext.Provider value={profiles}>
     <div className={`mv mv-theme-${theme}${standalone ? '' : ' is-embedded'}`}>
       {standalone && (
         <>
@@ -395,6 +436,7 @@ export function MondayItemViewPage() {
         </div>
       </footer>
     </div>
+    </ProfilesContext.Provider>
   )
 }
 
@@ -546,6 +588,7 @@ function AssetsTab({
   onChangeTask?: () => void
 }) {
   const { updateTask, tasks } = useStore()
+  const profiles = useProfiles()
   const repo = useMemo(createRepository, [])
   const [board, setBoardState] = useState<AssetBoard>(EMPTY_BOARD)
   const boardRef = useRef(board)
@@ -1034,7 +1077,7 @@ function AssetsTab({
                 {people.map(([name, p]) => (
                   <div key={name} className="mv-person" title={`${p.lines} asset line${p.lines === 1 ? '' : 's'}`}>
                     <Avatar name={name} size={24} />
-                    <span className="mv-person-name">{name}</span>
+                    <span className="mv-person-name">{shownName(profiles, name)}</span>
                     <span className="mv-person-count">
                       {p.done}/{p.qty}
                     </span>
@@ -1394,11 +1437,12 @@ function Sheet({
 
 /** Several avatars, overlapped (monday's people column): up to 2, then "+N". */
 function Avatars({ names, size = 28 }: { names: string[]; size?: number }) {
+  const profiles = useProfiles()
   if (!names.length) return <Avatar name={null} size={size} />
   const shown = names.length > 2 ? names.slice(0, 1) : names
   const extra = names.length - shown.length
   return (
-    <span className="mv-avatars" title={names.join(', ')}>
+    <span className="mv-avatars" title={names.map((n) => shownName(profiles, n)).join(', ')}>
       {shown.map((n) => (
         <Avatar key={n} name={n} size={size} />
       ))}
@@ -1424,6 +1468,7 @@ function PeopleChips({
   taskPeople: string[]
   teamPeople: string[]
 }) {
+  const profiles = useProfiles()
   const rest = teamPeople.filter((p) => !taskPeople.includes(p))
   const [showRest, setShowRest] = useState(value.some((p) => rest.includes(p)))
   const toggle = (p: string) => onChange(value.includes(p) ? value.filter((x) => x !== p) : [...value, p])
@@ -1436,7 +1481,7 @@ function PeopleChips({
       onClick={() => toggle(p)}
     >
       <Avatar name={p} size={20} />
-      {p}
+      {shownName(profiles, p)}
     </button>
   )
   return (

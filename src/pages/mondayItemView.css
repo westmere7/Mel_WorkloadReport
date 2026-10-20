@@ -1292,6 +1292,10 @@
   margin-left: -8px;
   box-shadow: 0 0 0 2px var(--mv-surface);
 }
+.mv-avatar-img {
+  object-fit: cover;
+  background: var(--mv-grey);
+}
 .mv-avatar-more {
   background: var(--mv-grey);
   color: var(--mv-text-2);
