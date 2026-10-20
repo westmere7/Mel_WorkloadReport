@@ -1432,48 +1432,74 @@ REAL database via plain monday Embed widgets. `src/pages/MondayItemView.tsx` +
 `mondayItemView.css`, logic in `src/lib/assetLines.ts`; routed in `App.tsx` OUTSIDE the
 app shell, inside `StoreProvider` only (live tasks, no Layout).
 
-- **Two links.** GENERIC `/embed/item` → "Show a task's assets": enter the monday item ID
-  (also accepts a pasted item link or the task code), verified against tasks'
-  `mondayUrl`; a "Recent" list (`mwr.itemAssets.recent`) re-opens tasks in one tap.
-  TASK-SPECIFIC `/embed/item?itemId=<id>` opens straight away (task form footer
-  `ListChecks` icon via `assetsTabUrl`, and the tab's **Copy link**). "Change task" goes
-  back to the ID box (not offered when monday's app context supplies the item).
+- **Two links.** GENERIC `/embed/item` → "Show a task's assets": a task LOOKUP — monday
+  item ID or link, exact task code, or part of the code/name (live suggestions, codes
+  first, max 8); Enter opens the exact/only match; "Recent" (`mwr.itemAssets.recent`, by
+  task id; older entries by item id). ANY task opens — 231 of 400 tasks had no monday
+  link, and boards are keyed by task id anyway. TASK-SPECIFIC links via `assetsTabUrl(
+  mondayUrl, taskId)`: `?itemId=<monday id>` when linked, else `?task=<task id>` (task
+  form footer `ListChecks` icon — any saved task; ⋯ → Copy link). ⋯ → Change task returns
+  to the lookup (not when monday's app context supplies the item). `&theme=dark|black`.
+- **monday link from the tab:** unlinked tasks show "Not linked to monday.com · Link it";
+  ⋯ → Link / Change monday.com link (+ Open in monday.com when linked). `MondayLinkSheet`
+  takes a pasted item link (kept as-is) or a bare ID (→ `https://rmit.monday.com/pulses/<id>`),
+  refuses an item already linked to another task, and saves `mondayUrl` on the dashboard
+  task via `store.updateTask` (edit log: "monday.com link updated/removed"); Unlink clears it.
+  `MondayMark` (monday logo, colour = linked, greyed = not) sits in the task bar and on every
+  lookup/Recent row.
 - **Plain Embed widget ≠ app:** an embed never gets monday's SDK context (no item id /
   theme) — hence the ID box. The installed app will supply `itemId` + `theme` itself.
-- **Storage:** table `task_asset_lines` (task_id PK → tasks, `board` jsonb, realtime
-  publication) — `Repository.getAssetBoard / saveAssetBoard / subscribeAssetBoard`
-  (Local: `mwr.assetBoards` + storage events). Board = `{ lines, groups, basis, rev, by }`;
-  `rev`/`by` (per-page `CLIENT_ID`) drop the echo of your own save (board also carries
-  `tracker`). Missing table →
-  `AssetLinesNotSetUpError` → tab is READ-ONLY with a banner. Editing is also off until
-  the board has loaded. Not in year snapshots.
+- **Storage:** table `task_asset_lines` (task_id PK → tasks ON DELETE CASCADE, `board`
+  jsonb, realtime publication). Board = `{ lines, groups, tracker, basis, fromBasis, rev, by }`.
+  Repository: `getTask`, `getAssetBoard`, `saveAssetBoardIf` (compare-and-swap on
+  `board->>rev`; insert for the first save, 23505 = lost the race), `subscribeAssetBoard`
+  (Local: `mwr.assetBoards` + storage events — NOT atomic across tabs, so concurrency
+  can only be tested on Supabase). Missing table → `AssetLinesNotSetUpError` → READ-ONLY
+  banner. Editing is off until the board has loaded. Not in year snapshots.
 - **Invariant: Σ line qty per (function, type) === the task's dashboard count.**
-  - The **unassigned pool** = one `pool` line per (function, type). A task nobody has
-    split shows its package as pool lines (derived, deterministic `pool:` ids — no row is
-    written until someone edits).
-  - **Tab edits are pool-first** (`rebalance`): carving out / growing a line takes from the
-    pool; only the excess raises the dashboard count. Shrinking / deleting a line returns
-    it to the pool (count unchanged). Editing or deleting the pool line itself changes
-    the count. Assigning / renaming / ticking a pool line turns it into a real line.
-    Count changes go through `store.updateTask` with `countsFromLines` (function slices +
-    combined roll-up, same rule as TaskForm) → normal edit-log entries.
-  - **Dashboard edits** are absorbed by `reconcile`: more → pool grows (new types get a
-    pool line); fewer → pool first, then not-started, stuck, working, done last. A board
-    whose `basis` ≠ `basisOf(task)` is shown reconciled and re-saved once.
-  - Legacy ↔ single-function upgrades keep lines (fn remapped when unambiguous).
-  - Pure + unit-tested shape: see the scratch tests pattern (esbuild bundle → node).
-- **Asset tracker link:** optional `board.tracker` (https URL, e.g. the task's online Excel
-  tracker) shown as "Asset tracker ↗" under the task meta; add/edit/remove via a sheet.
-  Saved with the board (shared + live), no migration of its own.
-- **Lines:** name · asset type (function's asset types) · (function on multi-function
-  tasks) · person in charge · quantity · status · due · notes. FLAT list in stored array
-  order; `#` = position down the page. User groups are blind (free names, colours);
-  drag (grip handle, pointer events, touch-friendly, insertion line, auto-scroll) to
-  reorder or move between groups; the Group field is the keyboard equivalent.
-- **Look:** monday light/dark/night (`?theme=dark|black`, or monday context), Figtree +
-  Poppins, `mv-` classes on theme variables; compact summary with Details (package per
-  type + who's doing what); round check-off per line; pool rows show "Unassigned".
-- ⚠️ **No sign-in gate here** — anyone with the link can edit lines and (via the pool
-  rules) the task's asset counts. Same permissive RLS as the rest of the app.
+  - **Tab edits are LITERAL** — adding a 4-asset line adds 4 to the dashboard; editing /
+    deleting changes it too. After the board save, `store.updateTask` writes
+    `countsFromLines` (function slices + combined roll-up, TaskForm's rule) → edit log.
+  - **Function per line** (picker lists every configured function): a line in a function
+    the task doesn't have adds that slice (`emptyFunctionEntry`); `withFunctions` gives
+    unset lines a concrete function once the task has/gets function data (legacy task →
+    legacy owner, keeping its work types). A legacy task stays legacy otherwise.
+  - **Unassigned pool** = `pool` lines (no one in charge yet). A task nobody has touched
+    shows its package as pool lines (deterministic `pool:` ids, no row until an edit).
+    Assigning / renaming / ticking a pool line makes it a real line.
+  - **Dashboard edits** are absorbed by `reconcile` (more → pool grows; fewer → pool
+    first, then not-started, in progress, done last) — DISPLAY ONLY; never auto-saved
+    (auto-saving raced other viewers). `linesFor(board, task)` = saved lines when
+    `basis` or `fromBasis` equals the task's signature, else reconciled.
+  - `fromBasis` = the task's signature when the board was saved: a board AHEAD of the
+    task (its saver's count update not landed yet) is NOT stale — re-balancing it deleted
+    the other person's new line before this fix.
+- **Concurrent editing (several viewers):** every edit is a `BoardOp` (pure function of
+  `{lines, groups, tracker}` by line id). `apply(op)` shows it at once, then loops: fresh
+  `getTask` + `getAssetBoard` → op on `linesFor(server board, server task)` →
+  `saveAssetBoardIf(rev)`; retry ≤ 6 on conflict. Sheet saves send only CHANGED FIELDS
+  (`patchLine`), so two people editing different fields of one line both win. Verified on
+  Supabase: different lines, same line/different fields, simultaneous adds (36+4+2 → 42).
+  Realtime echo of own saves dropped via `rev`/`by` (per-page `CLIENT_ID`).
+- **Lines:** name · asset type · function · people in charge (`owners: string[]`, legacy
+  `owner` read as `[owner]`) · asset count · status (Not started / In progress / Done —
+  "Stuck" retired, reads as In progress) · due · notes. FLAT list in stored order; `#` =
+  position. User groups are blind (free names/colours); drag (grip, pointer events,
+  touch, insertion line, auto-scroll) to reorder or move between groups.
+- **Editor sheet** (kept calm — no explanatory text): Asset name; Asset type + Function;
+  Person in charge = small toggle chips, multi-select (task people + "+N more"); Asset
+  count stepper (no native spinners) + Status dropdown filled with the status colour;
+  Due date; Notes hidden behind a sticky-note-with-plus icon in the footer (open when a
+  note exists). Footer: Delete · note icon · Cancel · Save. (Split was built and removed.)
+- **Task bar = one row:** task name (always, 17px Poppins) over monday mark · code · short dates
+  ("15 Sep – 2 Nov"); a prominent **Asset tracker** button (opens `board.tracker`, an
+  https link to e.g. the online Excel tracker; dashed "+ Asset tracker" when unset); ⋯
+  menu: Copy link, Edit asset tracker link, Change task.
+- **Look:** monday light/dark/night variable sets (`mv-theme-*`), Figtree + Poppins,
+  compact summary + Details (package per type, who's doing what — a shared line counts for
+  each owner); rows show stacked avatars (2, then +N), status pill, type, function when
+  several are in play, due/overdue; round check-off.
+- ⚠️ **No sign-in gate here** — anyone with the link can edit lines and, through them, the
+  task's asset counts. Same permissive RLS as the rest of the app.
 - Don't use `crypto.randomUUID` (undefined in non-secure frames); a plain `.mv button`
   reset overrides component colours — use `:where(.mv button)`.

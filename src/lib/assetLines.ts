@@ -1,4 +1,5 @@
 import type { AppSettings, AssetBreakdown, FunctionData, Task } from '../types'
+import { emptyFunctionEntry } from '../constants'
 
 /*
  * Asset lines — the per-task breakdown behind the monday "Assets" tab.
@@ -7,17 +8,16 @@ import type { AppSettings, AssetBreakdown, FunctionData, Task } from '../types'
  * Lines split that package into batches with a person in charge and a status.
  * Invariant: for every (function, type), Σ line qty === the dashboard count.
  *
- * - The UNASSIGNED POOL is one `pool` line per (function, type): the part of the
- *   package nobody has taken yet. A fresh task is all pool.
- * - Tab edits are pool-first: carving a line out (or growing one) takes from the
- *   pool, and only what the pool can't cover raises the dashboard count;
- *   shrinking/deleting a line hands its assets back to the pool. Editing or
- *   deleting the pool line itself changes the dashboard count.
+ * - Tab edits are LITERAL: the lines' totals become the dashboard counts (adding a
+ *   4-asset line adds 4).
+ * - The UNASSIGNED POOL is one `pool` line per (function, type), not yet given to
+ *   anyone. A fresh task is all pool; assigning/renaming/ticking one makes it a
+ *   real line.
  * - Dashboard edits are absorbed by `reconcile`: more → pool grows; fewer → taken
  *   from the pool first, then from not-started lines, done lines last.
  */
 
-export type LineStatus = 'notStarted' | 'working' | 'stuck' | 'done'
+export type LineStatus = 'notStarted' | 'working' | 'done'
 
 export interface AssetLine {
   id: string
@@ -26,7 +26,8 @@ export interface AssetLine {
   type: string
   /** Recording function (null on legacy tasks without per-function data). */
   fn: string | null
-  owner: string | null
+  /** People in charge (any number). */
+  owners: string[]
   qty: number
   status: LineStatus
   due: string | null
@@ -47,8 +48,12 @@ export interface AssetBoard {
   groups: LineGroup[]
   /** Link to the task's online asset tracker (e.g. an Excel sheet), if it has one. */
   tracker: string | null
-  /** Package signature the lines were last balanced against (see `basisOf`). */
+  /** Package signature the lines add up to (see `basisOf`). */
   basis: string
+  /** The dashboard's signature when this board was saved. `basis` ≠ the task's but
+   *  `fromBasis` = it means the saver's count update just hasn't landed yet — the
+   *  board is AHEAD, not stale, and must not be re-balanced. */
+  fromBasis?: string
   /** Write counter + writer id — lets a client ignore the echo of its own save. */
   rev: number
   by: string
@@ -76,10 +81,16 @@ export function normalizeBoard(raw: unknown): AssetBoard {
         .map((l) => ({
           ...l,
           qty: Math.max(0, Math.round(Number(l.qty) || 0)),
-          status: (['notStarted', 'working', 'stuck', 'done'] as const).includes(l.status) ? l.status : 'notStarted',
+          // 'stuck' was retired → it reads as in progress.
+          status: (l.status as string) === 'stuck' ? 'working' : (['notStarted', 'working', 'done'] as const).includes(l.status) ? l.status : 'notStarted',
           groupId: l.groupId ?? null,
           fn: l.fn ?? null,
-          owner: l.owner ?? null,
+          // Lines saved before multi-person kept a single `owner`.
+          owners: Array.isArray(l.owners)
+            ? l.owners.filter((o): o is string => typeof o === 'string')
+            : typeof (l as { owner?: unknown }).owner === 'string'
+              ? [(l as unknown as { owner: string }).owner]
+              : [],
           due: l.due ?? null,
           notes: l.notes ?? '',
         }))
@@ -90,6 +101,7 @@ export function normalizeBoard(raw: unknown): AssetBoard {
     groups,
     tracker: typeof b.tracker === 'string' && b.tracker.trim() ? b.tracker.trim() : null,
     basis: typeof b.basis === 'string' ? b.basis : '',
+    fromBasis: typeof b.fromBasis === 'string' ? b.fromBasis : undefined,
     rev: Number(b.rev) || 0,
     by: typeof b.by === 'string' ? b.by : '',
   }
@@ -141,6 +153,13 @@ function signature(counts: Map<string, number>): string {
     .join('|')
 }
 
+/** Lines to show/build on for a board vs the task's current counts: as saved when they
+ *  match (or the board is merely ahead — see `fromBasis`), else re-balanced. */
+export function linesFor(board: AssetBoard, task: Task, settings?: AppSettings): AssetLine[] {
+  const tb = basisOf(task)
+  return board.basis === tb || board.fromBasis === tb ? board.lines : reconcile(board.lines, task, settings)
+}
+
 /** Signature of the dashboard's package — changes whenever a count changes. */
 export function basisOf(task: Task): string {
   return signature(new Map(packageOf(task).map((p) => [p.key, p.count])))
@@ -158,7 +177,7 @@ function poolLine(fn: string | null, type: string, qty: number, taken: Set<strin
   let id = base
   for (let n = 2; taken.has(id); n++) id = `${base}:${n}`
   taken.add(id)
-  return { id, groupId: null, name: type, type, fn, owner: null, qty, status: 'notStarted', due: null, notes: '', pool: true }
+  return { id, groupId: null, name: type, type, fn, owners: [], qty, status: 'notStarted', due: null, notes: '', pool: true }
 }
 
 /** Insert `line` right after the last line with the same key (else at the end). */
@@ -174,12 +193,12 @@ function insertNearKey(lines: AssetLine[], line: AssetLine): AssetLine[] {
 
 /** Is this line still just "unassigned stock"? (anything set on it makes it a real line) */
 export function isPoolShaped(l: AssetLine): boolean {
-  return !l.owner && l.status === 'notStarted' && l.name === l.type && !l.notes.trim() && !l.due
+  return !l.owners.length && l.status === 'notStarted' && l.name === l.type && !l.notes.trim() && !l.due
 }
 
 // Which lines give up assets first when the dashboard count drops.
 const SHRINK_ORDER = (l: AssetLine) =>
-  l.pool ? 0 : l.status === 'notStarted' ? (l.owner ? 2 : 1) : l.status === 'stuck' ? 3 : l.status === 'working' ? 4 : 5
+  l.pool ? 0 : l.status === 'notStarted' ? (l.owners.length ? 2 : 1) : l.status === 'working' ? 3 : 4
 
 /**
  * Fit lines to the task's CURRENT package (after a dashboard edit, or first open).
@@ -224,45 +243,21 @@ export function reconcile(lines: AssetLine[], task: Task, settings?: AppSettings
 }
 
 /**
- * Apply a tab edit pool-first. `next` is the user's intended lines; for every
- * (function, type) whose ALLOCATED (non-pool) total changed, the pool absorbs the
- * difference — only what it can't cover changes the dashboard count. An edit to
- * the pool line itself (`touchedId`) is taken literally.
+ * Give every line a concrete function once the task has (or is getting) per-function
+ * data: unset lines go to the task's first function, or — on a legacy task — to its
+ * legacy owner (the same owner the dashboard assumes). A legacy task whose lines
+ * all leave the function unset stays legacy.
  */
-export function rebalance(prev: AssetLine[], next: AssetLine[], touchedId: string | null): AssetLine[] {
-  let out = [...next]
-  const allocated = (ls: AssetLine[], key: string) =>
-    ls.filter((l) => !l.pool && keyOf(l) === key).reduce((n, l) => n + l.qty, 0)
-  const taken = new Set([...prev, ...next].map((l) => l.id))
-  for (const key of new Set([...prev, ...next].map(keyOf))) {
-    const poolIdx = out.findIndex((l) => l.pool && keyOf(l) === key)
-    if (poolIdx >= 0 && out[poolIdx].id === touchedId) continue // explicit pool edit
-    // (Deleting the pool line leaves `allocated` unchanged → d = 0 → the count drops.)
-    const d = allocated(out, key) - allocated(prev, key)
-    if (d === 0) continue
-    const prevPool = prev.find((l) => l.pool && keyOf(l) === key)?.qty ?? 0
-    const poolQty = Math.max(0, prevPool - d)
-    if (poolIdx >= 0) {
-      out = poolQty > 0 ? out.map((l, i) => (i === poolIdx ? { ...l, qty: poolQty } : l)) : out.filter((_, i) => i !== poolIdx)
-    } else if (poolQty > 0) {
-      const sample = [...next, ...prev].find((l) => keyOf(l) === key)!
-      out = insertNearKey(out, poolLine(sample.fn, sample.type, poolQty, taken))
-    }
-  }
-  return out
+export function withFunctions(lines: AssetLine[], task: Task, legacyOwner: string): AssetLine[] {
+  const fd = task.functionData && Object.keys(task.functionData).length ? task.functionData : null
+  if (!fd && !lines.some((l) => l.fn)) return lines
+  const fallback = fd ? Object.keys(fd)[0] : legacyOwner
+  return lines.map((l) => (l.fn ? l : { ...l, fn: fallback }))
 }
 
-/** How a pending edit of one (function, type) splits between the pool and the dashboard. */
-export function poolEffect(prev: AssetLine[], key: string, deltaAllocated: number) {
-  const pool = prev.find((l) => l.pool && keyOf(l) === key)?.qty ?? 0
-  if (deltaAllocated >= 0) {
-    const fromPool = Math.min(pool, deltaAllocated)
-    return { fromPool, toDashboard: deltaAllocated - fromPool, pool }
-  }
-  return { fromPool: deltaAllocated, toDashboard: 0, pool }
-}
-
-/** The task fields that carry the counts, rebuilt from lines (keeps the roll-up rule). */
+/** The task fields that carry the counts, rebuilt from lines (keeps the roll-up rule).
+ *  Run `withFunctions` first; a line in a function the task doesn't have yet adds
+ *  that function's slice (like switching it on in the task form). */
 export function countsFromLines(
   lines: AssetLine[],
   task: Task,
@@ -273,11 +268,14 @@ export function countsFromLines(
     return bd
   }
   const total = (bd: AssetBreakdown) => Object.values(bd).reduce((n, v) => n + v, 0)
-  const fd = task.functionData
-  if (fd && Object.keys(fd).length) {
+  const fd = task.functionData && Object.keys(task.functionData).length ? task.functionData : null
+  const lineFns = [...new Set(lines.map((l) => l.fn).filter((f): f is string => !!f))]
+  if (fd || lineFns.length) {
     const next: FunctionData = {}
     const combined: AssetBreakdown = {}
-    for (const [fn, entry] of Object.entries(fd)) {
+    for (const fn of [...new Set([...Object.keys(fd ?? {}), ...lineFns])]) {
+      // A legacy task's owner slice keeps the task's work types when it's created.
+      const entry = fd?.[fn] ?? (fd ? emptyFunctionEntry() : { ...emptyFunctionEntry(), types: [...task.types] })
       const bd = sum(lines.filter((l) => l.fn === fn))
       next[fn] = { ...entry, assetBreakdown: bd, assetTotal: total(bd) }
       for (const [k, v] of Object.entries(bd)) combined[k] = (combined[k] ?? 0) + v

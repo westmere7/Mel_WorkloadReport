@@ -1,6 +1,23 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Check, ChevronDown, Copy, ExternalLink, FolderPlus, GripVertical, Loader2, Minus, MoreHorizontal, Plus, X } from 'lucide-react'
+import {
+  ArrowLeftRight,
+  Check,
+  ChevronDown,
+  Copy,
+  ExternalLink,
+  FileSpreadsheet,
+  FolderPlus,
+  GripVertical,
+  Link2,
+  Loader2,
+  Minus,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  StickyNote,
+  X,
+} from 'lucide-react'
 import mondaySdk from 'monday-sdk-js'
 import '@fontsource/figtree/400.css'
 import '@fontsource/figtree/500.css'
@@ -8,8 +25,8 @@ import '@fontsource/figtree/600.css'
 import '@fontsource/poppins/500.css'
 import './mondayItemView.css'
 import { createRepository, useStore } from '../data/store'
-import { formatDate, toMessage } from '../lib/format'
-import { mondayItemIdFromUrl } from '../lib/monday'
+import { toMessage } from '../lib/format'
+import { assetsTabUrl, mondayItemIdFromUrl } from '../lib/monday'
 import {
   AssetLinesNotSetUpError,
   EMPTY_BOARD,
@@ -17,18 +34,18 @@ import {
   basisOfLines,
   countsFromLines,
   isPoolShaped,
+  linesFor,
   lineKey,
   packageOf,
-  poolEffect,
-  rebalance,
-  reconcile,
   taskFunctions,
+  withFunctions,
   type AssetBoard,
   type AssetLine,
   type LineGroup,
   type LineStatus,
 } from '../lib/assetLines'
 import type { AppSettings, Task, TaskInput } from '../types'
+import { legacyOwnerName } from '../constants'
 
 /*
  * monday.com Item View — /embed/item. The "Assets" tab of a monday item: the
@@ -36,16 +53,18 @@ import type { AppSettings, Task, TaskInput } from '../types'
  * status · due · notes), live and shared.
  *
  * Two links:
- * - GENERIC `/embed/item` → enter a monday item ID (or paste its link / the task
- *   code); recently opened tasks are one tap away. (A plain monday Embed widget
- *   can't tell us which item it's on — the installed app will, via SDK context.)
- * - TASK-SPECIFIC `/embed/item?itemId=<id>` → opens that task straight away
- *   (the task form's checklist icon, and "Copy link" here).
+ * - GENERIC `/embed/item` → look a task up: monday item ID or link, task code, or
+ *   part of its name (live suggestions; recent tasks one tap away). Any task works,
+ *   monday-linked or not. (A plain monday Embed widget can't tell us which item it's
+ *   on — the installed app will, via SDK context.)
+ * - TASK-SPECIFIC `/embed/item?itemId=<monday id>` (linked tasks) or
+ *   `?task=<task id>` (unlinked) → opens straight away (task form checklist icon,
+ *   ⋯ → Copy link).
  *
  * Lines live in Supabase (`task_asset_lines`, one board per task) and update live.
- * They always add up to the task's dashboard counts — see lib/assetLines.ts for
- * the pool-first rules. Edits here that go beyond the unassigned stock change
- * the dashboard's counts (with an edit-log entry); dashboard edits re-balance here.
+ * They always add up to the task's dashboard counts: quantity edits here change
+ * the counts there (edit-log entry included), and dashboard edits re-balance here
+ * (lib/assetLines.ts).
  */
 
 type Status = LineStatus
@@ -57,12 +76,11 @@ const DETAILS_KEY = 'mwr.itemAssets.detailsOpen'
 // monday's own status labels + colours.
 const STATUS: Record<Status, { label: string; color: string }> = {
   notStarted: { label: 'Not started', color: '#c4c4c4' },
-  working: { label: 'Working on it', color: '#fdab3d' },
-  stuck: { label: 'Stuck', color: '#df2f4a' },
+  working: { label: 'In progress', color: '#fdab3d' },
   done: { label: 'Done', color: '#00c875' },
 }
-const STATUS_ORDER: Status[] = ['notStarted', 'working', 'stuck', 'done']
-const SHORT_LABEL: Record<Status, string> = { done: 'done', working: 'working', stuck: 'stuck', notStarted: 'not started' }
+const STATUS_ORDER: Status[] = ['notStarted', 'working', 'done']
+const SHORT_LABEL: Record<Status, string> = { done: 'done', working: 'in progress', notStarted: 'not started' }
 const UNGROUPED_COLOR = 'var(--mv-ui-border)'
 
 /** monday's themes. Light is the default; dark/black (night) come from monday's
@@ -89,10 +107,14 @@ function parseItemInput(raw: string): string | null {
 }
 
 interface RecentTask {
-  itemId: string
+  taskId?: string
+  /** Older entries (before any-task lookup) only stored the monday item id. */
+  itemId?: string
   code: string
   name: string
 }
+const recentTask = (tasks: Task[], r: RecentTask) =>
+  (r.taskId ? tasks.find((t) => t.id === r.taskId) : r.itemId ? findTaskByItem(tasks, r.itemId) : undefined) ?? null
 function loadRecent(): RecentTask[] {
   try {
     const list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as RecentTask[]
@@ -103,7 +125,7 @@ function loadRecent(): RecentTask[] {
 }
 function pushRecent(t: RecentTask) {
   try {
-    const next = [t, ...loadRecent().filter((r) => r.itemId !== t.itemId)].slice(0, 6)
+    const next = [t, ...loadRecent().filter((r) => r.taskId !== t.taskId)].slice(0, 6)
     localStorage.setItem(RECENT_KEY, JSON.stringify(next))
   } catch {
     /* storage blocked — recents are a convenience only */
@@ -145,6 +167,20 @@ function Avatar({ name, size = 28 }: { name: string | null; size?: number }) {
   )
 }
 
+/** monday logo: in colour when the task is linked to a monday item, greyed when not. */
+function MondayMark({ linked }: { linked: boolean }) {
+  return (
+    <img
+      src="/monday.svg"
+      alt={linked ? 'Linked to monday.com' : 'Not linked to monday.com'}
+      title={linked ? 'Linked to monday.com' : 'Not linked to monday.com'}
+      className={`mv-monday-mark${linked ? '' : ' is-off'}`}
+      width={14}
+      height={14}
+    />
+  )
+}
+
 function StatusPill({ status }: { status: Status }) {
   return (
     <span className="mv-status" style={{ background: STATUS[status].color }}>
@@ -153,9 +189,11 @@ function StatusPill({ status }: { status: Status }) {
   )
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** "15 Sep" — fixed 3-letter months (en-AU's "Sept" is wider and inconsistent). */
 function shortDate(iso: string | null): string {
-  if (!iso) return ''
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+  const m = iso?.match(/^\d{4}-(\d{2})-(\d{2})/)
+  return m ? `${Number(m[2])} ${MONTHS[Number(m[1]) - 1]}` : ''
 }
 const todayISO = () => {
   const d = new Date()
@@ -173,14 +211,15 @@ function useEscape(onClose: () => void) {
 export function MondayItemViewPage() {
   const [params, setParams] = useSearchParams()
   const paramItemId = params.get('itemId')
+  const paramTaskId = params.get('task')
   const standalone = typeof window !== 'undefined' && window.self === window.top
   const { loading, error, tasks, settings } = useStore()
-  // Where the item id comes from: the task-specific link, monday's app context,
-  // or the generic link's ID box (only that one can be changed in place).
+  // Which task: the task-specific link (?itemId / ?task), monday's app context, or
+  // the generic link's lookup (only the last two can be changed in place).
   const [contextId, setContextId] = useState<string | null>(null)
-  const [pickedId, setPickedId] = useState<string | null>(null)
+  const [pickedTaskId, setPickedTaskId] = useState<string | null>(null)
   const [contextWaiting, setContextWaiting] = useState(false)
-  const itemId = paramItemId ?? contextId ?? pickedId
+  const chosen = paramItemId ?? paramTaskId ?? contextId ?? pickedTaskId
   // monday's own theme (app context) wins over ?theme=; default light.
   const [mondayTheme, setMondayTheme] = useState<string | null>(null)
   const theme = toTheme(mondayTheme ?? params.get('theme'))
@@ -220,18 +259,25 @@ export function MondayItemViewPage() {
     }
   }, [standalone])
 
-  const task = useMemo(() => (itemId ? findTaskByItem(tasks, itemId) ?? null : null), [tasks, itemId])
+  const task = useMemo(() => {
+    if (paramItemId) return findTaskByItem(tasks, paramItemId) ?? null
+    if (paramTaskId) return tasks.find((t) => t.id === paramTaskId) ?? null
+    if (contextId) return findTaskByItem(tasks, contextId) ?? null
+    if (pickedTaskId) return tasks.find((t) => t.id === pickedTaskId) ?? null
+    return null
+  }, [tasks, paramItemId, paramTaskId, contextId, pickedTaskId])
 
   // Remember opened tasks for the generic link's "Recent" list.
   useEffect(() => {
-    if (task && itemId) pushRecent({ itemId, code: task.code, name: task.name })
-  }, [task, itemId])
+    if (task) pushRecent({ taskId: task.id, code: task.code, name: task.name })
+  }, [task])
 
   const changeTask = () => {
-    setPickedId(null)
-    if (paramItemId) {
+    setPickedTaskId(null)
+    if (paramItemId || paramTaskId) {
       const next = new URLSearchParams(params)
       next.delete('itemId')
+      next.delete('task')
       setParams(next, { replace: true })
     }
   }
@@ -251,16 +297,16 @@ export function MondayItemViewPage() {
         {error}
       </div>
     )
-  } else if (!itemId) {
-    body = <TaskPicker tasks={tasks} waiting={contextWaiting} onPick={setPickedId} />
+  } else if (!chosen) {
+    body = <TaskPicker tasks={tasks} waiting={contextWaiting} onPick={setPickedTaskId} />
   } else if (!task) {
     body = (
       <div className="mv-state">
         <strong>Not on the Workload dashboard yet</strong>
-        No dashboard task is linked to monday item {itemId}.
+        {paramTaskId ? 'This task no longer exists.' : `No dashboard task is linked to monday item ${chosen}.`}
         {!contextId && (
           <button type="button" className="mv-text-btn" onClick={changeTask}>
-            Enter a different ID
+            Look up another task
           </button>
         )}
       </div>
@@ -269,11 +315,9 @@ export function MondayItemViewPage() {
     body = (
       <AssetsTab
         key={task.id}
-        itemId={itemId}
         task={task}
         settings={settings}
         theme={theme}
-        showName={!standalone}
         // In the installed app the item is fixed by monday; elsewhere it can change.
         onChangeTask={contextId ? undefined : changeTask}
       />
@@ -308,7 +352,8 @@ export function MondayItemViewPage() {
   )
 }
 
-/** The generic link's start screen: enter a monday item ID (or link / task code). */
+/** The generic link's start screen: look a task up by monday item ID / link, task
+ *  code, or part of its name. Any task can be opened — a monday link is optional. */
 function TaskPicker({
   tasks,
   waiting,
@@ -317,36 +362,59 @@ function TaskPicker({
   tasks: Task[]
   /** Still listening for monday's app context (installed app). */
   waiting: boolean
-  onPick: (itemId: string) => void
+  onPick: (taskId: string) => void
 }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const recent = useMemo(() => loadRecent().filter((r) => findTaskByItem(tasks, r.itemId)), [tasks])
+  const recent = useMemo(
+    () =>
+      loadRecent()
+        .map((r) => recentTask(tasks, r))
+        .filter((t): t is Task => !!t)
+        .filter((t, i, all) => all.findIndex((x) => x.id === t.id) === i),
+    [tasks],
+  )
+  const q = value.trim().toLowerCase()
+  // Live suggestions: code or name contains what's typed (codes first, newest first).
+  const matches = useMemo(() => {
+    if (q.length < 2) return []
+    return tasks
+      .filter((t) => t.code.toLowerCase().includes(q) || t.name.toLowerCase().includes(q))
+      .sort((a, b) => Number(b.code.toLowerCase().includes(q)) - Number(a.code.toLowerCase().includes(q)) || b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 8)
+  }, [tasks, q])
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    const raw = value.trim()
-    if (!raw) return setError('Enter the monday item ID.')
-    const byCode = tasks.find((t) => t.code && t.code.toLowerCase() === raw.toLowerCase() && mondayItemIdFromUrl(t.mondayUrl))
-    const id = byCode ? mondayItemIdFromUrl(byCode.mondayUrl) : parseItemInput(raw)
-    if (!id) return setError('Not a monday item ID.')
-    if (!findTaskByItem(tasks, id)) return setError(`No dashboard task is linked to item ${id}.`)
-    setError(null)
-    onPick(id)
+    if (!q) return setError('Type a task code, name or monday item ID.')
+    const itemId = parseItemInput(value)
+    const hit =
+      (itemId && findTaskByItem(tasks, itemId)) ||
+      tasks.find((t) => t.code && t.code.toLowerCase() === q) ||
+      (matches.length === 1 ? matches[0] : undefined)
+    if (hit) return onPick(hit.id)
+    if (itemId) return setError(`No dashboard task is linked to monday item ${itemId}.`)
+    setError(matches.length ? 'Pick one of the tasks below.' : 'No task matches.')
   }
+
+  const row = (t: Task) => (
+    <button key={t.id} type="button" className="mv-recent-item" onClick={() => onPick(t.id)}>
+      <MondayMark linked={!!mondayItemIdFromUrl(t.mondayUrl)} />
+      {t.code && <span className="mv-code">{t.code}</span>}
+      <span className="mv-recent-name">{t.name}</span>
+    </button>
+  )
 
   return (
     <div className="mv-body">
       <div className="mv-picker">
         <h2 className="mv-picker-title">Show a task’s assets</h2>
-        <p className="mv-hint">
-          The monday item ID (end of the item’s link), the link itself, or the task code.
-        </p>
+        <p className="mv-hint">Task code, task name, or the monday item ID / link.</p>
         <form className="mv-picker-form" onSubmit={submit}>
           <input
             className={`mv-input${error ? ' is-error' : ''}`}
-            aria-label="monday item ID"
-            placeholder="e.g. 2827224155"
+            aria-label="Find a task"
+            placeholder="e.g. 26.0113.A"
             value={value}
             onChange={(e) => {
               setValue(e.target.value)
@@ -359,18 +427,12 @@ function TaskPicker({
           </button>
         </form>
         {error && <p className="mv-error">{error}</p>}
+        {matches.length > 0 && <div className="mv-recent">{matches.map(row)}</div>}
         {waiting && <p className="mv-hint mv-picker-wait">Checking monday…</p>}
-        {recent.length > 0 && (
+        {!matches.length && recent.length > 0 && (
           <>
             <p className="mv-subhead">Recent</p>
-            <div className="mv-recent">
-              {recent.map((r) => (
-                <button key={r.itemId} type="button" className="mv-recent-item" onClick={() => onPick(r.itemId)}>
-                  {r.code && <span className="mv-code">{r.code}</span>}
-                  <span className="mv-recent-name">{r.name}</span>
-                </button>
-              ))}
-            </div>
+            <div className="mv-recent">{recent.map(row)}</div>
           </>
         )}
       </div>
@@ -379,6 +441,8 @@ function TaskPicker({
 }
 
 type LineSheet = { line: AssetLine; isNew: boolean } | null
+/** An edit, as a pure function of a board — re-applied to the latest saved board on save. */
+type BoardOp = (b: Pick<AssetBoard, 'lines' | 'groups' | 'tracker'>) => Pick<AssetBoard, 'lines' | 'groups' | 'tracker'>
 type GroupSheet = { group: LineGroup; isNew: boolean } | null
 
 /** Drop-target key for the ungrouped section. */
@@ -425,22 +489,17 @@ function placeLine(lines: AssetLine[], groups: LineGroup[], id: string, spot: Dr
 }
 
 function AssetsTab({
-  itemId,
   task,
   settings,
   theme,
-  showName,
   onChangeTask,
 }: {
-  itemId: string
   task: Task
   settings: AppSettings
   theme: MondayTheme
-  /** Show the task name (standalone, the preview header already does). */
-  showName: boolean
   onChangeTask?: () => void
 }) {
-  const { updateTask } = useStore()
+  const { updateTask, tasks } = useStore()
   const repo = useMemo(createRepository, [])
   const [board, setBoardState] = useState<AssetBoard>(EMPTY_BOARD)
   const boardRef = useRef(board)
@@ -475,6 +534,7 @@ function AssetsTab({
   const [lineSheet, setLineSheet] = useState<LineSheet>(null)
   const [groupSheet, setGroupSheet] = useState<GroupSheet>(null)
   const [trackerOpen, setTrackerOpen] = useState(false)
+  const [mondayOpen, setMondayOpen] = useState(false)
 
   // ── Load the board + follow live changes from every other viewer ──
   useEffect(() => {
@@ -506,90 +566,115 @@ function AssetsTab({
   // re-balanced to them (a dashboard edit, or a task nobody has split yet).
   const taskBasis = basisOf(task)
   const lines = useMemo(
-    () => (inflight > 0 || board.basis === taskBasis ? board.lines : reconcile(board.lines, task, settings)),
+    () => (inflight > 0 ? board.lines : linesFor(board, task, settings)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [inflight, board, taskBasis, task, settings],
   )
   const { groups } = board
   // No editing until the board has loaded (and we know saving works).
   const readOnly = setupMissing || !loaded
 
-  const save = async (b: AssetBoard) => {
-    try {
-      await repo.saveAssetBoard(task.id, b)
-      setSaveError(null)
-    } catch (err) {
-      if (err instanceof AssetLinesNotSetUpError) setSetupMissing(true)
-      setSaveError(toMessage(err))
-    }
-  }
+  // The latest task, for saves that finish after a re-render.
+  const taskRef = useRef(task)
+  taskRef.current = task
 
-  // A dashboard edit changed the counts: store the re-balanced lines once, so
-  // every viewer (and the next one) starts from the same board.
-  useEffect(() => {
-    if (!loaded || readOnly || inflight > 0 || board.basis === taskBasis) return
-    if (board.rev === 0) return // never saved — the derived lines need no row until someone edits
-    const b = { ...board, lines: reconcile(board.lines, task, settings), basis: taskBasis, rev: board.rev + 1, by: CLIENT_ID }
-    setBoard(b)
-    void save(b)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, readOnly, inflight, board, taskBasis])
+  // A dashboard edit is NOT saved back automatically: every viewer derives the same
+  // re-balanced lines, and the next real edit stores them. (Auto-saving raced another
+  // viewer's edit — its new counts can land before its lines and get overwritten.)
 
   /**
-   * Apply an edit: balance it pool-first, show it at once, push changed counts to
-   * the dashboard task (edit log included), then save the board.
+   * Apply an edit. Edits are OPERATIONS on lines by id, so several people can work
+   * on the same task at once: the op is shown immediately, then re-applied to the
+   * LATEST saved board and written with a compare-and-swap on `rev` (retried if
+   * someone saved in between). Changed totals then go to the dashboard task.
    */
-  const commit = async (nextLines: AssetLine[], nextGroups: LineGroup[], touchedId: string | null) => {
+  const apply = async (op: BoardOp) => {
     if (readOnly) return
-    const balanced = rebalance(lines, nextLines, touchedId)
-    const basis = basisOfLines(balanced)
-    const b: AssetBoard = { ...boardRef.current, lines: balanced, groups: nextGroups, basis, rev: boardRef.current.rev + 1, by: CLIENT_ID }
-    setBoard(b)
+    const optimistic = op({ lines, groups, tracker: boardRef.current.tracker })
+    const shown = withFunctions(optimistic.lines, task, legacyOwner)
+    setBoard({ ...boardRef.current, ...optimistic, lines: shown, basis: basisOfLines(shown) })
     setInflight((n) => n + 1)
     try {
-      if (basis !== taskBasis) {
-        const { id: _id, createdAt: _c, updatedAt: _u, createdBy: _b, ...input } = task
-        await updateTask(task.id, { ...input, ...countsFromLines(balanced, task) } as TaskInput)
+      let saved: AssetBoard | null = null
+      let t = taskRef.current
+      for (let attempt = 0; attempt < 6 && !saved; attempt++) {
+        // Fresh task + board: build on what's really saved, not on this tab's copy.
+        t = (await repo.getTask(task.id)) ?? taskRef.current
+        const server = await repo.getAssetBoard(t.id)
+        const base = server ?? EMPTY_BOARD
+        const res = op({ lines: linesFor(base, t, settings), groups: base.groups, tracker: base.tracker })
+        const resLines = withFunctions(res.lines, t, legacyOwner)
+        const next: AssetBoard = {
+          ...res,
+          lines: resLines,
+          basis: basisOfLines(resLines),
+          fromBasis: basisOf(t),
+          rev: base.rev + 1,
+          by: CLIENT_ID,
+        }
+        if (await repo.saveAssetBoardIf(t.id, next, server ? base.rev : null)) saved = next
       }
-      await save(b)
+      if (!saved) throw new Error('Others are editing this task right now — please try again.')
+      setBoard(saved)
+      setSaveError(null)
+      if (saved.basis !== basisOf(t)) {
+        const { id: _id, createdAt: _c, updatedAt: _u, createdBy: _b, ...input } = t
+        await updateTask(t.id, { ...input, ...countsFromLines(saved.lines, t) } as TaskInput)
+      }
     } catch (err) {
+      if (err instanceof AssetLinesNotSetUpError) setSetupMissing(true)
       setSaveError(toMessage(err))
     } finally {
       setInflight((n) => n - 1)
     }
   }
 
-  /** Set or clear the tracker link (no effect on lines or counts). */
-  const saveTracker = (url: string | null) => {
-    if (readOnly) return
-    const b: AssetBoard = { ...boardRef.current, lines, tracker: url, rev: boardRef.current.rev + 1, by: CLIENT_ID }
-    if (boardRef.current.basis !== taskBasis) b.basis = taskBasis // lines shown are already balanced
-    setBoard(b)
-    void save(b)
-  }
-
-  const upsertLine = (line: AssetLine) =>
-    commit(
-      lines.some((l) => l.id === line.id) ? lines.map((l) => (l.id === line.id ? line : l)) : [...lines, line],
-      groups,
-      line.id,
-    )
-  const removeLine = (id: string) => commit(lines.filter((l) => l.id !== id), groups, id)
+  const addLine = (line: AssetLine) => apply((b) => ({ ...b, lines: [...b.lines, line] }))
+  /** Change only the fields that were edited — others' edits to the same line survive. */
+  const patchLine = (id: string, patch: Partial<AssetLine>) =>
+    apply((b) => ({ ...b, lines: b.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)) }))
+  const removeLine = (id: string) => apply((b) => ({ ...b, lines: b.lines.filter((l) => l.id !== id) }))
   const upsertGroup = (group: LineGroup) =>
-    commit(lines, groups.some((g) => g.id === group.id) ? groups.map((g) => (g.id === group.id ? group : g)) : [...groups, group], null)
+    apply((b) => ({
+      ...b,
+      groups: b.groups.some((g) => g.id === group.id) ? b.groups.map((g) => (g.id === group.id ? group : g)) : [...b.groups, group],
+    }))
   // Deleting a group keeps its lines — they move back to "No group".
   const removeGroup = (id: string) =>
-    commit(
-      lines.map((l) => (l.groupId === id ? { ...l, groupId: null } : l)),
-      groups.filter((g) => g.id !== id),
-      null,
-    )
+    apply((b) => ({
+      ...b,
+      lines: b.lines.map((l) => (l.groupId === id ? { ...l, groupId: null } : l)),
+      groups: b.groups.filter((g) => g.id !== id),
+    }))
+  /** Link / unlink the task's monday item — saved on the dashboard task itself. */
+  const saveMondayLink = async (url: string | null) => {
+    const t = taskRef.current
+    const { id: _id, createdAt: _c, updatedAt: _u, createdBy: _b, ...input } = t
+    try {
+      await updateTask(t.id, { ...input, mondayUrl: url ?? undefined } as TaskInput)
+      setSaveError(null)
+    } catch (err) {
+      setSaveError(toMessage(err))
+    }
+  }
+  const mondayItem = mondayItemIdFromUrl(task.mondayUrl)
+
+  /** Set or clear the tracker link (no effect on lines or counts). */
+  const saveTracker = (url: string | null) => apply((b) => ({ ...b, tracker: url }))
 
   const pkg = useMemo(() => packageOf(task, settings), [task, settings])
   const fns = useMemo(() => taskFunctions(task), [task])
-  const multiFn = fns.filter(Boolean).length > 1
+  const legacyOwner = legacyOwnerName(settings.functions)
+  // Every configured function can take lines (a new one gets its own dashboard slice).
+  const fnOptions = useMemo(
+    () => [...new Set([...settings.functions.map((f) => f.name), ...(fns.filter(Boolean) as string[])])],
+    [settings.functions, fns],
+  )
+  // Show the function on rows/details only when more than one is in play.
+  const multiFn = new Set([...fns.filter(Boolean), ...lines.map((l) => l.fn).filter(Boolean)]).size > 1
 
   const overall = useMemo(() => {
-    const t = { done: 0, working: 0, stuck: 0, notStarted: 0, unassigned: 0, total: 0 }
+    const t = { done: 0, working: 0, notStarted: 0, unassigned: 0, total: 0 }
     for (const l of lines) {
       t[l.status] += l.qty
       t.total += l.qty
@@ -601,12 +686,13 @@ function AssetsTab({
   const people = useMemo(() => {
     const map = new Map<string, { qty: number; done: number; lines: number }>()
     for (const l of lines) {
-      if (!l.owner) continue
-      const p = map.get(l.owner) ?? { qty: 0, done: 0, lines: 0 }
-      p.qty += l.qty
-      if (l.status === 'done') p.done += l.qty
-      p.lines += 1
-      map.set(l.owner, p)
+      for (const owner of l.owners) {
+        const p = map.get(owner) ?? { qty: 0, done: 0, lines: 0 }
+        p.qty += l.qty
+        if (l.status === 'done') p.done += l.qty
+        p.lines += 1
+        map.set(owner, p)
+      }
     }
     return [...map.entries()].sort((a, b) => b[1].qty - a[1].qty)
   }, [lines])
@@ -626,7 +712,7 @@ function AssetsTab({
     name: '',
     type: pkg[0]?.type ?? typesFor(fns[0] ?? null)[0] ?? 'Others',
     fn: pkg[0]?.fn ?? fns[0] ?? null,
-    owner: null,
+    owners: [],
     qty: 1,
     status: 'notStarted',
     due: task.endDate,
@@ -656,7 +742,7 @@ function AssetsTab({
     })
 
   const copyLink = async () => {
-    const url = `${window.location.origin}/embed/item?itemId=${itemId}${theme === 'light' ? '' : `&theme=${theme}`}`
+    const url = `${window.location.origin}${assetsTabUrl(task.mondayUrl, task.id)}${theme === 'light' ? '' : `&theme=${theme}`}`
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)
@@ -680,8 +766,8 @@ function AssetsTab({
   const dragging = drag !== null
   const canDrag = !readOnly && (lines.length > 1 || groups.length > 0)
   // The drop handler runs inside a window listener: read the latest lines via a ref.
-  const latest = useRef({ lines, groups, commit })
-  latest.current = { lines, groups, commit }
+  const latest = useRef({ lines, groups, apply })
+  latest.current = { lines, groups, apply }
 
   const startDrag = (line: AssetLine, from: string) => (e: React.PointerEvent) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
@@ -710,9 +796,9 @@ function AssetsTab({
       const d = dragRef.current
       const spot = e.type === 'pointerup' ? dropAt(e.clientX, e.clientY) : null
       if (d && spot) {
-        const { lines: ls, groups: gs, commit: apply } = latest.current
-        const next = placeLine(ls, gs, d.id, spot)
-        if (next) void apply(next, gs, null)
+        const { lines: ls, groups: gs, apply: run } = latest.current
+        // Only drop when it actually moves; then re-apply the move to the latest board.
+        if (placeLine(ls, gs, d.id, spot)) void run((b) => ({ ...b, lines: placeLine(b.lines, b.groups, d.id, spot) ?? b.lines }))
       }
       setDrag(null)
     }
@@ -754,53 +840,73 @@ function AssetsTab({
 
   return (
     <div className={`mv-body${dragging ? ' is-dragging' : ''}`}>
-      {/* Which task this is — and the two ways to get here. */}
+      {/* Which task this is: one compact row; tracker up front, the rest in ⋯ */}
       <div className="mv-taskbar">
         <div className="mv-taskbar-main">
-          {showName && <p className="mv-taskbar-name">{task.name}</p>}
-          <div className="mv-meta">
+          <p className="mv-taskbar-name" title={task.name}>
+            {task.name}
+          </p>
+          <p className="mv-meta-line" title="Updates live from the dashboard and other viewers">
+            <MondayMark linked={!!mondayItem} />
             {task.code && <span className="mv-code">{task.code}</span>}
-            <span>
-              {formatDate(task.startDate)} – {formatDate(task.endDate)}
+            <span className="mv-meta-dates">
+              {shortDate(task.startDate) || '—'} – {shortDate(task.endDate) || '—'}
             </span>
-            <span className="mv-live" title="Changes from the dashboard and other viewers appear live">
-              Live
-            </span>
-          </div>
-          {board.tracker ? (
-            <div className="mv-tracker">
-              <a className="mv-text-btn mv-inline-btn" href={board.tracker} target="_blank" rel="noopener noreferrer">
-                Asset tracker
-                <ExternalLink size={13} />
-              </a>
-              {!readOnly && (
-                <button type="button" className="mv-text-btn mv-muted-btn" onClick={() => setTrackerOpen(true)}>
-                  Edit
-                </button>
-              )}
-            </div>
-          ) : (
-            !readOnly && (
-              <div className="mv-tracker">
-                <button type="button" className="mv-text-btn mv-inline-btn" onClick={() => setTrackerOpen(true)}>
-                  <Plus size={13} />
-                  Add tracker link
-                </button>
-              </div>
-            )
+          </p>
+          {!mondayItem && (
+            <p className="mv-link-hint">
+              Not linked to monday.com ·{' '}
+              <button type="button" className="mv-text-btn" onClick={() => setMondayOpen(true)}>
+                Link it
+              </button>
+            </p>
           )}
         </div>
-        <div className="mv-taskbar-actions">
-          <button type="button" className="mv-text-btn mv-inline-btn" onClick={copyLink} title="Copy this task’s Assets link">
-            {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? 'Copied' : 'Copy link'}
-          </button>
-          {onChangeTask && (
-            <button type="button" className="mv-text-btn" onClick={onChangeTask}>
-              Change task
+        {copied && <span className="mv-saving">Link copied</span>}
+        {board.tracker ? (
+          <a
+            className="mv-btn mv-btn-secondary mv-tracker-btn"
+            href={board.tracker}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open the asset tracker"
+          >
+            <FileSpreadsheet size={16} className="mv-tracker-icon" />
+            Asset tracker
+            <ExternalLink size={13} />
+          </a>
+        ) : (
+          !readOnly && (
+            <button type="button" className="mv-btn mv-tracker-add" onClick={() => setTrackerOpen(true)}>
+              <Plus size={14} />
+              Asset tracker
             </button>
-          )}
-        </div>
+          )
+        )}
+        <Menu
+          label="Task options"
+          items={[
+            { label: 'Copy link to this task', icon: <Copy size={16} />, onClick: copyLink },
+            ...(task.mondayUrl && mondayItem
+              ? [
+                  {
+                    label: 'Open in monday.com',
+                    icon: <img src="/monday.svg" alt="" width={16} height={16} />,
+                    onClick: () => window.open(task.mondayUrl, '_blank', 'noopener'),
+                  },
+                ]
+              : []),
+            {
+              label: mondayItem ? 'Change monday.com link' : 'Link to monday.com',
+              icon: <Link2 size={16} />,
+              onClick: () => setMondayOpen(true),
+            },
+            ...(board.tracker && !readOnly
+              ? [{ label: 'Edit asset tracker link', icon: <Pencil size={16} />, onClick: () => setTrackerOpen(true) }]
+              : []),
+            ...(onChangeTask ? [{ label: 'Change task', icon: <ArrowLeftRight size={16} />, onClick: onChangeTask }] : []),
+          ]}
+        />
       </div>
 
       {setupMissing && (
@@ -835,15 +941,14 @@ function AssetsTab({
         <div
           className="mv-battery"
           role="img"
-          aria-label={`${overall.done} done, ${overall.working} working on it, ${overall.stuck} stuck, ${overall.notStarted} not started`}
+          aria-label={`${overall.done} done, ${overall.working} in progress, ${overall.notStarted} not started`}
         >
           <span style={{ width: seg(overall.done), background: STATUS.done.color }} />
           <span style={{ width: seg(overall.working), background: STATUS.working.color }} />
-          <span style={{ width: seg(overall.stuck), background: STATUS.stuck.color }} />
           <span style={{ width: seg(overall.notStarted), background: STATUS.notStarted.color }} />
         </div>
         <div className="mv-legend">
-          {(['working', 'stuck', 'notStarted'] as Status[])
+          {(['working', 'notStarted'] as Status[])
             .filter((s) => overall[s] > 0)
             .map((s) => (
               <span key={s} title={STATUS[s].label}>
@@ -997,7 +1102,7 @@ function AssetsTab({
                           disabled={readOnly}
                         >
                           <span className="mv-no">#{position.get(l.id)}</span>
-                          <Avatar name={l.owner} />
+                          <Avatars names={l.owners} />
                           <span className="mv-row-text">
                             <span className={`mv-row-title${complete ? ' is-done' : ''}`}>
                               {l.name}
@@ -1022,7 +1127,7 @@ function AssetsTab({
                           aria-checked={complete}
                           className={`mv-check${complete ? ' is-done' : ''}`}
                           disabled={readOnly}
-                          onClick={() => upsertLine({ ...l, status: complete ? 'notStarted' : 'done', pool: undefined })}
+                          onClick={() => patchLine(l.id, { status: complete ? 'notStarted' : 'done', pool: undefined })}
                           aria-label={`#${position.get(l.id)} ${l.name}: ${complete ? 'mark not done' : 'mark done'}`}
                           title={complete ? 'Mark not done' : 'Mark done'}
                         >
@@ -1069,14 +1174,23 @@ function AssetsTab({
           initial={lineSheet.line}
           isNew={lineSheet.isNew}
           position={position.get(lineSheet.line.id)}
-          lines={lines}
           typesFor={typesFor}
-          fns={multiFn ? (fns.filter(Boolean) as string[]) : []}
-          groups={groups}
+          fns={fnOptions}
+          defaultFn={fns[0] ?? legacyOwner}
           taskPeople={task.people}
           teamPeople={settings.people}
           onSave={(line) => {
-            void upsertLine(line)
+            const before = lineSheet.line
+            if (lineSheet.isNew) void addLine(line)
+            else {
+              // Send only what changed, so a concurrent edit to other fields isn't undone.
+              const patch = Object.fromEntries(
+                (Object.keys(line) as (keyof AssetLine)[])
+                  .filter((k) => line[k] !== before[k])
+                  .map((k) => [k, line[k]]),
+              ) as Partial<AssetLine>
+              if (Object.keys(patch).length) void patchLine(before.id, patch)
+            }
             setLineSheet(null)
           }}
           onDelete={
@@ -1088,6 +1202,18 @@ function AssetsTab({
                 }
           }
           onClose={() => setLineSheet(null)}
+        />
+      )}
+
+      {mondayOpen && (
+        <MondayLinkSheet
+          current={mondayItem ? task.mondayUrl ?? null : null}
+          linkedElsewhere={(itemId) => tasks.find((t) => t.id !== task.id && mondayItemIdFromUrl(t.mondayUrl) === itemId) ?? null}
+          onSave={(url) => {
+            void saveMondayLink(url)
+            setMondayOpen(false)
+          }}
+          onClose={() => setMondayOpen(false)}
         />
       )}
 
@@ -1121,6 +1247,64 @@ function AssetsTab({
           }
           onClose={() => setGroupSheet(null)}
         />
+      )}
+    </div>
+  )
+}
+
+/** A small ⋯ popover menu (closes on pick, outside tap or Escape). */
+function Menu({
+  label,
+  items,
+}: {
+  label: string
+  items: { label: string; icon?: React.ReactNode; onClick: () => void }[]
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const outside = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    window.addEventListener('pointerdown', outside)
+    window.addEventListener('keydown', esc)
+    return () => {
+      window.removeEventListener('pointerdown', outside)
+      window.removeEventListener('keydown', esc)
+    }
+  }, [open])
+  return (
+    <div className="mv-menu" ref={ref}>
+      <button
+        type="button"
+        className="mv-icon-btn"
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <MoreHorizontal size={18} />
+      </button>
+      {open && (
+        <div className="mv-menu-list" role="menu">
+          {items.map((it) => (
+            <button
+              key={it.label}
+              type="button"
+              role="menuitem"
+              className="mv-menu-item"
+              onClick={() => {
+                setOpen(false)
+                it.onClick()
+              }}
+            >
+              {it.icon}
+              {it.label}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -1162,14 +1346,75 @@ function Sheet({
   )
 }
 
+/** Several avatars, overlapped (monday's people column): up to 2, then "+N". */
+function Avatars({ names, size = 28 }: { names: string[]; size?: number }) {
+  if (!names.length) return <Avatar name={null} size={size} />
+  const shown = names.length > 2 ? names.slice(0, 1) : names
+  const extra = names.length - shown.length
+  return (
+    <span className="mv-avatars" title={names.join(', ')}>
+      {shown.map((n) => (
+        <Avatar key={n} name={n} size={size} />
+      ))}
+      {extra > 0 && (
+        <span className="mv-avatar mv-avatar-more" style={{ width: size, height: size, fontSize: size * 0.38 }}>
+          +{extra}
+        </span>
+      )}
+    </span>
+  )
+}
+
+/** Person in charge: tap chips to toggle (several allowed). Task people first;
+ *  the rest of the team behind "Show everyone". */
+function PeopleChips({
+  value,
+  onChange,
+  taskPeople,
+  teamPeople,
+}: {
+  value: string[]
+  onChange: (next: string[]) => void
+  taskPeople: string[]
+  teamPeople: string[]
+}) {
+  const rest = teamPeople.filter((p) => !taskPeople.includes(p))
+  const [showRest, setShowRest] = useState(value.some((p) => rest.includes(p)))
+  const toggle = (p: string) => onChange(value.includes(p) ? value.filter((x) => x !== p) : [...value, p])
+  const chip = (p: string) => (
+    <button
+      key={p}
+      type="button"
+      className={`mv-chip${value.includes(p) ? ' is-selected' : ''}`}
+      aria-pressed={value.includes(p)}
+      onClick={() => toggle(p)}
+    >
+      <Avatar name={p} size={20} />
+      {p}
+    </button>
+  )
+  return (
+    <div className="mv-chip-list" role="group" aria-label="Person in charge">
+      {taskPeople.map(chip)}
+      {rest.length > 0 &&
+        (showRest ? (
+          rest.map(chip)
+        ) : (
+          <button type="button" className="mv-text-btn mv-chip-more" onClick={() => setShowRest(true)}>
+            +{rest.length} more
+          </button>
+        ))}
+    </div>
+  )
+}
+
 function AssetSheet({
   initial,
   isNew,
   position,
-  lines,
   typesFor,
   fns,
-  groups,
+  defaultFn,
   taskPeople,
   teamPeople,
   onSave,
@@ -1180,12 +1425,11 @@ function AssetSheet({
   isNew: boolean
   /** The line's # in the list (existing lines only). */
   position?: number
-  /** The lines as shown — to explain what an edit does to the pool/dashboard. */
-  lines: AssetLine[]
   typesFor: (fn: string | null) => string[]
-  /** Functions to choose from (empty = single-function task, no picker). */
+  /** Functions (teams) to choose from. */
   fns: string[]
-  groups: LineGroup[]
+  /** What an unset function means for this task (its first function / legacy owner). */
+  defaultFn: string
   taskPeople: string[]
   teamPeople: string[]
   onSave: (line: AssetLine) => void
@@ -1194,46 +1438,14 @@ function AssetSheet({
 }) {
   const [line, setLine] = useState<AssetLine>(initial)
   const [touched, setTouched] = useState(false)
-  const rest = teamPeople.filter((p) => !taskPeople.includes(p))
-  const [showRest, setShowRest] = useState(!!initial.owner && rest.includes(initial.owner))
   const nameMissing = !line.name.trim()
   const types = typesFor(line.fn)
+  // Notes stay out of the way until asked for (footer icon) — or already written.
+  const [notesOpen, setNotesOpen] = useState(!!initial.notes.trim())
+  const notesRef = useRef<HTMLTextAreaElement>(null)
 
   const set = (patch: Partial<AssetLine>) => setLine((l) => ({ ...l, ...patch }))
   const setQty = (n: number) => set({ qty: Math.max(1, Math.round(n) || 1) })
-
-  // Still the untouched unassigned stock? Then edits to it are taken literally.
-  const stillPool = !!initial.pool && isPoolShaped(line)
-  const qtyNote = (() => {
-    const k = keyOf(line)
-    if (stillPool) {
-      const d = line.qty - initial.qty
-      return d === 0
-        ? 'Unassigned stock. Assign someone to make it a line.'
-        : `${d > 0 ? '+' : '−'}${Math.abs(d)} on the dashboard.`
-    }
-    const before = !isNew && !initial.pool && keyOf(initial) === k ? initial.qty : 0
-    const d = line.qty - before
-    if (d === 0) return ''
-    if (d < 0) return `${-d} back to unassigned.`
-    const { fromPool, toDashboard } = poolEffect(lines, k, d)
-    if (!toDashboard) return `From unassigned (${d}).`
-    if (fromPool > 0) return `${fromPool} from unassigned, +${toDashboard} on the dashboard.`
-    return `+${toDashboard} on the dashboard.`
-  })()
-
-  const chip = (name: string) => (
-    <button
-      key={name}
-      type="button"
-      className={`mv-chip${line.owner === name ? ' is-selected' : ''}`}
-      aria-pressed={line.owner === name}
-      onClick={() => set({ owner: line.owner === name ? null : name })}
-    >
-      <Avatar name={name} size={24} />
-      {name}
-    </button>
-  )
 
   const save = () => {
     setTouched(true)
@@ -1253,6 +1465,22 @@ function AssetSheet({
               Delete
             </button>
           )}
+          <button
+            type="button"
+            className={`mv-icon-btn mv-note-btn${notesOpen ? ' is-on' : ''}`}
+            aria-label={notesOpen ? 'Notes' : 'Add a note'}
+            aria-pressed={notesOpen}
+            title={notesOpen ? 'Notes' : 'Add a note'}
+            onClick={() => {
+              setNotesOpen(true)
+              window.setTimeout(() => notesRef.current?.focus(), 0)
+            }}
+          >
+            <span className="mv-note-icon" aria-hidden>
+              <StickyNote size={18} />
+              {!notesOpen && <Plus size={11} strokeWidth={3} className="mv-note-plus" />}
+            </span>
+          </button>
           <span className="mv-spacer" />
           <button type="button" className="mv-btn mv-btn-tertiary" onClick={onClose}>
             Cancel
@@ -1295,94 +1523,63 @@ function AssetSheet({
           </select>
         </div>
         <div>
-          <label className="mv-field-label" htmlFor="mv-group">
-            Group
+          <label className="mv-field-label" htmlFor="mv-fn">
+            Function
           </label>
           <select
-            id="mv-group"
+            id="mv-fn"
             className="mv-input mv-select"
-            value={line.groupId ?? ''}
-            onChange={(e) => set({ groupId: e.target.value || null })}
+            value={line.fn ?? defaultFn}
+            // Re-picking the default on an unset line keeps it unset (no legacy-task upgrade).
+            onChange={(e) => set({ fn: !line.fn && e.target.value === defaultFn ? null : e.target.value })}
           >
-            <option value="">No group</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
+            {(fns.includes(line.fn ?? defaultFn) ? fns : [line.fn ?? defaultFn, ...fns]).map((f) => (
+              <option key={f}>{f}</option>
             ))}
           </select>
         </div>
-        {fns.length > 0 && (
-          <div>
-            <label className="mv-field-label" htmlFor="mv-fn">
-              Function
-            </label>
-            <select
-              id="mv-fn"
-              className="mv-input mv-select"
-              value={line.fn ?? ''}
-              onChange={(e) => set({ fn: e.target.value || null })}
-            >
-              {fns.map((f) => (
-                <option key={f}>{f}</option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       <div>
-        <p className="mv-field-label">
-          Person in charge <span>Optional</span>
-        </p>
-        <p className="mv-subhead" style={{ marginTop: 0 }}>
-          On this task
-        </p>
-        <div className="mv-chip-list">{taskPeople.map(chip)}</div>
-        {rest.length > 0 &&
-          (showRest ? (
-            <>
-              <p className="mv-subhead">Rest of the team</p>
-              <div className="mv-chip-list">{rest.map(chip)}</div>
-            </>
-          ) : (
-            <button type="button" className="mv-text-btn" onClick={() => setShowRest(true)}>
-              Show everyone ({rest.length} more)
-            </button>
-          ))}
+        <p className="mv-field-label">Person in charge</p>
+        <PeopleChips
+          value={line.owners}
+          onChange={(owners) => set({ owners })}
+          taskPeople={taskPeople}
+          teamPeople={teamPeople}
+        />
       </div>
 
-      <div>
-        <label className="mv-field-label" htmlFor="mv-qty">
-          Quantity
-        </label>
-        <Stepper id="mv-qty" value={line.qty} min={1} onChange={setQty} />
-        {qtyNote && <p className="mv-field-note">{qtyNote}</p>}
-      </div>
-
-      <div>
-        <p className="mv-field-label">Status</p>
-        <div className="mv-status-picker" role="radiogroup" aria-label="Status">
-          {STATUS_ORDER.map((s) => (
-            <button
-              key={s}
-              type="button"
-              role="radio"
-              aria-checked={line.status === s}
-              className={`mv-status-opt${line.status === s ? ' is-selected' : ''}`}
-              style={{ ['--mv-status' as string]: STATUS[s].color }}
-              onClick={() => set({ status: s })}
-            >
-              {line.status === s && <Check size={14} strokeWidth={3} />}
-              {STATUS[s].label}
-            </button>
-          ))}
+      <div className="mv-count-status">
+        <div>
+          <label className="mv-field-label" htmlFor="mv-qty">
+            Asset count
+          </label>
+          <Stepper id="mv-qty" value={line.qty} min={1} onChange={setQty} />
+        </div>
+        <div>
+          <label className="mv-field-label" htmlFor="mv-status">
+            Status
+          </label>
+          <select
+            id="mv-status"
+            className="mv-input mv-select mv-status-select"
+            style={{ backgroundColor: STATUS[line.status].color }}
+            value={line.status}
+            onChange={(e) => set({ status: e.target.value as Status })}
+          >
+            {STATUS_ORDER.map((st) => (
+              <option key={st} value={st}>
+                {STATUS[st].label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       <div>
         <label className="mv-field-label" htmlFor="mv-due">
-          Due date <span>Optional</span>
+          Due date
         </label>
         <input
           id="mv-due"
@@ -1393,25 +1590,92 @@ function AssetSheet({
         />
       </div>
 
-      <div>
-        <label className="mv-field-label" htmlFor="mv-notes">
-          Notes <span>Optional</span>
-        </label>
-        <textarea
-          id="mv-notes"
-          className="mv-input mv-textarea"
-          rows={3}
-          value={line.notes}
-          onChange={(e) => set({ notes: e.target.value })}
-          placeholder="Sizes, specs, links…"
-        />
-      </div>
-
-      {onDelete && (
-        <p className="mv-field-note">
-          {initial.pool ? `Delete: −${initial.qty} on the dashboard.` : `Delete: ${initial.qty} back to unassigned.`}
-        </p>
+      {notesOpen && (
+        <div>
+          <label className="mv-field-label" htmlFor="mv-notes">
+            Notes
+          </label>
+          <textarea
+            id="mv-notes"
+            ref={notesRef}
+            className="mv-input mv-textarea"
+            rows={3}
+            value={line.notes}
+            onChange={(e) => set({ notes: e.target.value })}
+            placeholder="Sizes, specs, links…"
+          />
+        </div>
       )}
+    </Sheet>
+  )
+}
+
+/** Link the task to its monday item: paste the item link, or just its ID. */
+function MondayLinkSheet({
+  current,
+  linkedElsewhere,
+  onSave,
+  onClose,
+}: {
+  current: string | null
+  /** Another task already linked to this monday item, if any. */
+  linkedElsewhere: (itemId: string) => Task | null
+  onSave: (url: string | null) => void
+  onClose: () => void
+}) {
+  const [value, setValue] = useState(current ?? '')
+  const [error, setError] = useState<string | null>(null)
+
+  const save = () => {
+    const raw = value.trim()
+    if (!raw) return setError('Paste the item link or its ID.')
+    const itemId = parseItemInput(raw)
+    if (!itemId) return setError('Not a monday item link or ID.')
+    const other = linkedElsewhere(itemId)
+    if (other) return setError(`Already linked to ${other.code ? `${other.code} · ` : ''}${other.name}.`)
+    // Keep a pasted link as-is (it carries the board); an ID alone gets the item URL.
+    onSave(mondayItemIdFromUrl(raw) ? raw : `https://rmit.monday.com/pulses/${itemId}`)
+  }
+
+  return (
+    <Sheet
+      title={current ? 'monday.com link' : 'Link to monday.com'}
+      onClose={onClose}
+      footer={
+        <>
+          {current && (
+            <button type="button" className="mv-btn mv-btn-danger" onClick={() => onSave(null)}>
+              Unlink
+            </button>
+          )}
+          <span className="mv-spacer" />
+          <button type="button" className="mv-btn mv-btn-tertiary" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="mv-btn mv-btn-primary" onClick={save}>
+            {current ? 'Save' : 'Link'}
+          </button>
+        </>
+      }
+    >
+      <div>
+        <label className="mv-field-label" htmlFor="mv-monday-link">
+          monday item link or ID
+        </label>
+        <input
+          id="mv-monday-link"
+          className={`mv-input${error ? ' is-error' : ''}`}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            setError(null)
+          }}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
+          placeholder="https://rmit.monday.com/boards/…/pulses/… or 2827224155"
+          autoFocus
+        />
+        {error && <p className="mv-error">{error}</p>}
+      </div>
     </Sheet>
   )
 }

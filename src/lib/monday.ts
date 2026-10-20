@@ -54,10 +54,11 @@ export function mondayItemIdFromUrl(url: string | null | undefined): string | nu
   return m ? m[1] : null
 }
 
-/** The item's "Assets" tab page (monday Item View), opened standalone for this item. */
-export function assetsTabUrl(mondayUrl: string | null | undefined): string | null {
+/** A task's "Assets" tab page: by its monday item when linked, else by task id. */
+export function assetsTabUrl(mondayUrl: string | null | undefined, taskId?: string | null): string | null {
   const id = mondayItemIdFromUrl(mondayUrl)
-  return id ? `/embed/item?itemId=${id}` : null
+  if (id) return `/embed/item?itemId=${id}`
+  return taskId ? `/embed/item?task=${encodeURIComponent(taskId)}` : null
 }
 
 /**

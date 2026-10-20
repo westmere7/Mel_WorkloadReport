@@ -560,6 +560,8 @@
   gap: 8px;
 }
 .mv-stepper .mv-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
   width: 84px;
   text-align: center;
   font-size: 16px;
@@ -590,9 +592,10 @@
 .mv-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 10px 0 4px;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px 0 3px;
+  font-size: 13px;
   border: 1px solid var(--mv-border);
   border-radius: 16px;
   background: var(--mv-surface);
@@ -1008,37 +1011,44 @@
   font-size: 12px;
   color: var(--mv-negative);
 }
-.mv-status-picker {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+.mv-stepper .mv-input::-webkit-outer-spin-button,
+.mv-stepper .mv-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Asset count + Status share a row (wraps on very narrow screens) */
+.mv-count-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.mv-count-status > div:last-child {
+  flex: 1;
+  min-width: 150px;
+}
+.mv-count-status .mv-step-btn {
+  width: 36px;
+}
+.mv-count-status .mv-stepper {
   gap: 6px;
 }
-@media (min-width: 420px) {
-  .mv-status-picker {
-    grid-template-columns: repeat(4, 1fr);
-  }
+.mv-count-status .mv-stepper .mv-input {
+  width: 84px;
 }
-.mv-status-opt {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 36px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 4px;
-  background: var(--mv-status);
+/* Status dropdown: filled with the status colour, like a monday status cell */
+.mv .mv-status-select {
+  border-color: transparent;
   color: #fff;
-  font-size: 13px;
   font-weight: 500;
-  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 10px center !important;
 }
-.mv-status-opt:hover {
-  filter: brightness(0.94);
-}
-.mv-status-opt.is-selected {
-  outline: 2px solid var(--mv-text);
-  outline-offset: 2px;
+.mv-status-select option {
+  background: var(--mv-surface);
+  color: var(--mv-text);
 }
 .mv-text-btn {
   margin-top: 8px;
@@ -1106,56 +1116,115 @@
   white-space: nowrap;
 }
 
-/* ── Task bar (which task, copy link, change) ── */
-.mv-tracker {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 2px;
-}
-.mv-tracker .mv-text-btn {
-  margin: 0;
-  padding: 0;
-  text-decoration: none;
-}
-.mv .mv-muted-btn {
-  color: var(--mv-text-2);
-}
+/* ── Task bar: one row — which task · tracker · ⋯ ── */
 .mv-taskbar {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 8px;
 }
 .mv-taskbar-main {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 .mv-taskbar-name {
-  margin: 0;
+  margin: 0 0 2px;
   font-family: Poppins, Figtree, sans-serif;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mv-taskbar-actions {
+.mv-meta-line {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 2px 12px;
+  column-gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--mv-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mv-meta-dates {
+  white-space: nowrap;
+}
+.mv-monday-mark {
+  flex-shrink: 0;
+  align-self: center;
+}
+.mv-monday-mark.is-off {
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+.mv-link-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--mv-text-2);
+}
+.mv-link-hint .mv-text-btn {
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+}
+.mv .mv-tracker-btn {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 10px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--mv-text);
+}
+.mv-tracker-icon {
+  color: var(--mv-done);
+}
+.mv .mv-tracker-add {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px dashed var(--mv-ui-border);
+  background: transparent;
+  color: var(--mv-text-2);
+  font-size: 13px;
+}
+.mv-tracker-add:hover {
+  border-color: var(--mv-primary);
+  color: var(--mv-primary);
+}
+.mv-menu {
+  position: relative;
   flex-shrink: 0;
 }
-.mv-taskbar-actions .mv-text-btn {
-  margin: 0;
+.mv-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 40;
+  min-width: 210px;
+  padding: 8px 0;
+  border-radius: 8px;
+  background: var(--mv-surface);
+  border: 1px solid var(--mv-border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
-.mv .mv-inline-btn {
-  display: inline-flex;
+.mv-menu-item {
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 16px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+}
+.mv-menu-item:hover {
+  background: var(--mv-hover);
+}
+.mv-menu-item svg {
+  color: var(--mv-text-2);
 }
 .mv-banner {
   padding: 10px 12px;
@@ -1200,6 +1269,51 @@
   margin: 6px 0 0;
   font-size: 12px;
   color: var(--mv-text-2);
+}
+
+.mv .mv-more-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  align-self: flex-start;
+  margin: -6px 0 -6px;
+  color: var(--mv-text-2);
+}
+
+/* several people on a line */
+.mv-avatars {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.mv-avatars > * + * {
+  margin-left: -8px;
+  box-shadow: 0 0 0 2px var(--mv-surface);
+}
+.mv-avatar-more {
+  background: var(--mv-grey);
+  color: var(--mv-text-2);
+  font-weight: 600;
+}
+
+.mv .mv-chip-more {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 13px;
+}
+.mv-note-icon {
+  position: relative;
+  display: inline-grid;
+}
+.mv-note-plus {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--mv-surface);
+}
+.mv-note-btn.is-on {
+  color: var(--mv-primary);
 }
 
 /* ── States ── */

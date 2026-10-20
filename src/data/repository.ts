@@ -98,11 +98,16 @@ export interface Repository {
   subscribeSettings(onChange: () => void): () => void
 
   // ── Asset lines (monday "Assets" tab) ─────────────────────────
+  /** One task, fresh from storage (null if gone) — for read-modify-write saves. */
+  getTask(id: string): Promise<Task | null>
   /** A task's asset-lines board, or null if none saved yet.
    *  Throws AssetLinesNotSetUpError before the table exists (schema.sql not re-run). */
   getAssetBoard(taskId: string): Promise<AssetBoard | null>
-  /** Save (upsert) a task's asset-lines board. */
-  saveAssetBoard(taskId: string, board: AssetBoard): Promise<void>
+  /**
+   * Save a task's board only if the stored one is still at `expectedRev` (null = no
+   * row yet). Returns false when someone else saved first — re-read and re-apply.
+   */
+  saveAssetBoardIf(taskId: string, board: AssetBoard, expectedRev: number | null): Promise<boolean>
   /** Live updates of one task's board (null when its row is deleted). */
   subscribeAssetBoard(taskId: string, onChange: (board: AssetBoard | null) => void): () => void
 }

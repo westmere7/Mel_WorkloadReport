@@ -510,6 +510,12 @@ export class SupabaseRepository implements Repository {
     }
   }
 
+  async getTask(id: string): Promise<Task | null> {
+    const { data, error } = await getSupabase().from('tasks').select('*').eq('id', id).maybeSingle()
+    if (error) throw error
+    return data ? rowToTask(data) : null
+  }
+
   async getAssetBoard(taskId: string): Promise<AssetBoard | null> {
     const { data, error } = await getSupabase()
       .from('task_asset_lines')
@@ -520,11 +526,24 @@ export class SupabaseRepository implements Repository {
     return data ? normalizeBoard(data.board) : null
   }
 
-  async saveAssetBoard(taskId: string, board: AssetBoard): Promise<void> {
-    const { error } = await getSupabase()
+  async saveAssetBoardIf(taskId: string, board: AssetBoard, expectedRev: number | null): Promise<boolean> {
+    const sb = getSupabase()
+    const updated_at = new Date().toISOString()
+    if (expectedRev === null) {
+      // First save for this task: a plain insert; a duplicate key means someone beat us.
+      const { error } = await sb.from('task_asset_lines').insert({ task_id: taskId, board, updated_at })
+      if (!error) return true
+      if (error.code === '23505') return false
+      throw isMissingRelation(error) ? new AssetLinesNotSetUpError() : error
+    }
+    const { data, error } = await sb
       .from('task_asset_lines')
-      .upsert({ task_id: taskId, board, updated_at: new Date().toISOString() })
+      .update({ board, updated_at })
+      .eq('task_id', taskId)
+      .eq('board->>rev', String(expectedRev))
+      .select('task_id')
     if (error) throw isMissingRelation(error) ? new AssetLinesNotSetUpError() : error
+    return (data?.length ?? 0) > 0
   }
 
   subscribeAssetBoard(taskId: string, onChange: (board: AssetBoard | null) => void): () => void {

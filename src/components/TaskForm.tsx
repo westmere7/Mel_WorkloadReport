@@ -2602,12 +2602,12 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
               <img src="/monday.svg" alt="Monday.com" className="h-4 w-4 grayscale" />
             </span>
           )}
-          {assetsTabUrl(mondayUrl) ? (
+          {assetsTabUrl(mondayUrl, initial?.id) ? (
             <a
-              href={assetsTabUrl(mondayUrl)!}
+              href={assetsTabUrl(mondayUrl, initial?.id)!}
               target="_blank"
               rel="noopener noreferrer"
-              title="Open the Assets tab — asset lines, people in charge and progress for this monday item"
+              title="Open the Assets tab — asset lines, people in charge and progress for this task"
               aria-label="Open Assets tab"
               className="inline-flex items-center justify-center rounded-lg border border-line bg-subtle p-1.5 text-muted transition hover:bg-card hover:border-brand-300 hover:text-ink"
             >
@@ -2615,7 +2615,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
             </a>
           ) : (
             <span
-              title="Assets tab needs a monday.com link (auto-fills when selecting a monday result)"
+              title="Save the task first to open its Assets tab"
               className="inline-flex items-center justify-center rounded-lg border border-line bg-subtle p-1.5 text-muted opacity-40 cursor-not-allowed"
             >
               <ListChecks className="h-4 w-4" />

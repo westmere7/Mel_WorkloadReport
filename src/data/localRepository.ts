@@ -163,13 +163,21 @@ export class LocalRepository implements Repository {
     return () => window.removeEventListener('storage', handler)
   }
 
+  async getTask(id: string): Promise<Task | null> {
+    return (await this.listTasks()).find((t) => t.id === id) ?? null
+  }
+
   async getAssetBoard(taskId: string): Promise<AssetBoard | null> {
     const all = readAssetBoards()
     return all[taskId] ? normalizeBoard(all[taskId]) : null
   }
 
-  async saveAssetBoard(taskId: string, board: AssetBoard): Promise<void> {
-    localStorage.setItem(ASSET_BOARDS_KEY, JSON.stringify({ ...readAssetBoards(), [taskId]: board }))
+  async saveAssetBoardIf(taskId: string, board: AssetBoard, expectedRev: number | null): Promise<boolean> {
+    const all = readAssetBoards()
+    const current = all[taskId] ? normalizeBoard(all[taskId]) : null
+    if ((current ? current.rev : null) !== expectedRev) return false
+    localStorage.setItem(ASSET_BOARDS_KEY, JSON.stringify({ ...all, [taskId]: board }))
+    return true
   }
 
   subscribeAssetBoard(taskId: string, onChange: (board: AssetBoard | null) => void): () => void {
