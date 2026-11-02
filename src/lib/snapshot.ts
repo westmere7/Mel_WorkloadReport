@@ -1,4 +1,5 @@
 import type { AppSettings, Task, TaskImage } from '../types'
+import type { AssetBoard } from './assetLines'
 
 /**
  * Year Snapshots — freeze the full workload state (tasks + settings + the tasks'
@@ -43,6 +44,9 @@ export interface SnapshotPayload {
   tasks: Task[]
   settings: AppSettings
   images: SnapshotImage[]
+  /** Each captured task's Assets-tab board (lines, groups, tracker), by task id.
+   *  Missing on snapshots made before the tab existed. */
+  assetBoards?: Record<string, AssetBoard>
 }
 
 export interface SnapshotInput {
@@ -129,6 +133,7 @@ export async function buildPayload(
   input: SnapshotInput,
   createdBy: string | null,
   onProgress?: (done: number, total: number) => void,
+  assetBoards: Record<string, AssetBoard> = {},
 ): Promise<SnapshotPayload> {
   const refs: TaskImage[] = tasks.flatMap((t) => t.images ?? [])
   const total = refs.length
@@ -158,7 +163,9 @@ export async function buildPayload(
     bytes: 0,
     appVersion: __APP_VERSION__,
   }
-  const payload: SnapshotPayload = { meta, tasks, settings, images }
+  const ids = new Set(tasks.map((t) => t.id))
+  const boards = Object.fromEntries(Object.entries(assetBoards).filter(([id]) => ids.has(id)))
+  const payload: SnapshotPayload = { meta, tasks, settings, images, assetBoards: boards }
   meta.bytes = new Blob([JSON.stringify(payload)]).size
   return payload
 }

@@ -51,7 +51,7 @@ export function ImportBackupModal({ open, onClose }: { open: boolean; onClose: (
     if (
       mode === 'replace' &&
       !window.confirm(
-        `Replace all ${tasks.length} current tasks with the ${parsed.length} rows from this file? This cannot be undone.`,
+        `Replace all ${tasks.length} current tasks with the ${parsed.length} rows from this file? Their asset lines (Assets tab) are deleted too. This cannot be undone.`,
       )
     )
       return
@@ -116,7 +116,8 @@ export function ImportBackupModal({ open, onClose }: { open: boolean; onClose: (
                 </button>
               </div>
               <p className="mt-2 text-xs text-muted">
-                <strong className="text-ink">Clean &amp; load all</strong> deletes every current task first.{' '}
+                <strong className="text-ink">Clean &amp; load all</strong> deletes every current task first — and
+                their asset lines in the Assets tab.{' '}
                 <strong className="text-ink">Only update what&rsquo;s new</strong> keeps existing tasks, adds new
                 codes and refreshes matching ones.
               </p>

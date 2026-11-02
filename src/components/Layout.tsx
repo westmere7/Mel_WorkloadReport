@@ -11,9 +11,10 @@ import { useAuth } from '../lib/auth'
 import { cx } from '../lib/format'
 
 const TITLES: Record<string, { title: string; subtitle: string }> = {
-  '/': { title: 'Dashboard', subtitle: '' },
+  '/': { title: '', subtitle: '' },
   '/tasks': { title: 'Task List', subtitle: 'All registered tasks' },
   '/calendar': { title: 'Calendar', subtitle: 'Workload by day, with public holidays' },
+  '/help': { title: 'Help', subtitle: '' },
   '/showcase': { title: 'Showcase', subtitle: 'Build a shareable animated year-in-review' },
   '/settings': { title: 'Settings', subtitle: 'Manage campaigns, work types and people' },
 }
@@ -27,7 +28,7 @@ export const useHeaderSlots = () => useContext(HeaderSlotContext)
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation()
-  const meta = TITLES[pathname] ?? { title: 'Workload Report', subtitle: '' }
+  const meta = TITLES[pathname] ?? { title: '', subtitle: '' }
   const { theme, toggle } = useTheme()
   const { user } = useAuth()
 
@@ -72,20 +73,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
               {/* When collapsed, the sidebar rail drops its logo + name — show them here
                   (full-colour on the light header, red/white on the dark one). */}
               {collapsed && (
-                <div className="hidden items-center gap-2.5 md:flex" title="GCMC Workload Report">
+                <div className="hidden items-center gap-2.5 md:flex" title="GCMC Dashboard">
                   <img src="/RMIT_full.svg" alt="RMIT" className="h-8 w-auto shrink-0 dark:hidden" />
                   <img src="/RMIT_red.svg" alt="RMIT" className="hidden h-8 w-auto shrink-0 dark:block" />
                   <div className="min-w-0">
                     <p className="text-sm font-bold leading-tight text-ink">GCMC</p>
-                    <p className="text-[11px] leading-tight text-muted">Workload Report</p>
+                    <p className="text-[11px] leading-tight text-muted">Dashboard</p>
                   </div>
-                  <span className="mx-1 h-9 self-center border-l border-line" />
+                  {(meta.title || slots.left) && <span className="mx-1 h-9 self-center border-l border-line" />}
                 </div>
               )}
-              <div className="flex min-w-0 flex-col justify-center">
-                <h1 className="truncate text-base font-bold text-ink sm:text-lg">{meta.title}</h1>
-                {meta.subtitle && <p className="hidden truncate text-xs text-muted sm:block">{meta.subtitle}</p>}
-              </div>
+              {meta.title && (
+                <div className="flex min-w-0 flex-col justify-center">
+                  <h1 className="truncate text-base font-bold text-ink sm:text-lg">{meta.title}</h1>
+                  {meta.subtitle && <p className="hidden truncate text-xs text-muted sm:block">{meta.subtitle}</p>}
+                </div>
+              )}
               {/* Page-injected left slot (e.g. the dashboard's function filter) —
                   hidden on mobile to keep the top row compact */}
               {slots.left && <div className="hidden items-center sm:flex">{slots.left}</div>}

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
+import { basisOfLines, type AssetBoard, type AssetLine } from '../lib/assetLines'
 import type { Repository } from './repository'
 import { LocalRepository } from './localRepository'
 import { SupabaseRepository } from './supabaseRepository'
@@ -324,7 +325,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async (input: SnapshotInput, onProgress?: (done: number, total: number) => void) => {
       // Capture only the selected years' tasks (all when the selection is empty).
       const scoped = tasksForSnapshotYears(tasks, input.years)
-      const payload = await buildPayload(scoped, settings, input, user, onProgress)
+      // Asset lines ride along so a revert brings them back (best-effort: none pre-migration).
+      const boards = await repo.listAssetBoards().catch(() => ({}))
+      const payload = await buildPayload(scoped, settings, input, user, onProgress, boards)
       const meta = await repo.saveSnapshot(payload)
       setSnapshots((prev) => [meta, ...prev.filter((s) => s.id !== meta.id)])
       return meta
@@ -359,7 +362,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       // Free the images the current (about-to-be-replaced) tasks referenced.
       const orphaned = tasks.flatMap((t) => t.images ?? [])
+      // Restoring tasks deletes their asset lines (they cascade with the task rows).
+      // Put back the snapshot's lines — or, for snapshots made before they were
+      // captured, the CURRENT lines of every task the snapshot restores.
+      const currentBoards = await repo.listAssetBoards().catch(() => ({}) as Record<string, AssetBoard>)
       await repo.restoreTasks(restored)
+      const keep: Record<string, AssetBoard> = {}
+      for (const t of restored) {
+        const b = payload.assetBoards?.[t.id] ?? currentBoards[t.id]
+        if (b) keep[t.id] = b
+      }
+      await repo.putAssetBoards(keep).catch(() => {})
       const savedSettings = await repo.saveSettings(payload.settings)
       setTasks(restored)
       setSettings(savedSettings)
@@ -417,6 +430,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [repo],
   )
 
+  /** Rewrite every task's asset lines after a Settings rename/removal, so lines
+   *  keep their people/status instead of being re-balanced away. Merge-safe:
+   *  compare-and-swap per board, retried on conflict. */
+  const rewriteAssetLines = useCallback(
+    async (map: (l: AssetLine) => AssetLine) => {
+      let all: Record<string, AssetBoard>
+      try {
+        all = await repo.listAssetBoards()
+      } catch {
+        return
+      }
+      for (const [taskId, start] of Object.entries(all)) {
+        let b: AssetBoard | null = start
+        for (let attempt = 0; b && attempt < 4; attempt++) {
+          const cur: AssetBoard = b
+          const lines = cur.lines.map(map)
+          if (lines.every((l, i) => l === cur.lines[i])) break
+          const basis = basisOfLines(lines)
+          const next: AssetBoard = { ...cur, lines, basis, fromBasis: basis, rev: cur.rev + 1, by: 'settings' }
+          if (await repo.saveAssetBoardIf(taskId, next, cur.rev).catch(() => true)) break
+          b = await repo.getAssetBoard(taskId).catch(() => null)
+        }
+      }
+    },
+    [repo],
+  )
+
   const renameListItem = useCallback(
     async (key: 'squads' | 'campaigns' | 'types' | 'people' | 'assetTypes', oldValue: string, newValue: string) => {
       const trimmed = newValue.trim()
@@ -424,8 +464,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const field =
         key === 'squads' ? 'squad' : key === 'campaigns' ? 'campaign' : key === 'assetTypes' ? 'assetBreakdown' : key
 
-      // 1. Propagate the rename to every task that references the old value.
+      // 1. Propagate the rename to every task that references the old value
+      //    (and to the Assets-tab lines that name it).
       await repo.renameValue(field, oldValue, trimmed)
+      if (key === 'assetTypes')
+        await rewriteAssetLines((l) =>
+          l.type === oldValue ? { ...l, type: trimmed, name: l.name === oldValue ? trimmed : l.name } : l,
+        )
+      if (key === 'people')
+        await rewriteAssetLines((l) =>
+          l.owners.includes(oldValue) ? { ...l, owners: [...new Set(l.owners.map((o) => (o === oldValue ? trimmed : o)))] } : l,
+        )
 
       // 2. Update the Settings list (merge if the new name already exists).
       setSettings((prev) => {
@@ -516,7 +565,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // 3. Refresh tasks so counts/labels reflect the rename.
       setTasks(await repo.listTasks())
     },
-    [repo],
+    [repo, rewriteAssetLines],
   )
 
   const removeListItem = useCallback(
@@ -525,8 +574,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const field =
         key === 'squads' ? 'squad' : key === 'campaigns' ? 'campaign' : key === 'assetTypes' ? 'assetBreakdown' : key
 
-      // 1. Reassign any tasks still using this value to the "Others" fallback.
+      // 1. Reassign any tasks still using this value to the "Others" fallback
+      //    (asset lines follow: the type becomes "Others"; a removed person is dropped).
       await repo.renameValue(field, value, FALLBACK_ITEM)
+      if (key === 'assetTypes')
+        await rewriteAssetLines((l) =>
+          l.type === value ? { ...l, type: FALLBACK_ITEM, name: l.name === value ? FALLBACK_ITEM : l.name } : l,
+        )
+      if (key === 'people')
+        await rewriteAssetLines((l) => (l.owners.includes(value) ? { ...l, owners: l.owners.filter((o) => o !== value) } : l))
 
       // 2. Drop it from the Settings list.
       setSettings((prev) => {
@@ -590,7 +646,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // 3. Refresh tasks so counts reflect the reassignment.
       setTasks(await repo.listTasks())
     },
-    [repo],
+    [repo, rewriteAssetLines],
   )
 
   // ── GCMC functions (Settings panel) ─────────────────────────────
@@ -609,8 +665,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const trimmed = newName.trim()
       if (!trimmed || trimmed === oldName) return
 
-      // 1. Rewrite the per-function key on every task that has one.
+      // 1. Rewrite the per-function key on every task that has one (and on asset lines).
       await repo.renameValue('functionData', oldName, trimmed)
+      await rewriteAssetLines((l) => (l.fn === oldName ? { ...l, fn: trimmed } : l))
 
       // 2. Update the Settings config (merge configs if the new name already exists).
       setSettings((prev) => {
@@ -640,7 +697,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // 3. Refresh tasks so usage counts reflect the rewrite.
       setTasks(await repo.listTasks())
     },
-    [repo],
+    [repo, rewriteAssetLines],
   )
 
   const removeFunction = useCallback(

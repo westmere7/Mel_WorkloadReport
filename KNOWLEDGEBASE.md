@@ -560,6 +560,8 @@ Tasks can carry up to **10 images** (`task.images: TaskImage[]`). Groundwork for
 
 ## 16. Year snapshots
 
+> Snapshots also carry each task's Assets-tab board (`assetBoards`) — see §26 "Kept consistent".
+
 Freeze the entire workload state — all tasks + settings + the tasks' demo images — into a
 **self-contained JSON**, managed from a **"Year snapshots" card** at the bottom of Settings
 (`SnapshotsCard` in `src/pages/Settings.tsx`). Per-year archive + rollback.
@@ -1346,6 +1348,25 @@ app shell, inside `StoreProvider` only (live tasks, no Layout).
   compact summary + Details (package per type, who's doing what — a shared line counts for
   each owner); rows show stacked avatars (2, then +N), status pill, type, function when
   several are in play, due/overdue; round check-off.
+- **Kept consistent with the dashboard (audit fixes):**
+  - **Snapshots** carry `assetBoards` (by task id); revert re-puts them after `restoreTasks`
+    (whose delete cascades the boards away). Old snapshots without them keep each restored
+    task's CURRENT board. Repo: `listAssetBoards` (paged) / `putAssetBoards` (upsert).
+  - **Settings renames/removals** rewrite lines via `store.rewriteAssetLines` (CAS per board):
+    asset type rename → `type`/`name`; removal → "Others"; person rename → `owners`; person
+    removal → dropped from `owners`; function rename → `fn`. (Function removal is blocked
+    while used, so no line can reference a removed function.)
+  - **Task form conflict guard:** on save, if the live task differs from the one the form
+    opened (`diffTask`, starring ignored) it shows what changed and needs a second Save to
+    overwrite — the form saves whole records, so it would otherwise undo tab edits.
+  - **Import "Clean & load all"** warns that asset lines go too.
+  - **Tab can't empty a task** (form requires > 0 assets): checked optimistically and again
+    on the fresh board.
+  - **New function slice from the tab** gets work types: the task's types that function
+    allows, else its first allowed type (`countsFromLines(…, workTypesFor)`), and the
+    top-level `types` roll-up includes them.
+  - Verified end-to-end on the LOCAL backend (revert/renames rewrite every task — never test
+    those against the real database).
 - ⚠️ **No sign-in gate here** — anyone with the link can edit lines and, through them, the
   task's asset counts. Same permissive RLS as the rest of the app.
 - Don't use `crypto.randomUUID` (undefined in non-secure frames); a plain `.mv button`

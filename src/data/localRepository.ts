@@ -178,6 +178,16 @@ export class LocalRepository implements Repository {
     return true
   }
 
+  async listAssetBoards(): Promise<Record<string, AssetBoard>> {
+    const out: Record<string, AssetBoard> = {}
+    for (const [id, raw] of Object.entries(readAssetBoards())) out[id] = normalizeBoard(raw)
+    return out
+  }
+
+  async putAssetBoards(boards: Record<string, AssetBoard>): Promise<void> {
+    localStorage.setItem(ASSET_BOARDS_KEY, JSON.stringify({ ...readAssetBoards(), ...boards }))
+  }
+
   subscribeAssetBoard(taskId: string, onChange: (board: AssetBoard | null) => void): () => void {
     // Cross-tab updates only (same browser) — the local backend has no server.
     const handler = (e: StorageEvent) => {

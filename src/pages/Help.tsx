@@ -164,7 +164,7 @@ export function HelpPage() {
               strip line up on a single left edge past the icon. */}
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-faint">User guide</p>
-            <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-ink">How the Workload Report works</h1>
+            <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-ink">How the GCMC Dashboard works</h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
               Everything the app does and how to get value out of it. For a quick answer about one dashboard
               panel, the <HelpQ /> on the panel itself is faster — this is the full tour.
@@ -202,7 +202,7 @@ export function HelpPage() {
             <>
               <Section id="what" n="01" title="What this app is">
                 <P>
-                  The Workload Report is GCMC&rsquo;s single record of creative work: every task the team is
+                  The GCMC Dashboard is GCMC&rsquo;s single record of creative work: every task the team is
                   briefed on, every deliverable that comes out of it, who asked for it, who did it, and when.
                   From that one record it produces the{' '}
                   <XRef to="reading">dashboard</XRef>, <XRef to="compare">year-over-year comparisons</XRef>,

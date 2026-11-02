@@ -312,7 +312,7 @@ function VersionCard() {
 
   return (
     <Card>
-      <CardHeader title="Version" subtitle="This build of the Workload Report." />
+      <CardHeader title="Version" subtitle="This build of the GCMC Dashboard." />
       <div className="flex items-center gap-3">
         <span className="text-2xl font-bold text-ink">v{APP_VERSION}</span>
         <span className="rounded-full bg-subtle px-2 py-0.5 text-[11px] font-semibold text-muted">Current</span>

@@ -537,6 +537,31 @@ export class SupabaseRepository implements Repository {
     return (data?.length ?? 0) > 0
   }
 
+  async listAssetBoards(): Promise<Record<string, AssetBoard>> {
+    const out: Record<string, AssetBoard> = {}
+    const PAGE = 1000
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await getSupabase()
+        .from('task_asset_lines')
+        .select('task_id, board')
+        .order('task_id')
+        .range(from, from + PAGE - 1)
+      if (error) {
+        if (isMissingRelation(error)) return out
+        throw error
+      }
+      for (const r of data ?? []) out[(r as { task_id: string }).task_id] = normalizeBoard((r as { board: unknown }).board)
+      if (!data || data.length < PAGE) return out
+    }
+  }
+
+  async putAssetBoards(boards: Record<string, AssetBoard>): Promise<void> {
+    const rows = Object.entries(boards).map(([task_id, board]) => ({ task_id, board, updated_at: new Date().toISOString() }))
+    if (!rows.length) return
+    const { error } = await getSupabase().from('task_asset_lines').upsert(rows)
+    if (error && !isMissingRelation(error)) throw error
+  }
+
   subscribeAssetBoard(taskId: string, onChange: (board: AssetBoard | null) => void): () => void {
     const channel = getSupabase()
       .channel(`public:task_asset_lines:${taskId}`)

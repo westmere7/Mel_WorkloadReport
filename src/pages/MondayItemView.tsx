@@ -682,6 +682,12 @@ function AssetsTab({
   const apply = async (op: BoardOp) => {
     if (readOnly) return
     const optimistic = op({ lines, groups, tracker: boardRef.current.tracker })
+    // A registered task needs assets (the task form refuses 0) — don't let the tab empty it.
+    const sumQty = (ls: AssetLine[]) => ls.reduce((n, l) => n + l.qty, 0)
+    if (sumQty(lines) > 0 && sumQty(optimistic.lines) === 0) {
+      setSaveError('A task needs at least one asset — add another line before removing the last one.')
+      return
+    }
     const shown = withFunctions(optimistic.lines, task, legacyOwner)
     setBoard({ ...boardRef.current, ...optimistic, lines: shown, basis: basisOfLines(shown) })
     setInflight((n) => n + 1)
@@ -693,7 +699,10 @@ function AssetsTab({
         t = (await repo.getTask(task.id)) ?? taskRef.current
         const server = await repo.getAssetBoard(t.id)
         const base = server ?? EMPTY_BOARD
-        const res = op({ lines: linesFor(base, t, settings), groups: base.groups, tracker: base.tracker })
+        const baseLines = linesFor(base, t, settings)
+        const res = op({ lines: baseLines, groups: base.groups, tracker: base.tracker })
+        if (sumQty(baseLines) > 0 && sumQty(res.lines) === 0)
+          throw new Error('A task needs at least one asset — add another line before removing the last one.')
         const resLines = withFunctions(res.lines, t, legacyOwner)
         const next: AssetBoard = {
           ...res,
@@ -710,7 +719,7 @@ function AssetsTab({
       setSaveError(null)
       if (saved.basis !== basisOf(t)) {
         const { id: _id, createdAt: _c, updatedAt: _u, createdBy: _b, ...input } = t
-        await updateTask(t.id, { ...input, ...countsFromLines(saved.lines, t) } as TaskInput)
+        await updateTask(t.id, { ...input, ...countsFromLines(saved.lines, t, workTypesFor) } as TaskInput)
       }
     } catch (err) {
       if (err instanceof AssetLinesNotSetUpError) setSetupMissing(true)
@@ -756,6 +765,8 @@ function AssetsTab({
   const pkg = useMemo(() => packageOf(task, settings), [task, settings])
   const fns = useMemo(() => taskFunctions(task), [task])
   const legacyOwner = legacyOwnerName(settings.functions)
+  /** A function's allowed work types — seeds work types on a slice the tab creates. */
+  const workTypesFor = (fn: string) => settings.functions.find((f) => f.name === fn)?.workTypes ?? settings.types
   // Every configured function can take lines (a new one gets its own dashboard slice).
   const fnOptions = useMemo(
     () => [...new Set([...settings.functions.map((f) => f.name), ...(fns.filter(Boolean) as string[])])],

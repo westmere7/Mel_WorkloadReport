@@ -97,6 +97,10 @@ export interface Repository {
    * row yet). Returns false when someone else saved first — re-read and re-apply.
    */
   saveAssetBoardIf(taskId: string, board: AssetBoard, expectedRev: number | null): Promise<boolean>
+  /** Every task's board, by task id ({} before the table exists). */
+  listAssetBoards(): Promise<Record<string, AssetBoard>>
+  /** Write many boards as-is (snapshot revert) — overwrites. No-op before the table exists. */
+  putAssetBoards(boards: Record<string, AssetBoard>): Promise<void>
   /** Live updates of one task's board (null when its row is deleted). */
   subscribeAssetBoard(taskId: string, onChange: (board: AssetBoard | null) => void): () => void
 }

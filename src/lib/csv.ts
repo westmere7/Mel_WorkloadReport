@@ -159,7 +159,7 @@ export function parseTasksCsv(text: string): TaskInput[] {
   const missing = CORE_HEADERS.filter((h) => !header.includes(h))
   if (missing.length) {
     throw new Error(
-      `This isn't a Workload Report export — missing column${missing.length > 1 ? 's' : ''}: ${missing
+      `This isn't a GCMC Dashboard export — missing column${missing.length > 1 ? 's' : ''}: ${missing
         .slice(0, 3)
         .join(', ')}${missing.length > 3 ? '…' : ''}.`,
     )

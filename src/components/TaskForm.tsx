@@ -38,6 +38,7 @@ import { TaskLogModal } from './TaskLogModal'
 import { MondayWorkloadButton } from './MondayWorkloadButton'
 import { ImageLightbox } from './ui/ImageLightbox'
 import { addDaysISO, cx, todayISO, toMessage } from '../lib/format'
+import { diffTask } from '../lib/taskLog'
 import { compressToWebP, ACCEPTED_IMAGE_TYPES } from '../lib/image'
 import { deriveHalf, parseTaskCode, type ParsedCode } from '../lib/taskCode'
 import { assetsTabUrl, isMondayLookupEnabled, resolvePeopleFromMonday, searchMonday, type MondayHit } from '../lib/monday'
@@ -1408,6 +1409,8 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
   const [lightbox, setLightbox] = useState<string | null>(null) // enlarged image URL
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
+  // Set after warning that the task changed elsewhere; the next Save overwrites.
+  const [overwriteOk, setOverwriteOk] = useState(false)
   // True once the user has clicked the (greyed) register button and seen the
   // validation errors — only THEN do we offer "Save as draft".
   const [attempted, setAttempted] = useState(false)
@@ -1758,6 +1761,24 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
       setAttempted(true) // reveal errors + unlock "Save as draft" for the next click
       setErrors(errs)
       return
+    }
+    // Changed elsewhere since this form opened (e.g. asset counts in the Assets tab,
+    // or another editor)? Saving would silently put the old values back — say so
+    // first; a second Save overwrites deliberately. (Starring is ignored: the
+    // header star saves on its own while the form is open.)
+    if (initial && !overwriteOk) {
+      const live = tasks.find((t) => t.id === initial.id)
+      const elsewhere =
+        live && live.updatedAt !== initial.updatedAt ? diffTask(initial, { ...live, starred: initial.starred }) : []
+      if (elsewhere.length) {
+        setOverwriteOk(true)
+        setErrors([
+          `This task was changed elsewhere after you opened it (${elsewhere.slice(0, 3).join(' · ')}${
+            elsewhere.length > 3 ? ` · +${elsewhere.length - 3} more` : ''
+          }). Saving now would undo that — close and reopen it to start from the latest, or press Save again to overwrite.`,
+        ])
+        return
+      }
     }
     setErrors([])
     setSubmitting(true)

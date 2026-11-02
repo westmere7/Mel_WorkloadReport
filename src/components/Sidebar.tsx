@@ -103,7 +103,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             <img src="/RMIT_red.svg" alt="RMIT" className="hidden h-5 w-auto shrink-0 dark:block md:h-7" />
             <div className="hidden min-w-0 whitespace-nowrap md:block">
               <p className="text-sm font-bold leading-tight text-ink dark:text-white">GCMC</p>
-              <p className="text-[11px] leading-tight text-muted dark:text-navy-100">Workload Report</p>
+              <p className="text-[11px] leading-tight text-muted dark:text-navy-100">Dashboard</p>
             </div>
           </div>
 

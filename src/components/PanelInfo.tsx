@@ -87,7 +87,7 @@ export const PANEL_INFO: Record<string, PanelExplainer> = {
       'The chart has two layers: a line for each month, and a dot for each task.',
       {
         lead: 'The line.',
-        text: 'Every month gets one point. It adds up all the work that started in that month. In the normal view that is the number of assets. Switch to Effort and the same line becomes hours of work instead.',
+        text: 'Every month gets one point. It adds up the effort (hours of work, weighted by output rate) of all tasks that started in that month.',
       },
       {
         lead: 'The dots.',

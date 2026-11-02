@@ -7,15 +7,11 @@ import { TaskDetails } from '../components/TaskDetails'
 import { TaskStar } from '../components/TaskStar'
 import { FunctionFilter } from '../components/FunctionFilter'
 import { ChartGroupsModal } from '../components/ChartGroupsModal'
-import { EffortInfoModal } from '../components/EffortInfoModal'
 import { EffortSummaryCard, VolumeCompactCard } from '../components/EffortStats'
 import { PanelInfo } from '../components/PanelInfo'
 import { PanelExpand } from '../components/PanelExpand'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
-import { StatCard } from '../components/ui/StatCard'
-import { TrendDelta } from '../components/ui/TrendDelta'
-import { AnimatedNumber } from '../components/ui/AnimatedNumber'
 import { AreaTrendChart, MixChart, RankedBars, StackedBarChart, StackedLegend, useSquadColor, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
 import {
@@ -37,8 +33,8 @@ import { cx, todayISO, formatDate, formatDayMonth } from '../lib/format'
 import { sliceTasksByFunctions } from '../lib/functionData'
 import { SpanFilter } from '../components/SpanFilter'
 import { filterBySpan, taskYears, type SpanMode } from '../lib/span'
-import { COMMON_CAMPAIGNS, setDashboardPrefs, useDashboardPrefs, type DemandDim, type WorkloadUnit } from '../lib/dashboardPrefs'
-import { effortByAssetType, formatHours, hasAnyRate, taskEffortHours, unratedTypesWithVolume } from '../lib/effort'
+import { COMMON_CAMPAIGNS, setDashboardPrefs, useDashboardPrefs, type DemandDim } from '../lib/dashboardPrefs'
+import { effortByAssetType, formatHours, hasAnyRate, taskEffortHours } from '../lib/effort'
 import { applyChartGroups, expandChartSelection } from '../lib/chartGroups'
 import { useAuth } from '../lib/auth'
 import type { Half, Squad, Task, TaskInput } from '../types'
@@ -89,21 +85,20 @@ export function Dashboard() {
     return `${parts[0]} ${parts[1]}` // e.g. "2 Jul"
   }, [today])
   // Chart display preferences — edited in Settings → Dashboard.
-  const { demandDim, hideCommonCampaigns, groupAssetMix, groupWorkTypeMix, groupDemand, workloadUnit } =
+  const { demandDim, hideCommonCampaigns, groupAssetMix, groupWorkTypeMix, groupDemand } =
     useDashboardPrefs()
   // ── Effort weighting ──────────────────────────────────────────────────────
-  // While on, it re-values the across-the-year chart and swaps the two hero stat
-  // cards for a compact Volume panel + an Effort panel. The by-squad, mix, demand
-  // and campaign panels keep counting each asset as 1, and nothing is persisted —
-  // every figure below is derived from the rates at render time.
+  // Re-values the across-the-year chart and shows the compact Volume panel + an
+  // Effort panel. The by-squad, mix, demand and campaign panels keep counting
+  // each asset as 1, and nothing is persisted — every figure below is derived
+  // from the rates at render time.
   const assetRates = settings.assetRates ?? {}
   const ratesConfigured = hasAnyRate(assetRates)
-  const effortOn = workloadUnit === 'effort' && ratesConfigured
-  /** A task's value on the workload chart — assets, or effort hours. */
+  /** A task's value on the workload chart — effort hours. */
   const workloadValue = useMemo(
-    () => (effortOn ? (t: Task) => taskEffortHours(t, assetRates) : (t: Task) => t.assetTotal || 0),
+    () => (t: Task) => taskEffortHours(t, assetRates),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [effortOn, settings.assetRates],
+    [settings.assetRates],
   )
   // Chart display GROUPS live in synced settings (shared across devices). Each
   // panel has its OWN local-only toggle to view grouped or fully individual,
@@ -207,47 +202,40 @@ export function Dashboard() {
     }
     return list
   }, [fnTasks, chartYear, compare, ytd, todayMD])
-  // ── Effort-mode header aggregates (only computed while Effort is on) ──────
+  // ── Effort header aggregates ──────────────────────────────────────────────
   // Totals derived from the rates at render time; nothing here is stored, and the
   // count-based aggregates above are untouched.
   const effortTotal = useMemo(
-    () => (effortOn ? filtered.reduce((a, t) => a + taskEffortHours(t, assetRates), 0) : 0),
+    () => filtered.reduce((a, t) => a + taskEffortHours(t, assetRates), 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [effortOn, filtered, settings.assetRates],
+    [filtered, settings.assetRates],
   )
   const srcEffortTotal = useMemo(
-    () => (effortOn ? sourceTasks.reduce((a, t) => a + taskEffortHours(t, assetRates), 0) : 0),
+    () => sourceTasks.reduce((a, t) => a + taskEffortHours(t, assetRates), 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [effortOn, sourceTasks, settings.assetRates],
+    [sourceTasks, settings.assetRates],
   )
   // Assets per task size — Volume's own breakdown, so the two header panels can be
   // compared directly (where the volume sits vs where the effort sits).
   const assetsBySize = useMemo(
-    () => (effortOn ? valueBySize(filtered, (t) => t.assetTotal || 0) : []),
-    [effortOn, filtered],
+    () => valueBySize(filtered, (t) => t.assetTotal || 0),
+    [filtered],
   )
   const srcAssetsBySize = useMemo(
-    () => (effortOn ? valueBySize(sourceTasks, (t) => t.assetTotal || 0) : []),
-    [effortOn, sourceTasks],
+    () => valueBySize(sourceTasks, (t) => t.assetTotal || 0),
+    [sourceTasks],
   )
   const effortByType = useMemo(
-    () => (effortOn ? effortByAssetType(filtered, assetRates) : []),
+    () => effortByAssetType(filtered, assetRates),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [effortOn, filtered, settings.assetRates],
+    [filtered, settings.assetRates],
   )
-  /** Comparison context shared by the effort-mode header panels. */
+  /** Comparison context shared by the header panels. */
   const cmpCtx = useMemo(
     () => ({ on: compare, activeYear, srcYear, ytd, todayDM }),
     [compare, activeYear, srcYear, ytd, todayDM],
   )
 
-  // Asset types with volume on this chart but no output rate — they count as
-  // zero hours, so the panel says so rather than showing a quietly short total.
-  const unratedInScope = useMemo(
-    () => (effortOn ? unratedTypesWithVolume(chartYearTasks, assetRates) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [effortOn, chartYearTasks, settings.assetRates],
-  )
   // The task currently under the pointer on the workload chart — shown live in
   // the card's top-right corner in place of the year.
   const [hoverTask, setHoverTask] = useState<Task | null>(null)
@@ -268,8 +256,6 @@ export function Dashboard() {
   // which dimension tab to land on based on the panel that opened it.
   const [chartGroupsOpen, setChartGroupsOpen] = useState(false)
   const [chartGroupsTab, setChartGroupsTab] = useState<'asset' | 'type'>('asset')
-  // "What does Effort mean?" — explanation, comparison, and rate editing.
-  const [effortInfoOpen, setEffortInfoOpen] = useState(false)
 
   const handleUpdateTask = async (input: TaskInput) => {
     if (!editTask) return
@@ -442,68 +428,6 @@ export function Dashboard() {
         // data-help: anchor for the Help-page screenshot of the scope controls.
         <div className="flex flex-wrap items-center gap-2" data-help="header-scope">
           <FunctionFilter functions={settings.functions} selected={fnFilter} onChange={setFnFilter} />
-          {/* Assets ↔ Effort sits beside the function filter: both re-scope the
-              whole dashboard, so they belong at the same level. Hidden until at
-              least one output rate exists — with none, everything would weigh 0. */}
-          {ratesConfigured && (
-            <>
-              <span className="h-5 w-px shrink-0 bg-line" aria-hidden="true" />
-              {/* Mode switch, not a display tweak — so the selected side is filled
-                  in the brand red and the other stays plainly unselected. The
-                  softer navy used by the display tabs read as "nothing happened". */}
-              <div className="inline-flex shrink-0 items-center gap-0.5 rounded-lg border border-line bg-subtle p-0.5">
-                {(
-                  [
-                    ['assets', 'Assets'],
-                    ['effort', 'Effort'],
-                  ] as [WorkloadUnit, string][]
-                ).map(([u, label]) => (
-                  <button
-                    key={u}
-                    type="button"
-                    onClick={() => setDashboardPrefs({ workloadUnit: u })}
-                    aria-pressed={workloadUnit === u}
-                    title={
-                      u === 'assets'
-                        ? 'Count every deliverable as one'
-                        : 'Weigh each deliverable by how long that asset type takes to make'
-                    }
-                    className={cx(
-                      'rounded-md px-3 py-1 text-xs font-bold transition',
-                      workloadUnit !== u
-                        ? 'text-faint hover:bg-card hover:text-ink'
-                        : // Only Effort takes the red, so the fill doubles as a
-                          // "you're off the default measure" signal.
-                          u === 'effort'
-                          ? 'bg-rmit-red text-white shadow-soft'
-                          : 'bg-rmit-navy text-white shadow-soft dark:bg-navy-300',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => setEffortInfoOpen(true)}
-                title="What does Effort mean?"
-                aria-label="What does Effort mean?"
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-line text-[10px] font-bold text-muted transition hover:border-faint hover:text-ink"
-              >
-                ?
-              </button>
-              {effortOn && unratedInScope.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setEffortInfoOpen(true)}
-                  className="shrink-0 text-[10px] font-medium text-accent-gold hover:underline"
-                  title={`No rate yet, so counted as zero: ${unratedInScope.join(', ')}`}
-                >
-                  {unratedInScope.length} unrated
-                </button>
-              )}
-            </>
-          )}
         </div>
       ),
       right: (
@@ -610,12 +534,7 @@ export function Dashboard() {
     sourceYearOptions,
     sourceTasks.length,
     ytd,
-    // The unit switch lives in this slot, so its own state must re-run the effect —
-    // without these the buttons keep a stale closure and the active side never moves.
-    workloadUnit,
-    ratesConfigured,
-    effortOn,
-    unratedInScope.length,
+    todayDM,
   ])
 
   if (tasks.length === 0) {
@@ -643,23 +562,6 @@ export function Dashboard() {
   const compareSubtitleSuffix = compare ? ` — ${activeYear} over ${srcYear} (${srcYear} faded)${ytdLabel}` : ''
   // The squad ranked-bar cards mark the source year with a tick, not a faded bar.
   const squadCompareSuffix = compare ? ` — ${activeYear} over ${srcYear} (bar)${ytdLabel}` : ''
-  // Human-readable description of the current (non-compare) span, for stat hints.
-  const spanDesc = span === 'total' ? 'all time' : span === 'half' ? `${activeYear} ${half}` : `${activeYear}`
-  // Earliest recorded start date in the current scope — for "Total" the hint names
-  // that date instead of a vague "all time".
-  const earliestStart = useMemo(() => {
-    let min: string | null = null
-    for (const t of filtered) {
-      if (t.startDate && (min === null || t.startDate < min)) min = t.startDate
-    }
-    return min
-  }, [filtered])
-  const assetsHint =
-    span === 'total'
-      ? earliestStart
-        ? `deliverables since ${formatDate(earliestStart)}`
-        : 'deliverables recorded'
-      : `deliverables from ${spanDesc}`
   // When isolating functions, empty charts say WHY (that function simply has no
   // recorded workload here yet) instead of the generic "add tasks" nudges.
   const fnLabel =
@@ -668,89 +570,29 @@ export function Dashboard() {
 
   return (
     <div className="flex min-h-full flex-col gap-4">
-      {/* Header stats: two hero cards + the two by-squad cards. In Effort mode the
-          hero pair is replaced by one compact Volume panel (counts kept, demoted)
-          plus an Effort panel — effort dominant, with its task-size spread. */}
-      {/* In Effort mode Volume gets a wider column than Effort — it carries two
-          figures side by side, Effort only one. Only from 2xl though: at xl the
-          uneven split squeezed Effort's column below the width its own header
-          needs, so it stays on equal quarters until there's room. */}
-      <div
-        className={cx(
-          'grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-4',
-          effortOn && '2xl:grid-cols-[1.4fr_1.05fr_1fr_1fr]',
-        )}
-      >
-        {effortOn ? (
-          <>
-            <VolumeCompactCard
-              assets={summary.totalAssets}
-              tasks={summary.totalTasks}
-              srcAssets={srcSummary.totalAssets}
-              srcTasks={srcSummary.totalTasks}
-              bySize={assetsBySize}
-              srcBySize={srcAssetsBySize}
-              cmp={cmpCtx}
-            />
-            <EffortSummaryCard
-              hours={effortTotal}
-              srcHours={srcEffortTotal}
-              assets={summary.totalAssets}
-              srcAssets={srcSummary.totalAssets}
-              byType={effortByType}
-              cmp={cmpCtx}
-            />
-          </>
-        ) : (
-          <>
-            <StatCard
-              label={compare ? `Asset count · ${activeYear} over ${srcYear}` : 'Asset count'}
-              value={<AnimatedNumber value={summary.totalAssets} />}
-              accent="navy"
-              size="xl"
-              delta={
-                compare ? (
-                  <TrendDelta
-                    size="lg"
-                    current={summary.totalAssets}
-                    previous={srcSummary.totalAssets}
-                    title={`${srcYear}: ${srcSummary.totalAssets} → ${activeYear}: ${summary.totalAssets}`}
-                  />
-                ) : undefined
-              }
-              hint={
-                compare
-                  ? ytd
-                    ? `deliverables up to ${todayDM} · was ${srcSummary.totalAssets.toLocaleString()} in ${srcYear} (same period)`
-                    : `deliverables from ${activeYear} · was ${srcSummary.totalAssets.toLocaleString()} in ${srcYear}`
-                  : assetsHint
-              }
-            />
-            <StatCard
-              label={compare ? `Task count · ${activeYear} over ${srcYear}` : 'Task count'}
-              value={<AnimatedNumber value={summary.totalTasks} />}
-              accent="red"
-              size="xl"
-              delta={
-                compare ? (
-                  <TrendDelta
-                    size="lg"
-                    current={summary.totalTasks}
-                    previous={srcSummary.totalTasks}
-                    title={`${srcYear}: ${srcSummary.totalTasks} → ${activeYear}: ${summary.totalTasks}`}
-                  />
-                ) : undefined
-              }
-              hint={
-                compare
-                  ? ytd
-                    ? `tasks up to ${todayDM} · was ${srcSummary.totalTasks.toLocaleString()} in ${srcYear} (same period)`
-                    : `tasks from ${activeYear} · was ${srcSummary.totalTasks.toLocaleString()} in ${srcYear}`
-                  : `Across ${summary.totalCampaigns} campaign${summary.totalCampaigns === 1 ? '' : 's'}`
-              }
-            />
-          </>
-        )}
+      {/* Header stats: compact Volume panel + Effort panel + the two by-squad cards. */}
+      {/* Volume gets a wider column than Effort — it carries two figures side by
+          side, Effort only one. Only from 2xl though: at xl the uneven split
+          squeezed Effort's column below the width its own header needs, so it
+          stays on equal quarters until there's room. */}
+      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-[1.4fr_1.05fr_1fr_1fr]">
+        <VolumeCompactCard
+          assets={summary.totalAssets}
+          tasks={summary.totalTasks}
+          srcAssets={srcSummary.totalAssets}
+          srcTasks={srcSummary.totalTasks}
+          bySize={assetsBySize}
+          srcBySize={srcAssetsBySize}
+          cmp={cmpCtx}
+        />
+        <EffortSummaryCard
+          hours={effortTotal}
+          srcHours={srcEffortTotal}
+          assets={summary.totalAssets}
+          srcAssets={srcSummary.totalAssets}
+          byType={effortByType}
+          cmp={cmpCtx}
+        />
 
         <Card className="flex flex-col">
           <CardHeader
@@ -804,11 +646,7 @@ export function Dashboard() {
               // The period lives in the title, so the chart doesn't need a pill
               // repeating it underneath.
               title={`Workload & tasks in ${compare ? `${activeYear} over ${srcYear}` : chartYear}`}
-              subtitle={
-                effortOn
-                  ? 'Effort per month, not asset count · hover or click a dot for task details'
-                  : 'Assets per month · hover or click a dot for task details · Shift + scroll to cycle overlapping dots'
-              }
+              subtitle="Effort per month, not asset count · hover or click a dot for task details"
               action={
                 // The "?" comes LAST and never shrinks, so it stays pinned to the
                 // right edge; the hover readout grows into the space on its left
@@ -824,8 +662,8 @@ export function Dashboard() {
                       </span>
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted">
                         {hoverTask.assetTotal} {hoverTask.assetTotal === 1 ? 'asset' : 'assets'}
-                        {/* In effort mode the dot's height is hours, so name them. */}
-                        {effortOn && ` ≈ ${formatHours(taskEffortHours(hoverTask, assetRates))}`} ·{' '}
+                        {/* The dot's height is hours, so name them. */}
+                        {` ≈ ${formatHours(taskEffortHours(hoverTask, assetRates))}`} ·{' '}
                         {hoverTask.people.length} {hoverTask.people.length === 1 ? 'person' : 'people'} ·{' '}
                         {/* Functions recording workload on this task (legacy tasks = 1). */}
                         {hoverFnCount} {hoverFnCount === 1 ? 'function' : 'functions'} ·{' '}
@@ -857,7 +695,12 @@ export function Dashboard() {
                 <AreaTrendChart
                   data={byMonth}
                   height="100%"
-                  emptyMessage={fnEmpty}
+                  emptyMessage={
+                    fnEmpty ??
+                    (!ratesConfigured
+                      ? 'Set output rates in Settings → Timing & effort to plot effort across the year.'
+                      : undefined)
+                  }
                   nowMonth={nowMonth}
                   // Zoom to Jan→now whenever the year is still in progress: always
                   // in single-year mode, and in compare mode only when matching ranges.
@@ -867,7 +710,7 @@ export function Dashboard() {
                   onHoverTask={setHoverTask}
                   // Dots share the line's y-axis, so they must be valued the same way.
                   taskValue={workloadValue}
-                  hideYLabels={effortOn}
+                  hideYLabels
                   compare={
                     compare
                       ? { data: srcByMonth, label: String(srcYear), currentLabel: String(activeYear), tasks: sourceTasks }
@@ -1079,13 +922,6 @@ export function Dashboard() {
           />
         )}
       </Modal>
-
-      {/* Effort explainer — opened by the "?" beside the workload unit switch. */}
-      <EffortInfoModal
-        open={effortInfoOpen}
-        onClose={() => setEffortInfoOpen(false)}
-        unratedInScope={unratedInScope}
-      />
 
       {/* Chart groups editor — opened by the panels' gear icons. */}
       <ChartGroupsModal

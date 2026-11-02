@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.10.0",
   "type": "module",
-  "description": "RMIT Melbourne Design Team — Workload Report web app",
+  "description": "RMIT Melbourne Design Team — GCMC Dashboard web app",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

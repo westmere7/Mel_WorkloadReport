@@ -261,7 +261,9 @@ export function withFunctions(lines: AssetLine[], task: Task, legacyOwner: strin
 export function countsFromLines(
   lines: AssetLine[],
   task: Task,
-): { functionData: FunctionData | null; assetBreakdown: AssetBreakdown; assetTotal: number } {
+  /** A function's allowed work types (Settings) — seeds a slice the lines create. */
+  workTypesFor?: (fn: string) => string[],
+): { functionData: FunctionData | null; assetBreakdown: AssetBreakdown; assetTotal: number; types: string[] } {
   const sum = (ls: AssetLine[]) => {
     const bd: AssetBreakdown = {}
     for (const l of ls) if (l.qty > 0) bd[l.type] = (bd[l.type] ?? 0) + l.qty
@@ -274,14 +276,29 @@ export function countsFromLines(
     const next: FunctionData = {}
     const combined: AssetBreakdown = {}
     for (const fn of [...new Set([...Object.keys(fd ?? {}), ...lineFns])]) {
-      // A legacy task's owner slice keeps the task's work types when it's created.
-      const entry = fd?.[fn] ?? (fd ? emptyFunctionEntry() : { ...emptyFunctionEntry(), types: [...task.types] })
+      // A slice created here needs work types like any enabled function (the task
+      // form requires one): a legacy task's owner keeps the task's types; another
+      // function takes the task's types it allows, else its first allowed type.
+      let entry = fd?.[fn]
+      if (!entry) {
+        const allowed = workTypesFor?.(fn) ?? []
+        const types = !fd
+          ? [...task.types]
+          : allowed.length
+            ? task.types.filter((t) => allowed.includes(t)).length
+              ? task.types.filter((t) => allowed.includes(t))
+              : [allowed[0]]
+            : [...task.types]
+        entry = { ...emptyFunctionEntry(), types }
+      }
       const bd = sum(lines.filter((l) => l.fn === fn))
       next[fn] = { ...entry, assetBreakdown: bd, assetTotal: total(bd) }
       for (const [k, v] of Object.entries(bd)) combined[k] = (combined[k] ?? 0) + v
     }
-    return { functionData: next, assetBreakdown: combined, assetTotal: total(combined) }
+    // Top-level work types stay the union of the slices' (the form's roll-up rule).
+    const types = [...new Set([...task.types, ...Object.values(next).flatMap((e) => e.types)])]
+    return { functionData: next, assetBreakdown: combined, assetTotal: total(combined), types }
   }
   const bd = sum(lines)
-  return { functionData: fd ?? null, assetBreakdown: bd, assetTotal: total(bd) }
+  return { functionData: fd ?? null, assetBreakdown: bd, assetTotal: total(bd), types: task.types }
 }

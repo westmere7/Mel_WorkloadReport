@@ -7,16 +7,6 @@ import { useSyncExternalStore } from 'react'
 
 export type DemandDim = 'type' | 'asset'
 
-/**
- * Unit for the "Workload across the year" chart only. 'assets' counts each
- * deliverable as 1 (what every other chart always does); 'effort' weights each
- * one by its asset type's recorded output rate, and is the DEFAULT — the whole
- * point of the chart is that a hundred banners and a hundred videos are not the
- * same workload. A local VIEW toggle: it changes nothing stored, and nobody
- * else's screen.
- */
-export type WorkloadUnit = 'assets' | 'effort'
-
 // NB: chart display GROUPS used to live here but moved into AppSettings.chartGroups
 // so they sync across devices via Supabase (see types.ts / chartGroups.ts). What
 // remains are lightweight, per-browser viewing toggles.
@@ -24,8 +14,6 @@ export type WorkloadUnit = 'assets' | 'effort'
 export interface DashboardPrefs {
   /** Dimension of the "Demand by stakeholders" chart. */
   demandDim: DemandDim
-  /** Unit of the workload-across-the-year chart. Effort unless switched. */
-  workloadUnit: WorkloadUnit
   /** Exclude the ongoing/catch-all campaigns from the campaign charts. */
   hideCommonCampaigns: boolean
   /** Apply chart display groups PER PANEL (local-only view toggles). Off = that
@@ -40,7 +28,6 @@ export const COMMON_CAMPAIGNS = ['BAU', 'Always On', 'Others']
 
 export const DEFAULT_DASHBOARD_PREFS: DashboardPrefs = {
   demandDim: 'asset',
-  workloadUnit: 'effort',
   hideCommonCampaigns: true,
   groupAssetMix: true,
   groupWorkTypeMix: true,
