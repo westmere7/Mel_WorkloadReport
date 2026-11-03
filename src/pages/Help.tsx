@@ -258,12 +258,12 @@ export function HelpPage() {
 
                 <H3 id="dash-stats">Headline stats & by-squad rankings</H3>
                 <P>
-                  Total deliverables and tasks for the scope, beside the two ranked squad panels.
+                  Volume (deliverables and tasks) and Effort for the scope, beside the two ranked squad panels.
                   Tasks-by-squad counts <B>bookings</B> (how often a squad comes to you); assets-by-squad
                   counts <B>deliverables</B> (how much you make for them). Together they separate the
                   many-small-briefs squads from the few-big-jobs ones.
                 </P>
-                <Shot src="dashboard-stats" caption="Headline counts with the two by-squad rankings" />
+                <Shot src="dashboard-stats" caption="Volume and Effort headlines with the two by-squad rankings" />
 
                 <H3 id="dash-workload">Workload & tasks across the year</H3>
                 <P>
@@ -320,7 +320,6 @@ export function HelpPage() {
                   deliberately unlabelled — the rates are hand-set estimates, so the <B>shape</B> is the
                   story, not the exact height.
                 </P>
-                <Shot src="effort-workload" caption="The workload line — weighted hours, unlabelled scale" />
 
                 <H3 id="effort-rates">The rates behind it</H3>
                 <P>

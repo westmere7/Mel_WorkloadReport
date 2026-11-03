@@ -431,7 +431,8 @@ export function Dashboard() {
         </div>
       ),
       right: (
-        <div className="flex flex-wrap items-center gap-3">
+        // data-help: anchor for the Help-page screenshot of the scope controls (span side).
+        <div className="flex flex-wrap items-center gap-3" data-help="header-span">
           {compare ? (
             <div className="flex items-center gap-1.5" title="Comparing the target year over the baseline year">
               <select

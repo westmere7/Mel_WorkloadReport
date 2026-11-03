@@ -325,9 +325,9 @@ export function AssetRatesModal({ open, onClose }: { open: boolean; onClose: () 
           {/* What these drive, stated up front. */}
           <div className="rounded-xl border border-line bg-subtle px-3 py-2.5">
             <p className="text-xs leading-relaxed text-muted">
-              <strong className="text-ink">These power the Effort view.</strong> Switching the dashboard to
-              Effort weighs every deliverable by its rate, so what you set here shapes what that view shows.
-              Stored totals and exports are untouched — they always count each asset as 1.
+              <strong className="text-ink">These power the dashboard&rsquo;s effort figures.</strong> The
+              dashboard weighs every deliverable by its rate, so what you set here shapes the workload chart
+              and the Effort panel. Stored totals and exports are untouched — they always count each asset as 1.
             </p>
           </div>
 

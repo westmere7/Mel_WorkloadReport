@@ -3,10 +3,11 @@
  *
  * Drives the RUNNING dev server headlessly (default http://localhost:5199 — pass
  * another origin as argv[2]), signs in via the localStorage session, and walks the
- * dashboard through its modes: assets, effort, compare, plus the effort explainer,
- * the output-rates editor, the New Task form and the task list. Re-run after a visual redesign to refresh the docs:
+ * dashboard (single year, then compare), the output-rates editor in Settings, the
+ * New Task form and the task list. Read-only: it opens forms and cancels them, never
+ * saves. Re-run after a visual redesign to refresh the docs:
  *
- *   node scripts/capture-help.mjs
+ *   node scripts/capture-help.mjs [origin]
  *
  * Shots are 2x device-scale PNGs of specific cards (not viewport crops), so they
  * stay crisp and tightly framed regardless of window size.
@@ -50,57 +51,66 @@ const shot = async (name, locator, opts = {}) => {
   console.log('captured', name)
 }
 const card = (text) => page.locator('.card').filter({ hasText: text })
-/** A visible header button by its exact label. */
-const headerBtn = (label) => page.locator(`button:visible`).filter({ hasText: new RegExp(`^${label}$`) })
+/** A dashboard card by its exact header title (avoids matching cards that merely mention it). */
+const titled = (title) =>
+  page.locator('.card').filter({ has: page.locator('h3, h2').filter({ hasText: new RegExp(`^${title}$`) }) })
+/** Screenshot the union of several cards' boxes (cards that share a grid row). */
+const shotUnion = async (name, locators, pad = 0) => {
+  await locators[0].first().scrollIntoViewIfNeeded()
+  await page.waitForTimeout(250)
+  const boxes = await Promise.all(locators.map((l) => l.first().boundingBox()))
+  const x = Math.min(...boxes.map((b) => b.x)) - pad
+  const y = Math.min(...boxes.map((b) => b.y)) - pad
+  const right = Math.max(...boxes.map((b) => b.x + b.width)) + pad
+  const bottom = Math.max(...boxes.map((b) => b.y + b.height)) + pad
+  await page.screenshot({ path: `${OUT}/${name}.png`, clip: { x, y, width: right - x, height: bottom - y } })
+  console.log('captured', name)
+}
 
 await page.goto(ORIGIN + '/', { waitUntil: 'networkidle' })
 await page.waitForSelector('.recharts-surface')
 await page.waitForTimeout(SETTLE)
 
-// ── Assets mode ───────────────────────────────────────────────────────────────
+// ── Dashboard (single year) ──────────────────────────────────────────────────
 await page.screenshot({ path: `${OUT}/dashboard-overview.png`, fullPage: true })
 console.log('captured dashboard-overview')
 
-const statGrid = page.locator('div.grid').filter({ has: card('Asset count').first() }).first()
+// Header row: Volume + Effort + the two by-squad rankings.
+const statGrid = page.locator('div.grid').filter({ has: titled('Volume') }).first()
 await shot('dashboard-stats', statGrid)
+await shotUnion('effort-panels', [titled('Volume'), titled('Effort')])
 await shot('dashboard-workload', card('Workload & tasks'))
 await shot('dashboard-campaign', card('Asset count by campaign'))
 // The two mix donuts share a row — capture their parent grid as one image.
 await shot('dashboard-mixes', page.locator('div.grid').filter({ has: card('Asset mix').first() }).first())
 await shot('dashboard-demand', card('Squads demand distribution'))
 
-// ── Effort mode ───────────────────────────────────────────────────────────────
-await headerBtn('Effort').first().click()
-await page.waitForTimeout(SETTLE)
-await shot('effort-panels', page.locator('div.grid').filter({ has: card('Volume').first() }).first())
-await shot('effort-workload', card('Workload & tasks'))
+// ── Scope controls (header crop) ─────────────────────────────────────────────
+// Function filter (left slot) through the span filter + Compare (right slot).
+await shotUnion('header-scope', [
+  page.locator('[data-help="header-scope"]:visible'),
+  page.locator('[data-help="header-span"]:visible'),
+], 10)
 
-// The explainer behind the "?" next to the unit switch.
-await page.locator('button[aria-label="What does Effort mean?"]:visible').first().click()
-await page.waitForTimeout(600)
-await shot('effort-explainer', card('Measuring workload by effort'))
-
-// The output-rates editor, opened from inside the explainer.
-await page.getByRole('button', { name: 'Edit output rates' }).click()
-await page.waitForTimeout(600)
-await shot('rates-editor', card('Output rates — asset types'))
-await page.getByRole('button', { name: 'Cancel' }).click()
-await page.getByRole('button', { name: 'Done' }).click()
-await page.waitForTimeout(400)
-
-// ── Compare mode (still in effort) ───────────────────────────────────────────
+// ── Compare mode ─────────────────────────────────────────────────────────────
 await page.locator('button[title="Compare two years"]:visible').first().click()
 await page.waitForTimeout(SETTLE)
-await shot('compare-panels', page.locator('div.grid').filter({ has: card('Volume').first() }).first())
+await shotUnion('compare-panels', [titled('Volume'), titled('Effort')])
 await shot('compare-workload', card('Workload & tasks'))
-
-// Back out of compare for the remaining captures.
 await page.locator('button[title="Exit comparison mode"]:visible').first().click()
-await headerBtn('Assets').first().click()
 await page.waitForTimeout(800)
 
-// ── Scope controls (header crop) ─────────────────────────────────────────────
-await shot('header-scope', page.locator('[data-help="header-scope"]:visible'))
+// ── Output-rates editor (Settings → Timing & effort) ─────────────────────────
+await page.goto(ORIGIN + '/settings', { waitUntil: 'networkidle' })
+await page.waitForTimeout(1200)
+await page.getByRole('button', { name: /^(Edit rates|Set rates)/ }).first().click()
+await page.waitForTimeout(800)
+await shot('rates-editor', card('Output rates — asset types'))
+await page.getByRole('button', { name: 'Cancel' }).click()
+await page.waitForTimeout(400)
+await page.goto(ORIGIN + '/', { waitUntil: 'networkidle' })
+await page.waitForSelector('.recharts-surface')
+await page.waitForTimeout(800)
 
 // ── New Task form ────────────────────────────────────────────────────────────
 await page.getByRole('button', { name: 'New Task' }).first().click()
