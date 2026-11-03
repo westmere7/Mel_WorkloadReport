@@ -3,7 +3,6 @@ import { normalizeCustomHolidays } from '../lib/holidays'
 import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
 import type { Repository } from './repository'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
-import type { ShowcaseConfig, ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
 import { getSupabase } from '../lib/supabaseClient'
 import {
   DEFAULT_SETTINGS,
@@ -43,32 +42,6 @@ function isMissingRelation(err: unknown): boolean {
 const SNAPSHOT_SETUP_MSG =
   "Snapshots aren't set up yet — run supabase/schema.sql to create the snapshots table + bucket."
 
-const SHOWCASE_SETUP_MSG =
-  "Showcase links aren't set up yet — run supabase/schema.sql to create the showcases table."
-
-interface ShowcaseRow {
-  id: string
-  title: string | null
-  year: number
-  created_by: string | null
-  task_count: number | null
-  bytes: number | null
-  expires_at: string | null
-  config?: ShowcaseConfig
-  created_at: string
-}
-function showcaseRowToMeta(row: ShowcaseRow): ShowcaseMeta {
-  return {
-    id: row.id,
-    title: row.title ?? '',
-    year: row.year,
-    createdAt: row.created_at,
-    createdBy: row.created_by ?? null,
-    expiresAt: row.expires_at ?? null,
-    taskCount: row.task_count ?? 0,
-    bytes: row.bytes ?? 0,
-  }
-}
 
 interface SnapshotRow {
   id: string
@@ -900,57 +873,4 @@ export class SupabaseRepository implements Repository {
     if (error) throw error
   }
 
-  // ── Showcases ─────────────────────────────────────────────────
-  async listShowcases(): Promise<ShowcaseMeta[]> {
-    // Exclude `config` so the list stays light.
-    const { data, error } = await getSupabase()
-      .from('showcases')
-      .select('id, title, year, created_by, task_count, bytes, expires_at, created_at')
-      .order('created_at', { ascending: false })
-    if (error) {
-      if (isMissingRelation(error)) return []
-      throw error
-    }
-    return (data ?? []).map((r) => showcaseRowToMeta(r as ShowcaseRow))
-  }
-
-  async saveShowcase(record: ShowcaseRecord): Promise<ShowcaseMeta> {
-    const { meta, config } = record
-    const { data, error } = await getSupabase()
-      .from('showcases')
-      .insert({
-        id: meta.id,
-        title: meta.title,
-        year: meta.year,
-        created_by: meta.createdBy,
-        task_count: meta.taskCount,
-        bytes: meta.bytes,
-        expires_at: meta.expiresAt,
-        config,
-        created_at: meta.createdAt,
-      })
-      .select('id, title, year, created_by, task_count, bytes, expires_at, created_at')
-      .single()
-    if (error) throw new Error(isMissingRelation(error) ? SHOWCASE_SETUP_MSG : error.message)
-    return showcaseRowToMeta(data as ShowcaseRow)
-  }
-
-  async getShowcase(id: string): Promise<ShowcaseRecord | null> {
-    const { data, error } = await getSupabase().from('showcases').select('*').eq('id', id).maybeSingle()
-    if (error) {
-      if (isMissingRelation(error)) return null
-      // A malformed id makes Postgres complain about uuid syntax — treat as not-found.
-      if ((error as { code?: string }).code === '22P02') return null
-      throw error
-    }
-    if (!data) return null
-    const row = data as ShowcaseRow
-    if (!row.config) return null
-    return { meta: showcaseRowToMeta(row), config: row.config }
-  }
-
-  async deleteShowcase(id: string): Promise<void> {
-    const { error } = await getSupabase().from('showcases').delete().eq('id', id)
-    if (error) throw error
-  }
 }

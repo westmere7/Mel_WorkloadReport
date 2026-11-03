@@ -9,7 +9,8 @@ non-obvious gotchas that have bitten us. (This is the file some tools also look 
 
 ## 1. What this app is
 
-An internal **workload tracker for the RMIT Melbourne GCMC design team**. It records
+An internal **workload tracker for the RMIT Melbourne GCMC design team**, branded
+**GCMC Dashboard** (formerly "Workload Report"). It records
 "tasks" (design jobs), each with a booking code, campaign, requesting squad, work
 types, an asset (deliverable) breakdown, assignees, dates, size, and a note. It
 surfaces this as a **Dashboard** of charts, a filterable/sortable **Task List**, and a
@@ -28,7 +29,8 @@ with the URL; a lightweight **username/password sign-in gates editing only**
 - **Tailwind CSS** (dark mode via the `class` strategy; semantic colors are CSS
   variables — see §9).
 - **Recharts** for charts, **lucide-react** for icons.
-- **React Router** (`/` dashboard, `/tasks` list, `/settings`).
+- **React Router** (`/` dashboard, `/tasks` list, `/calendar`, `/help`, `/settings`, plus the
+  chrome-free `/embed/item` monday Assets tab — see §26).
 - **Supabase JS** for the cloud backend (realtime subscriptions included).
 
 Run: `npm run dev`. Typecheck: `npx tsc --noEmit` (do this after every change — it's the
@@ -206,9 +208,6 @@ happens** (see §6).
   `NewTaskModal`/`useNewTask`) and Edit (from Task List). Big feature surface — see §8.
 - **Import & Backup** (`src/components/ImportBackupModal.tsx`): CSV import (clean-load vs
   merge) + span-scoped CSV backup.
-- **Showcase** (`src/pages/Showcase.tsx` wizard + `src/pages/ShowcaseViewer.tsx` public player +
-  `src/showcase/` engine + `src/lib/showcase.ts` contract): animated shareable year-in-review —
-  see §17.
 - **Settings** (`src/pages/Settings.tsx`), top→bottom — every section a collapsible
   `CollapsibleSection` (open state in localStorage `mwr.settings.*Open`): **Groups** (open by
   default; a master `Card` whose nested editor cards use `className="bg-subtle"` so they
@@ -263,7 +262,7 @@ happens** (see §6).
   only, NOT width 0) — `collapsed` forces rail mode at all widths by dropping the `md:`
   "full panel" classes (the `railOnly()` helper + `hideLabel` in Sidebar). When collapsed
   the rail **drops its brand row** (logo + name) and the header shows them instead —
-  a `{collapsed && …}` block in Layout renders the logo + "GCMC / Workload Report" before
+  a `{collapsed && …}` block in Layout renders the logo + "GCMC / Dashboard" before
   the page title (only at `md+`), so the brand never appears twice. The brand row's space
   is **reserved (`md:invisible`)** when collapsed so the nav icons don't shift up.
   **Clicking the sidebar background toggles collapse/expand** (the `<aside>` has
@@ -411,9 +410,7 @@ to run it**, because a write including an unknown column fails:
 - `snapshots` table + **private `snapshots` bucket** + policies + faithful restore — see §16.
   **Guarded**: `listSnapshots` returns `[]` on missing-table (`42P01`/`PGRST205`); creating
   shows a friendly "run schema.sql" message.
-- `showcases` table (config inline jsonb + `expires_at`) — see §17. **Guarded**: `listShowcases`
-  → `[]` on missing table; generating shows a "run schema.sql" message; the public viewer's
-  `getShowcase` returns null (→ "not found" screen).
+- ~~`showcases` table~~ — Showcase was removed (§17); `schema.sql` no longer creates it.
 
 `asset_breakdown` is `jsonb`, so changing the breakdown shape needs no schema change.
 
@@ -512,8 +509,8 @@ updateAccount }`):
 
 ## 15. Task images (Supabase Storage)
 
-Tasks can carry up to **10 images** (`task.images: TaskImage[]`). Groundwork for a future
-**Showcase mode** (cycling big campaigns + their assets + yearly headline stats).
+Tasks can carry up to **10 images** (`task.images: TaskImage[]`). (Originally groundwork
+for Showcase mode, since removed — §17; images stand on their own.)
 
 - **Storage, not the DB.** Images live in a **public** Supabase Storage bucket
   **`task-images`**; only `{ id, url, w, h }` descriptors are stored in the `tasks.images`
@@ -548,7 +545,7 @@ Tasks can carry up to **10 images** (`task.images: TaskImage[]`). Groundwork for
   preserves each matched task's existing images (`store.importTasks` sets `images: match.images`).
 - **Storage limits & the R2 escape hatch.** Supabase Free ≈ **1 GB storage + ~5 GB egress/mo**
   (DB is separate — we keep images out of it). With WebP compression, storage size won't be
-  the first wall; **egress** (image views, e.g. a running Showcase) is. When a limit is hit,
+  the first wall; **egress** (image views) is. When a limit is hit,
   new uploads just error inline in the Demo panel (task saves are unaffected) and Supabase
   restricts the Free project (no surprise bill; existing files kept). Watch **Reports → Usage**.
   If egress climbs, the escape hatch is **Cloudflare R2** (10 GB free, **$0 egress**,
@@ -596,81 +593,19 @@ Freeze the entire workload state — all tasks + settings + the tasks' demo imag
   the missing-table error (`42P01`/`PGRST205`) and returns `[]`; creating shows a friendly
   "run schema.sql" message. So the rest of the app is unaffected until you migrate.
 
-## 17. Showcase mode (animated shareable year-in-review)
+## 17. Showcase mode — REMOVED (v0.11.0)
 
-The payoff for demo images (§15): a **Showcase** sidebar item (edit-gated) opens a 7-step wizard
-that freezes a year's data into a **self-contained `ShowcaseConfig`**, and Generate mints a public
-link `/showcase/<id>` playing a deterministic, pure-CSS animated presentation.
-
-- **Routing (first route outside the shell):** `App.tsx` splits at the top — `/showcase/:id` →
-  `ShowcaseViewerPage` (chrome-free, NO store/auth/loading gate) vs a layout route `StoreShell`
-  (`StoreProvider > NewTaskProvider > Layout > loading gate > Outlet`) hosting `/`, `/tasks`,
-  `/showcase` (wizard, `EditGate`), `/settings` (`EditGate`), `*`. **StoreProvider moved from
-  main.tsx into StoreShell**; `createRepository()` is exported from store.tsx for store-less
-  consumers (the viewer). Sidebar: `EDIT_ONLY = ['/settings','/showcase']` filter (both navs).
-- **Contract:** `src/lib/showcase.ts` — `ShowcaseConfig` (versioned via `SHOWCASE_CONFIG_VERSION`;
-  viewer rejects newer versions politely). Frozen at generate time: `projects` (ShowcaseProject
-  cards incl. image **URLs** — frozen references, not copies; deleting a task image later breaks
-  that showcase's image), precomputed `stats` (`STAT_OPTIONS`, 13 ids) + `top3` (`TOP3_OPTIONS`,
-  6 ids) computed over ALL tasks of the year, `sectionOrder` (intro locked first), theme/style/
-  canvas/pacing, and `seed`. `mulberry32`/`seededShuffle`/`durationDays` live here. Draft
-  (`ShowcaseDraft`) autosaves to localStorage `mwr.showcaseDraft.v1`.
-- **Persistence:** `showcases` table, config **inline jsonb** (10–40 KB — image URLs, not base64;
-  unlike snapshots no bucket needed). `list` excludes `config`. Expiry (`EXPIRY_OPTIONS`
-  1w/1m/3m/1y/never, default 3m) is **lazy**: viewer shows "expired"; the wizard's
-  `refreshShowcases` purges expired rows. Local mode: `mwr.showcases.v1` + `mwr.showcase.<id>` —
-  links only open in the same browser (caveat shown; viewer not-found hints it).
-- **Wizard:** `src/pages/Showcase.tsx` + `src/components/showcase/` (WizardProgress + 7 steps +
-  `wizardBits` Segmented/SelectableCard). Step 2 defaults to **L+XL selected**, biggest-first;
-  size-filter chips select/deselect that size's tasks; reorder arrows disable when the
-  **Randomize** switch is on (live `seededShuffle` preview; Re-roll mints a new seed); changing
-  year resets the selection. `ui/Switch.tsx` was extracted for reuse (Settings still has its
-  local copy). **Desktop-only:** the Showcase route is filtered out of the mobile tab bar
-  (`MOBILE_HIDDEN` in `Sidebar.tsx` `MobileNav`), and both the wizard (`Showcase.tsx`) and the
-  public viewer render a "not on mobile" screen below 768px / on mobile UA.
-- **Engine (2025-storyboard rework):** `src/showcase/` (viewer-only; `showcase.css` imported by
-  `ShowcasePlayerView`). `compileScenes(config)` bakes ALL variance from `mulberry32(config.seed)`
-  into payloads — no Math.random/Date.now in render. Core anti-uniformity device is a **seeded
-  shuffle-bag** (`makeBag`): deals each item once (shuffled) before repeating and never repeats
-  across the refill boundary — used for backgrounds, scene enters, stat variants, and per-image-
-  count layout archetypes so consecutive scenes differ. `useShowcasePlayer` = single rAF over
-  `performance.now()`, scenes overlap by `TRANSITION_MS` (**640ms**; exit z-1 under enter z-2, ≤2
-  mounted), `visibilitychange` pauses (JS clock + `[data-paused] * {animation-play-state:paused}`),
-  loop = cycle-prefixed keys + clock wrap. **Pacing** `PACE {fast .85, normal 1, relaxed 1.25}` via
-  `--pace`; per-element staggers via `--d` (`bits/anim.ts dly()`). Stage authored at true canvas
-  px, root `font-size = width/100`, `transform: scale(fit)`.
-  - **Per-scene brand panels** — the big change. There is NO fixed stage backdrop / `showcaseTheme`
-    rooms / aurora blobs / geometric decor / `StageDecor` anymore (all removed). Every scene owns a
-    `bg: SceneBgId` (`red|redGrad|navy|navyGrad|duoGrad|white|split`) painted by a `.sc-bg-*` class
-    that sets the panel's `--sc-ink/-muted/-accent/-pixel/-grad-text` vars. `makeBgPicker` walks a
-    weighted per-mode pool with a **no-adjacent-family rule** (`bgFamily`); forced panels (intro,
-    split) call `.note()` to keep the rule intact. White panels carry `data-ink` (seeded red/navy).
-    **Brand lock:** only `#e61e2a`, `#000054`, white + their gradients (no gold).
-  - **Style = background MIX profile.** The wizard's 4 cards are now `colorMode`
-    `gradient`=Signature / `red` / `navy` / `light`, each a weighted panel pool. `ShowcaseStyle.background`
-    is **deprecated/ignored** (kept so old stored configs parse); the shapes selector was removed.
-  - **Scenes** (`scenes/*`): `statSolo` (NEW — one bold figure per panel: `counter|ticker|gradient|
-    typewriter|split`, replacing the 3-up `StatTrioScene` which was deleted); `top3` is a **cycling
-    spotlight list** (focus walks 3→2→1 via seeded `--fa/--fd`, pixel arrow) — the podium is gone;
-    `project` picks strongly-distinct archetypes per image-count with seeded `flip`/`sheen`.
-  - **No camera movement:** the handheld `sc-bob` wiggle and the 4 Ken-Burns pan variants are gone —
-    full-bleed images use ONE slow uniform settle-zoom (`sc-still-zoom`). Settled "still" frames stay
-    alive via in-place ambient (gradient-text shimmer `sc-shimmer`, solid-type sheen `sc-sheen`,
-    pixel shimmer, typewriter caret blink) — none of which move the frame.
-  - **New bits/effects:** `bits/ScPixels.tsx` (RMIT pixel-cluster corner decor from `PixelSpec`),
-    `ScMaskText` gains `ticker` (slide-through) + `type` (typewriter) effects; transitions are
-    `wipeX|wipeUp|push|zoom` (hard cuts, no circle wipe). **Fonts:** Museo on all display type
-    (`.sc-display` + headline classes), Helvetica for body/small text (stage default family).
-  - **CSS gotcha (unchanged):** `sc-pop` animates the independent `scale`/`filter` channels so a
-    card's static `transform: translate()/rotate()` tilt survives the pop. Reduced motion: a var
-    block zeroes the motion vars → crossfades; ambient loops (shimmer/sheen/pixel/caret/still-zoom/
-    focus pulse) disabled; bars & focus rows fade in place.
-- **Viewer:** `ShowcaseViewerPage` — loading / notFound (+local-mode hint) / expired /
-  unsupported-version / ready states; controls are ONLY Play (+ Loop switch) and Play-again
-  (End scene; Space/Enter also starts/replays). Progress hairline reads the clock via ref (no
-  scene re-renders).
-- **Migration:** re-run `supabase/schema.sql` (adds `public.showcases` + open RLS). Anon read is
-  required — links are public by design.
+The animated, shareable year-in-review (the 7-step wizard at `/showcase`, the public
+player at `/showcase/:id`, the `src/showcase/` engine, `src/components/showcase/*`,
+`src/lib/showcase.ts`, the `showcases` repository/store methods and the Clapperboard
+sidebar item) was removed entirely in Nov 2026. `schema.sql` no longer creates
+`public.showcases`; an existing table is left in place (harmless, unused) — drop it by
+hand if wanted. Old `/showcase…` links fall through to the dashboard. Local-mode drafts
+and links in `mwr.showcaseDraft.v1` / `mwr.showcases.v1` / `mwr.showcase.<id>` are
+inert. `analytics.assetsByPerson()` (only fed its "Busiest people" stat) went with it.
+**Task images (§15) stay** — they began as Showcase groundwork but are a feature in
+their own right (task form, task details, snapshots). Old changelog entries still
+mention Showcase (history).
 
 ## 18. monday.com task lookup (on-demand prefill, NOT sync)
 
@@ -779,7 +714,7 @@ timeline on a task, via colour-coded tabs in the task form.
 Per-function data rides **alongside** the existing top-level fields, not instead of
 them. On save, the form recomputes the top-level `types` (union), `assetBreakdown` /
 `assetTotal` (merged sums) and `startDate`/`endDate` (envelope) from the enabled tabs.
-Every chart / CSV / showcase / snapshot consumer keeps reading the top-level fields —
+Every chart / CSV / snapshot consumer keeps reading the top-level fields —
 **the dashboard shows everything combined and needed ZERO changes.** Per-function
 dashboard views (incl. the "VN+Mel = one Design team, with isolate" rule) are a
 LATER phase; the data is already captured for it.
@@ -979,7 +914,7 @@ LATER phase; the data is already captured for it.
 - The Browser-pane console buffer persists across reloads AND dev-server restarts —
   old HMR errors linger; verify with a live `window.__errCount` probe instead.
 
-## 20. Asset output rates & Effort mode ⚠️ v0.8.0–0.9.0
+## 20. Asset output rates & Effort mode ⚠️ v0.8.0–0.11.0
 
 ### The problem it solves
 
@@ -1009,23 +944,16 @@ history rather than rewriting it. Unrated types contribute **0** and are reporte
 never guessed. `FALLBACK_ITEM` ("Others") is deliberately excluded from the
 unrated warning — it's a mixed bag by definition, so a rate for it is meaningless.
 
-### The measurement switch
+### The measurement switch — REMOVED (v0.11.0)
 
-- `dashboardPrefs.workloadUnit: 'assets'|'effort'` — **per browser**, so one
-  person's view never changes a colleague's. Only offered when ≥1 rate exists.
-- Lives in the header **left slot beside the function filter** (both re-scope the
-  whole dashboard). Active `Assets` = navy; active `Effort` = **RMIT red**, so the
-  fill doubles as an "off the default measure" signal.
-- ⚠️ **The header slot is pushed via `setHeaderSlots` in a `useEffect`** — any state
-  the slot renders MUST be in that effect's dep array (`workloadUnit`,
-  `ratesConfigured`, `effortOn`, `unratedInScope.length`). Omitting them leaves a
-  stale closure: clicks update the pref and the body re-renders, but the buttons
-  never do, so the switch looks broken.
-- ⚠️ `Layout` renders the left slot **twice** (desktop `hidden sm:flex`, mobile
-  `sm:hidden`), so there are always 2× the buttons in the DOM. Filter on
-  `offsetParent !== null` when testing.
+The dashboard is now **Effort-only**: the header Assets ↔ Effort switch, its "?"
+explainer button, the "N unrated" flag and `dashboardPrefs.workloadUnit` are gone
+(a stale `workloadUnit` in localStorage is inert). With no rates set, the workload
+chart shows "Set output rates in Settings → Timing & effort…" instead of a line.
+Unrated types still count 0 but are no longer flagged on the dashboard (the rates
+editor still sorts them last). `EffortInfoModal` is now unreferenced.
 
-### What Effort changes
+### What Effort does
 
 1. **Workload chart** → weighted hours. `AreaTrendChart` gained `taskValue` (the
    scatter dots share the line's y-axis, so they must be valued the same way) and
@@ -1066,11 +994,11 @@ unrated warning — it's a mixed bag by definition, so a rate for it is meaningl
   a panel needs one line: `action={<PanelInfo panel="assetMix" />}`.
   Section bodies accept a string, or labelled `{lead, text}` bullets for the long
   ones (workload, effort) so they scan instead of walling up.
-- **`components/EffortInfoModal.tsx`** — a *separate*, richer dialog for the
-  **switch** (Assets vs Effort side by side, the to-scale rate comparison, and an
+- **`components/EffortInfoModal.tsx`** — ⚠️ unreferenced since the switch was removed
+  (§20, §27). Was a *separate*, richer dialog for the **switch** (Assets vs Effort side by side, the to-scale rate comparison, and an
   "Edit output rates" button). The Effort **panel** uses the standard `PanelInfo`;
   the header **switch** uses this one. Don't conflate them.
-- **`pages/Help.tsx`** (`/help`, public, sidebar above Showcase, `BookOpen` icon) —
+- **`pages/Help.tsx`** (`/help`, public, bottom of the sidebar, `BookOpen` icon) —
   the full manual, laid out as docs: 3 part **tabs**, a sticky **scroll-spy** TOC
   (`[data-toc]` + `IntersectionObserver`), anchored subsections, and inline
   **cross-links** that switch tabs then scroll (`ANCHOR_PART` maps anchor → part).
@@ -1078,7 +1006,8 @@ unrated warning — it's a mixed bag by definition, so a rate for it is meaningl
 - **Screenshots**: `public/help/*.png`, generated by **`scripts/capture-help.mjs`**
   (Playwright, headless, drives the *running* dev server, signs in via a seeded
   `mwr.session` localStorage entry). Element crops at 2× DPR, not viewport grabs.
-  Re-run after a visual redesign: `node scripts/capture-help.mjs`.
+  Re-run after a visual redesign: `node scripts/capture-help.mjs`. ⚠️ Currently broken
+  by the Effort-only change — see §27.
   `data-help="…"` attributes in `TaskForm`/`Dashboard` are **stable capture
   anchors** — don't remove them.
 
@@ -1087,8 +1016,8 @@ unrated warning — it's a mixed bag by definition, so a rate for it is meaningl
 The dashboard panel, its `showTasksByPerson` pref, the Settings toggle and the
 now-orphaned `HBarChart` (+ its `AXIS_STRONG` const) are **gone**. Per-person data
 is still tracked: `people` on tasks, the task-list person filter and `?person=`
-deep links, the CSV `People` column, and `analytics.assetsByPerson()` which still
-feeds the Showcase's **"Busiest people"** stat. A stale
+deep links, and the CSV `People` column. (`analytics.assetsByPerson()`, which fed the
+Showcase's "Busiest people" stat, was removed with Showcase — §17.) A stale
 `showTasksByPerson: true` in localStorage is inert.
 
 ## 23. Advisor — REMOVED
@@ -1162,7 +1091,7 @@ entries still mention it (history).
   once it was over. The per-card full screen above is what survives of it: the
   `presentCards()` geometry, `.present-card`, `toUser()` and the Modal portal were all
   lessons from the demo. Advisor and Showcase went back into the sidebar nav (their slot
-  had been the Demo button); Help §08 says "bottom of the sidebar" again.
+  had been the Demo button) — both have since been removed (§23, §17).
 
 
 ## 25. Calendar page & holidays ⚠️
@@ -1371,3 +1300,21 @@ app shell, inside `StoreProvider` only (live tasks, no Layout).
   task's asset counts. Same permissive RLS as the rest of the app.
 - Don't use `crypto.randomUUID` (undefined in non-secure frames); a plain `.mv button`
   reset overrides component colours — use `:where(.mv button)`.
+
+---
+
+## 27. v0.11.0 — GCMC Dashboard, Effort-only, Showcase removed
+
+- **Rebrand:** the app is **"GCMC Dashboard"** (`<title>`, sidebar/header brand line,
+  `package.json` description). The dashboard route has no page title of its own — the
+  header goes straight to the brand + scope controls. Repo/folder names are unchanged.
+- **Effort-only dashboard:** the Assets ↔ Effort switch and `dashboardPrefs.workloadUnit`
+  are gone (§20). The dashboard always reads the workload chart in effort hours and shows
+  the Volume + Effort hero panels.
+- **Showcase removed:** see §17.
+- **Known leftovers (not yet cleaned up):** `components/EffortInfoModal.tsx` and
+  `components/ui/StatCard.tsx` are no longer rendered anywhere; `analytics.countBySize`,
+  `assetsByMonth` and `topRequestType` have no callers. `scripts/capture-help.mjs` still
+  clicks the removed Effort / "What does Effort mean?" buttons and the "Asset count" card,
+  so it fails as written — fix it before regenerating `public/help/*.png` (the current
+  `header-scope` shot still shows the old switch; `effort-explainer.png` is unused).

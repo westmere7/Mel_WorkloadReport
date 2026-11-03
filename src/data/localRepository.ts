@@ -2,7 +2,6 @@ import type { AppSettings, Task, TaskInput } from '../types'
 import { normalizeCustomHolidays } from '../lib/holidays'
 import type { Repository } from './repository'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
-import type { ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
 import { normalizeBoard, type AssetBoard } from '../lib/assetLines'
 import {
   DEFAULT_SETTINGS,
@@ -29,8 +28,6 @@ const SETTINGS_KEY = 'mwr.settings.v1'
 const SEEDED_KEY = 'mwr.seeded.v1'
 const SNAPSHOTS_KEY = 'mwr.snapshots.v1' // metadata list
 const snapshotKey = (id: string) => `mwr.snapshot.${id}` // full payload
-const SHOWCASES_KEY = 'mwr.showcases.v1' // ShowcaseMeta[]
-const showcaseKey = (id: string) => `mwr.showcase.${id}` // full ShowcaseRecord
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -310,28 +307,4 @@ export class LocalRepository implements Repository {
     )
   }
 
-  // ── Showcases (localStorage — links only open in this browser) ──
-  async listShowcases(): Promise<ShowcaseMeta[]> {
-    return read<ShowcaseMeta[]>(SHOWCASES_KEY, [])
-  }
-
-  async saveShowcase(record: ShowcaseRecord): Promise<ShowcaseMeta> {
-    const { meta } = record
-    write(showcaseKey(meta.id), record)
-    const list = read<ShowcaseMeta[]>(SHOWCASES_KEY, []).filter((s) => s.id !== meta.id)
-    write(SHOWCASES_KEY, [meta, ...list])
-    return meta
-  }
-
-  async getShowcase(id: string): Promise<ShowcaseRecord | null> {
-    return read<ShowcaseRecord | null>(showcaseKey(id), null)
-  }
-
-  async deleteShowcase(id: string): Promise<void> {
-    localStorage.removeItem(showcaseKey(id))
-    write(
-      SHOWCASES_KEY,
-      read<ShowcaseMeta[]>(SHOWCASES_KEY, []).filter((s) => s.id !== id),
-    )
-  }
 }

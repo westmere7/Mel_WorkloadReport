@@ -1,9 +1,12 @@
-# RMIT Workload Report
+# GCMC Dashboard
 
-An internal web app for the **RMIT Melbourne Design Team** to register, browse and visualise
-the team's workload. Built with **React + Vite + TypeScript + Tailwind**, RMIT-branded
-(`#E61E2A` red / `#000054` navy), with a swappable data layer that runs **fully local by
-default** and connects to **Supabase** whenever you're ready.
+An internal web app for the **RMIT GCMC design team** (Melbourne + Vietnam) to record, browse and
+visualise the team's workload. Built with **React + Vite + TypeScript + Tailwind**, RMIT-branded
+(`#E61E2A` red / `#000054` navy), backed by **Supabase** — or, with no Supabase configured, a
+**local** browser-storage mode that works offline with seeded sample data.
+
+> **Working on the code?** Read [`KNOWLEDGEBASE.md`](./KNOWLEDGEBASE.md) first — it is the
+> architecture record: data model, Supabase migrations, per-feature design decisions and gotchas.
 
 ---
 
@@ -11,60 +14,69 @@ default** and connects to **Supabase** whenever you're ready.
 
 ```bash
 npm install
-npm run dev
+npm run dev        # http://localhost:5173  (or double-click launch.bat on Windows)
 ```
 
-Open http://localhost:5173. The app starts in **Local mode** — tasks are stored in your
-browser and pre-seeded with sample data, so everything works immediately and offline.
-
-To create a production build:
-
 ```bash
-npm run build      # type-checks + bundles to dist/
+npm run build      # type-checks (tsc) + bundles to dist/
 npm run preview    # serve the built app locally
 ```
 
----
-
-## Sections
-
-| Section        | What it does                                                                       |
-| -------------- | ---------------------------------------------------------------------------------- |
-| **Dashboard**  | Stat cards + charts: tasks by campaign, asset mix, workload per person, squad split, H1/H2. Filter by half. |
-| **New Task**   | Register a task. Smart task-code helpers (`[26.0629.A]` ⇄ date, auto-suggest next code, auto-derive Half). |
-| **Task List**  | Excel-style table — search, filter (squad/campaign/person/half), sort, edit, delete, **export CSV**. |
-| **Settings**   | Add/remove **Campaigns, Work types, People**. Squads are a fixed, locked list. Shows the active backend. |
-
-### Task model
-
-- **Squad** — requesting stakeholder team (fixed list: INTON, DOM, Student Recruitment, BPX, RMIT VN, Alumni, Agent Management, Others)
-- **Campaign** — extensible (BAU, SEM1–3, roadshows, Open Day, VTAC, Change of Preference, Always On, …)
-- **Task code + name** — `[26.0629.A]` = booked 29 Jun 2026, task “A” that day + the task name
-- **Work type(s)** — multi-select, editable
-- **Asset count** — total + breakdown (Image / Video / Publication / HTML5 ad / GIF·Motion)
-- **Person(s) in charge** — multi-select, editable
-- **Timeline** — start date (can be derived from the code) + optional end date
-- **Half** — H1 / H2 (auto-derived from start date, overridable)
+There are no unit tests for the app itself; `npm run lint` (`tsc --noEmit`) is the main safety
+net, and UI changes are verified against the running dev server with Playwright. The
+`monday-workload` Edge Function has tests: `node --test scripts/monday-workload.test.mjs`.
 
 ---
 
-## Switching to Supabase
+## What's in it
 
-The app auto-detects Supabase env vars: **present → cloud DB, absent → local**. No code changes.
+| Page | What it does |
+| --- | --- |
+| **Dashboard** (`/`) | Workload across the year in **effort hours** (each asset weighted by its type's output rate), Volume + Effort headline panels, by-squad rankings, asset & work-type mixes, campaign and stakeholder-demand charts. Scoped by a **function filter** (Vietnam Design / Melbourne Design / Production / Contents) and a **span filter** (total / year / half), with a year-over-year **Compare** mode. Any card opens full screen. |
+| **Task List** (`/tasks`) | Search, multi-select filters, sortable columns, paginated; row opens the task (editable when signed in, read-only otherwise). **Import & Backup** for CSV. |
+| **Calendar** (`/calendar`) | A year as 12 month heatmaps of the work active each day, with VIC / Vietnam public holidays, RMIT closures and team holidays. |
+| **Help** (`/help`) | The in-app manual. |
+| **Settings** (`/settings`, sign-in) | Editable groups (squads, campaigns, work & asset types, people, functions), output rates, holidays, monday.com boards, dashboard display options, year snapshots, version & what's new. |
+| **monday Assets tab** (`/embed/item`) | Chrome-free page embedded in monday.com items: a task's asset lines (people, status, due dates), live and shared, kept in step with the task's counts. |
+
+**Sign-in** (header, top right) gates editing only; everything else is open to anyone with the
+URL. It is a UX gate, not real security — see the security note below.
+
+### A task
+
+- **Code + name** — `[26.0629.A] Name` = booked 29 Jun 2026, task "A" that day (legacy
+  `VN25-1802-A` codes are read too). The code fills the start date and half.
+- **Squad** (requesting stakeholder), **campaign**, **T-shirt size** (XS–XL, drives the default end
+  date), **people in charge**, **timeline**, **note**, up to 10 **demo images**.
+- **Workload by function** — each GCMC function records its own work types, asset counts and
+  optional timeline; the task's top-level figures are the combined roll-up.
+- Optional **monday.com** auto-fill and link.
+
+---
+
+## Supabase
+
+The app auto-detects Supabase env vars: **present → cloud DB, absent → local mode**.
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. In the Supabase **SQL Editor**, run [`supabase/schema.sql`](./supabase/schema.sql).
-3. Copy `.env.example` → `.env` and fill in:
-   ```
-   VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-   VITE_SUPABASE_ANON_KEY=YOUR-ANON-KEY
-   ```
-   (Find these in Supabase → Project Settings → API.)
-4. Restart `npm run dev`. The top bar will switch from **Local** to **Supabase**.
+2. In the Supabase **SQL Editor**, run [`supabase/schema.sql`](./supabase/schema.sql). It is
+   idempotent — **re-run it whenever it changes** (new columns, tables, buckets, policies).
+3. Copy `.env.example` → `.env` and fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+   (Supabase → Project Settings → API). Restart `npm run dev`.
+4. Optional monday.com integration: deploy the Edge Functions in `supabase/functions/`
+   (`monday-search`, `monday-workload`) with their `MONDAY_*` secrets, then set
+   `VITE_MONDAY_LOOKUP=1` / `VITE_MONDAY_WORKLOAD=1`. The monday token never reaches the browser.
+   See `KNOWLEDGEBASE.md` §18 and `supabase/functions/monday-workload/README.md`.
 
-> **Security note:** there's no login yet (per setup), so `schema.sql` grants the public
-> anon key full access. That's fine for an internal tool behind a private URL. Before
-> exposing it publicly, tighten the RLS policies or add Supabase Auth.
+`.github/workflows/supabase-keepalive.yml` pings the database daily so a free-tier project
+isn't paused for inactivity (needs `SUPABASE_URL` / `SUPABASE_ANON_KEY` repo secrets).
+
+Production deploys to **Vercel** from `main` (`vercel.json`: Vite + SPA rewrite). Set the same
+`VITE_*` variables there.
+
+> **Security note:** `schema.sql` grants the anon key full access (open RLS), and the sign-in
+> checks password hashes in the browser. That's acceptable for an internal tool behind a private
+> URL, not for public exposure — tighten RLS / move to Supabase Auth first.
 
 ---
 
@@ -72,15 +84,22 @@ The app auto-detects Supabase env vars: **present → cloud DB, absent → local
 
 ```
 src/
-  components/        Sidebar, Layout, TaskForm, charts, ui/ (Card, Badge, Modal, MultiSelect, StatCard)
-  pages/             Dashboard, TaskInput, TaskList, Settings
-  data/              repository (interface) + localRepository + supabaseRepository + store (React context)
-  lib/               taskCode, analytics, csv, format, supabaseClient
-  constants.ts       Squads, default campaigns/types/people, chart palette
+  pages/             Dashboard, TaskList, Calendar, Help, Settings, MondayItemView
+  components/        Layout, Sidebar, TaskForm, charts, modals, ui/ primitives
+  data/              repository (interface) + local/supabase implementations + store (React context)
+  lib/               domain logic: taskCode, analytics, effort, functionData, assetLines,
+                     calendar, holidays, csv, snapshot, monday, auth, theme, changelog
+  constants.ts       defaults (squads, campaigns, types, sizes, functions, palette)
   types.ts           Task / AppSettings domain types
-supabase/schema.sql  Database schema + seed + RLS
+supabase/
+  schema.sql         database schema + RLS + storage buckets (idempotent)
+  functions/         monday-search, monday-workload Edge Functions (Deno)
+scripts/             Help screenshot capture, monday-workload tests
+public/help/         screenshots used by the Help page
 ```
 
-The **`Repository` interface** (`src/data/repository.ts`) is the seam: the whole UI talks to
-it, and `store.tsx` picks `LocalRepository` or `SupabaseRepository` at startup. Adding a new
-backend later means implementing one interface.
+The **`Repository` interface** (`src/data/repository.ts`) is the seam: the whole UI talks to it,
+and `store.tsx` picks the local or Supabase implementation at startup.
+
+**Releasing:** bump `version` in `package.json` and prepend an entry to
+`src/lib/changelogData.ts` (shown in Settings → Version and the in-app update notice).

@@ -270,8 +270,7 @@ end $$;
 -- ── Storage: task images ────────────────────────────────────────
 -- A PUBLIC bucket for task images. Images are compressed to WebP client-side
 -- and stored under an unguessable UUID filename ("<uuid>.webp"). Public read
--- means the URLs embed directly (used by the task list, details, and the
--- future Showcase mode). The anon key can upload/delete (consistent with the
+-- means the URLs embed directly (used by the task list and task details). The anon key can upload/delete (consistent with the
 -- app's open RLS above) — tighten with the rest before exposing publicly.
 insert into storage.buckets (id, name, public)
 values ('task-images', 'task-images', true)
@@ -342,30 +341,6 @@ create policy "anon update snapshots" on storage.objects
 drop policy if exists "anon delete snapshots" on storage.objects;
 create policy "anon delete snapshots" on storage.objects
   for delete using (bucket_id = 'snapshots');
-
--- ── Showcases (shareable animated year-in-review links) ─────────
--- The full self-contained ShowcaseConfig lives inline as jsonb (small — tens
--- of KB; images are referenced by their public task-images URLs, not embedded).
--- `expires_at` is enforced lazily client-side: the viewer shows "expired" and
--- the wizard's list purges expired rows. null = keep forever. Anon read is
--- required — showcase links are public by design.
-create table if not exists public.showcases (
-  id          uuid primary key default gen_random_uuid(),
-  title       text not null default '',
-  year        integer not null,
-  created_by  text,
-  task_count  integer not null default 0,
-  bytes       integer not null default 0,
-  expires_at  timestamptz,
-  config      jsonb not null,
-  created_at  timestamptz not null default now()
-);
-create index if not exists showcases_created_at_idx on public.showcases (created_at desc);
-
-alter table public.showcases enable row level security;
-drop policy if exists "anon full access to showcases" on public.showcases;
-create policy "anon full access to showcases" on public.showcases
-  for all using (true) with check (true);
 
 -- ── Asset lines (monday "Assets" tab) ──────────────────────────────
 -- One row per task: its asset lines (batches with a person in charge + status)

@@ -15,7 +15,6 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   '/tasks': { title: 'Task List', subtitle: 'All registered tasks' },
   '/calendar': { title: 'Calendar', subtitle: 'Workload by day, with public holidays' },
   '/help': { title: 'Help', subtitle: '' },
-  '/showcase': { title: 'Showcase', subtitle: 'Build a shareable animated year-in-review' },
   '/settings': { title: 'Settings', subtitle: 'Manage campaigns, work types and people' },
 }
 

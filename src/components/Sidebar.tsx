@@ -3,7 +3,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Clapperboard,
   BookOpen,
   LayoutDashboard,
   List,
@@ -26,16 +25,15 @@ const NAV: NavItem[] = [
   { to: '/tasks', label: 'Task List', icon: List },
   { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/help', label: 'Help', icon: BookOpen },
-  { to: '/showcase', label: 'Showcase', icon: Clapperboard },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 /** Pages that require sign-in — hidden from the nav for anonymous viewers. */
-const EDIT_ONLY = ['/settings', '/showcase']
+const EDIT_ONLY = ['/settings']
 
-/** Pages hidden from the mobile tab bar — the Showcase builder/player are
-    desktop-only, and the Help manual's screenshots read best on desktop. */
-const MOBILE_HIDDEN = ['/showcase', '/help']
+/** Pages hidden from the mobile tab bar — the Help manual's screenshots read
+    best on desktop. */
+const MOBILE_HIDDEN = ['/help']
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { openNewTask } = useNewTask()
@@ -48,9 +46,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const railOnly = (expandedMd: string) => (collapsed ? '' : expandedMd)
   const hideLabel = collapsed ? 'hidden' : 'hidden md:inline'
 
-  // Help + Showcase sit together at the BOTTOM of the rail (Help directly
-  // above the Showcase icon); the rest stay grouped up top.
-  const BOTTOM = ['/help', '/showcase']
+  // Help sits at the BOTTOM of the rail; the rest stay grouped up top.
+  const BOTTOM = ['/help']
   const topNav = nav.filter((item) => !BOTTOM.includes(item.to))
   const bottomNav = nav.filter((item) => BOTTOM.includes(item.to))
 

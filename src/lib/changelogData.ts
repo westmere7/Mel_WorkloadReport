@@ -26,6 +26,37 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.11.0',
+    date: '2026-11-03',
+    title: 'GCMC Dashboard',
+    notes: [
+      {
+        kind: 'improved',
+        text: 'The app is now called the GCMC Dashboard. Same address, same data — only the name in the sidebar, the header and the browser tab changed.',
+      },
+      {
+        kind: 'improved',
+        text: 'The dashboard always reads in Effort. The Assets / Effort switch is gone: the workload chart is in hours and the headline is the Volume and Effort pair, for everyone. Asset counts are still right there in the Volume panel, the task list and every export, which keep counting each asset as one.',
+      },
+      {
+        kind: 'new',
+        text: 'Calendar — a whole year as twelve month grids, each day coloured by the work running on it, with Victorian and Vietnamese public holidays and the RMIT closure marked. Hover a day to see its tasks, hover a task to see its span. Team holidays can be added in Settings → Holidays & closures.',
+      },
+      {
+        kind: 'new',
+        text: 'Any dashboard card can open full screen — hover it and use the control beside the “?”. It stays live, and some panels show more when they have the room.',
+      },
+      {
+        kind: 'new',
+        text: 'An Assets tab for monday.com items: a task’s deliverables as lines, each with its people in charge, status and due date, shared and live for everyone looking at it. Its totals always match the task’s counts on the dashboard.',
+      },
+      {
+        kind: 'improved',
+        text: 'Removed Showcase and Advisor. Showcase links no longer open and land on the dashboard instead; task demo images are unaffected.',
+      },
+    ],
+  },
+  {
     version: '0.10.0',
     date: '2026-07-27',
     title: 'Effort by default',

@@ -50,7 +50,7 @@ export function CardPresenterProvider({ children }: { children: ReactNode }) {
   return <PresentContext.Provider value={value}>{children}</PresentContext.Provider>
 }
 
-/** Null outside the app shell (the public showcase viewer mounts no presenter). */
+/** Null outside the app shell (the monday embed mounts no presenter). */
 export function useCardPresenter(): PresentValue | null {
   return useContext(PresentContext)
 }

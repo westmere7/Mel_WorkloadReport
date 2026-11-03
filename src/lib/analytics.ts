@@ -67,7 +67,7 @@ export type StakeholderRow = { name: string } & Record<StakeholderGroup, number>
 /**
  * Deliverables per work type, split across the three stakeholder groups —
  * feeds a 100%-stacked bar. A task's full asset total is counted for each of
- * its work types (mirrors assetsByPerson: not divided, to avoid understating).
+ * its work types (not divided, to avoid understating).
  * `types` sets the axis order; empty rows (no assets) are dropped.
  */
 export function demandByStakeholder(tasks: Task[], types: string[]): StakeholderRow[] {
@@ -120,15 +120,6 @@ export function assetsByType(tasks: Task[], assetTypes: string[]): NamedCount[] 
       value: tasks.reduce((acc, t) => acc + (Number(t.assetBreakdown[name]) || 0), 0),
     }))
     .filter((d) => d.value > 0)
-}
-
-/** Total assets per person (splits a task's total evenly is misleading — we sum full total per assignee). */
-export function assetsByPerson(tasks: Task[]): NamedCount[] {
-  const rec: Record<string, number> = {}
-  for (const t of tasks) {
-    for (const p of t.people) rec[p] = (rec[p] ?? 0) + t.assetTotal
-  }
-  return sortDesc(rec)
 }
 
 export function totalAssets(tasks: Task[]): number {

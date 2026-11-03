@@ -29,13 +29,6 @@ import {
   type SnapshotInput,
   type SnapshotMeta,
 } from '../lib/snapshot'
-import {
-  buildShowcaseConfig,
-  isExpired,
-  type ShowcaseDraft,
-  type ShowcaseMeta,
-  type ShowcaseRecord,
-} from '../lib/showcase'
 
 interface StoreValue {
   backend: 'local' | 'supabase'
@@ -88,21 +81,13 @@ interface StoreValue {
   deleteSnapshot: (id: string) => Promise<void>
   /** Download a snapshot as a self-contained JSON file. */
   downloadSnapshot: (id: string) => Promise<void>
-  // ── Showcases ─────────────────────────────────────────────────
-  showcases: ShowcaseMeta[]
-  /** Lazy list — called by the wizard's Generate step; purges expired links. */
-  refreshShowcases: () => Promise<void>
-  /** Freeze the draft against current data and persist it; returns the meta (link id). */
-  generateShowcase: (draft: ShowcaseDraft) => Promise<ShowcaseMeta>
-  deleteShowcase: (id: string) => Promise<void>
-  getShowcase: (id: string) => Promise<ShowcaseRecord | null>
   /** True while a live (realtime/cross-tab) subscription is active. */
   live: boolean
 }
 
 const StoreContext = createContext<StoreValue | null>(null)
 
-/** Exported for the store AND for store-less consumers (the public showcase viewer). */
+/** Exported for the store AND for consumers that need their own repo (the monday Assets tab). */
 export function createRepository(): Repository {
   return isSupabaseConfigured() ? new SupabaseRepository() : new LocalRepository()
 }
@@ -117,7 +102,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
-  const [showcases, setShowcases] = useState<ShowcaseMeta[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [live, setLive] = useState(false)
@@ -393,39 +377,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const payload = await repo.loadSnapshot(id)
       downloadJson(snapshotFilename(payload.meta), payload)
-    },
-    [repo],
-  )
-
-  const refreshShowcases = useCallback(async () => {
-    const all = await repo.listShowcases()
-    const live = all.filter((m) => !isExpired(m))
-    setShowcases(live)
-    // Lazy purge: expired links are deleted best-effort in the background.
-    all.filter((m) => isExpired(m)).forEach((m) => void repo.deleteShowcase(m.id).catch(() => {}))
-  }, [repo])
-
-  const generateShowcase = useCallback(
-    async (draft: ShowcaseDraft) => {
-      const record = buildShowcaseConfig(tasks, settings, draft, user)
-      const meta = await repo.saveShowcase(record)
-      setShowcases((prev) => [meta, ...prev.filter((s) => s.id !== meta.id)])
-      return meta
-    },
-    [repo, tasks, settings, user],
-  )
-
-  const deleteShowcase = useCallback(
-    async (id: string) => {
-      await repo.deleteShowcase(id)
-      setShowcases((prev) => prev.filter((s) => s.id !== id))
-    },
-    [repo],
-  )
-
-  const getShowcase = useCallback(
-    async (id: string) => {
-      return repo.getShowcase(id)
     },
     [repo],
   )
@@ -745,11 +696,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       revertSnapshot,
       deleteSnapshot,
       downloadSnapshot,
-      showcases,
-      refreshShowcases,
-      generateShowcase,
-      deleteShowcase,
-      getShowcase,
       live,
     }),
     [
@@ -781,11 +727,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       revertSnapshot,
       deleteSnapshot,
       downloadSnapshot,
-      showcases,
-      refreshShowcases,
-      generateShowcase,
-      deleteShowcase,
-      getShowcase,
     ],
   )
 

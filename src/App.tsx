@@ -9,17 +9,11 @@ import { HelpPage } from './pages/Help'
 import { TaskList } from './pages/TaskList'
 import { CalendarPage } from './pages/Calendar'
 import { SettingsPage } from './pages/Settings'
-import { ShowcasePage } from './pages/Showcase'
-import { ShowcaseViewerPage } from './pages/ShowcaseViewer'
 import { MondayItemViewPage } from './pages/MondayItemView'
 
 export default function App() {
   return (
     <Routes>
-      {/* Public, chrome-free showcase viewer — anyone with the link, no sign-in,
-          no store mount, no sidebar/header. */}
-      <Route path="/showcase/:id" element={<ShowcaseViewerPage />} />
-
       {/* monday.com Item View — the item's "Assets" tab (iframe in a monday item card,
           or ?itemId= standalone). Store only (live task data), no app chrome. */}
       <Route
@@ -39,15 +33,6 @@ export default function App() {
         <Route path="/calendar" element={<CalendarPage />} />
         {/* Public like the dashboard — reading the manual needs no sign-in. */}
         <Route path="/help" element={<HelpPage />} />
-        {/* Public too: anyone may READ the analysis; generating is gated inside. */}
-        <Route
-          path="/showcase"
-          element={
-            <EditGate>
-              <ShowcasePage />
-            </EditGate>
-          }
-        />
         <Route
           path="/settings"
           element={
@@ -62,7 +47,7 @@ export default function App() {
   )
 }
 
-/** Sign-in gate for edit-only pages (Settings, Showcase wizard). */
+/** Sign-in gate for edit-only pages (Settings). */
 function EditGate({ children }: { children: React.ReactNode }) {
   const { canEdit } = useAuth()
   return canEdit ? <>{children}</> : <Navigate to="/" replace />

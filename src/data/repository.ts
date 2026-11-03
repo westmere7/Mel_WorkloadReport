@@ -1,6 +1,5 @@
 import type { AppSettings, Task, TaskImage, TaskInput } from '../types'
 import type { SnapshotMeta, SnapshotPayload } from '../lib/snapshot'
-import type { ShowcaseMeta, ShowcaseRecord } from '../lib/showcase'
 import type { AssetBoard } from '../lib/assetLines'
 
 /**
@@ -51,15 +50,6 @@ export interface Repository {
   loadSnapshot(id: string): Promise<SnapshotPayload>
   /** Delete a snapshot (blob + metadata). */
   deleteSnapshot(id: string): Promise<void>
-
-  // ── Showcases (shareable animated year-in-review links) ────────
-  /** List saved showcase metadata (newest first). Missing table → []. */
-  listShowcases(): Promise<ShowcaseMeta[]>
-  /** Persist a generated showcase (config inline); returns the stored meta. */
-  saveShowcase(record: ShowcaseRecord): Promise<ShowcaseMeta>
-  /** Load a full showcase by id. Null when it doesn't exist (expiry NOT enforced here). */
-  getShowcase(id: string): Promise<ShowcaseRecord | null>
-  deleteShowcase(id: string): Promise<void>
 
   /**
    * Rename a value across all tasks (used when a campaign/type/person is

@@ -1845,8 +1845,7 @@ export function TaskForm({ initial, submitLabel, onSubmit, onCancel, onDelete, o
           ) : (
             <>
               <p className="text-xs text-muted">
-                Attach up to {MAX_IMAGES} demo images — these feed the auto-showcase. Click one
-                to view it larger.
+                Attach up to {MAX_IMAGES} demo images. Click one to view it larger.
               </p>
               <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
                 {images.map((img) => (

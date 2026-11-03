@@ -46,7 +46,7 @@ const PARTS: Part[] = [
           ['dash-panels', 'Campaigns, mixes & demand'],
         ],
       },
-      { id: 'effort', n: '03', label: 'Effort mode', subs: [['effort-rates', 'The rates behind it']] },
+      { id: 'effort', n: '03', label: 'Effort', subs: [['effort-rates', 'The rates behind it']] },
       { id: 'compare', n: '04', label: 'Comparing years' },
     ],
   },
@@ -72,8 +72,7 @@ const PARTS: Part[] = [
     label: 'Settings & more',
     sections: [
       { id: 'settings', n: '07', label: 'Settings' },
-      { id: 'showcase', n: '08', label: 'Showcase' },
-      { id: 'data', n: '09', label: 'Your data' },
+      { id: 'data', n: '08', label: 'Your data' },
     ],
   },
 ]
@@ -205,8 +204,8 @@ export function HelpPage() {
                   The GCMC Dashboard is GCMC&rsquo;s single record of creative work: every task the team is
                   briefed on, every deliverable that comes out of it, who asked for it, who did it, and when.
                   From that one record it produces the{' '}
-                  <XRef to="reading">dashboard</XRef>, <XRef to="compare">year-over-year comparisons</XRef>,
-                  CSV exports and animated <XRef to="showcase">showcases</XRef>.
+                  <XRef to="reading">dashboard</XRef>, <XRef to="compare">year-over-year comparisons</XRef>{' '}
+                  and CSV exports.
                 </P>
                 <Ul
                   items={[
@@ -220,18 +219,14 @@ export function HelpPage() {
                       anticipate this year&rsquo;s.
                     </>,
                     <>
-                      <B>Compare fairly</B> — <XRef to="effort">Effort mode</XRef> weighs each deliverable by
+                      <B>Compare fairly</B> — <XRef to="effort">Effort</XRef> weighs each deliverable by
                       how long its type takes, so quick, high-volume work stops overshadowing slow, heavy work.
-                    </>,
-                    <>
-                      <B>Report without slides</B> — the <XRef to="showcase">Showcase</XRef> turns a
-                      period&rsquo;s data into a shareable animated presentation.
                     </>,
                   ]}
                 />
                 <Tip>
                   Anyone with the link can <B>browse</B> everything. <B>Signing in</B> (top right) unlocks
-                  editing — creating tasks, changing <XRef to="settings">settings</XRef>, building showcases.
+                  editing — creating tasks and changing <XRef to="settings">settings</XRef>.
                 </Tip>
               </Section>
 
@@ -245,7 +240,7 @@ export function HelpPage() {
                 <Shot src="dashboard-overview" caption="The dashboard — every panel scoped by the controls in the header" />
 
                 <H3 id="dash-scope">Scope: what you&rsquo;re looking at</H3>
-                <P>Three header controls set the scope for every panel at once:</P>
+                <P>Two header controls set the scope for every panel at once:</P>
                 <Ul
                   items={[
                     <>
@@ -254,16 +249,12 @@ export function HelpPage() {
                       not the whole task.
                     </>,
                     <>
-                      <B>Assets / Effort switch</B> — how workload is measured (see{' '}
-                      <XRef to="effort">03 · Effort mode</XRef>). Appears once output rates exist.
-                    </>,
-                    <>
                       <B>Span filter</B> — Total (all time), By year, or By half — plus Compare (see{' '}
                       <XRef to="compare">04 · Comparing years</XRef>).
                     </>,
                   ]}
                 />
-                <Shot src="header-scope" caption="The scope controls — function filter, measurement switch and its explainer" />
+                <Shot src="header-scope" caption="The scope controls — function filter and span filter" />
 
                 <H3 id="dash-stats">Headline stats & by-squad rankings</H3>
                 <P>
@@ -310,42 +301,38 @@ export function HelpPage() {
                 <Shot src="dashboard-demand" caption="Share of each type across Domestic, INTON and other stakeholders" />
               </Section>
 
-              <Section id="effort" n="03" title="Effort mode">
+              <Section id="effort" n="03" title="Effort">
                 <P>
                   Counting assets flatters whoever makes the quickest ones: 300 photo edits and 10 banners
-                  read as a 30:1 difference in output even when the banners took longer. Effort mode fixes the
+                  read as a 30:1 difference in output even when the banners took longer. The dashboard fixes the
                   comparison by weighing every deliverable by its <B>output rate</B> — roughly how many of
                   that asset type the team finishes in how long (&ldquo;300 statics per day&rdquo;, &ldquo;1
                   guide per 2 weeks&rdquo;).
                 </P>
                 <P>
-                  Flip the <XRef to="dash-scope">header switch</XRef> to <B>Effort</B> and the dashboard
-                  re-reads itself in hours. The two hero cards become a compact <B>Volume</B> panel (the
+                  So the dashboard reads in hours. The headline cards are a compact <B>Volume</B> panel (the
                   counts, kept honest) and an <B>Effort</B> panel — total weighted hours, hours per asset, and
                   the top 3 asset types consuming the team&rsquo;s time.
                 </P>
-                <Shot src="effort-panels" caption="Effort mode — Volume demoted to one panel, Effort as the headline" />
+                <Shot src="effort-panels" caption="Volume as one compact panel, Effort as the headline" />
                 <P>
-                  The <XRef to="dash-workload">workload chart</XRef> switches to hours too. Its scale is
+                  The <XRef to="dash-workload">workload chart</XRef> is in hours too. Its scale is
                   deliberately unlabelled — the rates are hand-set estimates, so the <B>shape</B> is the
                   story, not the exact height.
                 </P>
-                <Shot src="effort-workload" caption="The workload line in Effort mode — weighted hours, unlabelled scale" />
+                <Shot src="effort-workload" caption="The workload line — weighted hours, unlabelled scale" />
 
                 <H3 id="effort-rates">The rates behind it</H3>
                 <P>
-                  Rates live in <XRef to="settings">Settings → Timing &amp; effort</XRef>, and the <HelpQ />{' '}
-                  beside the switch opens an explainer that links straight into the editor. Each asset type
+                  Rates live in <XRef to="settings">Settings → Timing &amp; effort</XRef>. Until at least one
+                  is set, the workload chart has nothing to plot and says so. Each asset type
                   gets one rate — &ldquo;N assets per N hours / days / weeks&rdquo; — with a live,
                   heat-coloured comparison so a typo stands out immediately.
                 </P>
-                <Shot src="effort-explainer" caption="The explainer behind the “?” — what each measure means, side by side" />
                 <Shot src="rates-editor" caption="The output-rates editor — one rate per asset type, compared to scale as you type" />
                 <Tip>
-                  Three things to trust: Effort changes <B>only how the dashboard reads</B> — no stored number
-                  or export is touched. The switch is <B>per browser</B>, so your view never changes a
-                  colleague&rsquo;s. And unrated asset types count as zero and are flagged, never silently
-                  guessed.
+                  Two things to trust: Effort changes <B>only how the dashboard reads</B> — no stored number
+                  or export is touched. And unrated asset types count as zero, never silently guessed.
                 </Tip>
               </Section>
 
@@ -353,10 +340,9 @@ export function HelpPage() {
                 <P>
                   <B>Compare</B> (top right) measures a target year against a baseline. Every panel gains
                   animated deltas, split bars or a faded baseline series, and the{' '}
-                  <XRef to="dash-workload">workload chart</XRef> draws both years on one axis. It combines
-                  with <XRef to="effort">Effort mode</XRef> — hours against hours.
+                  <XRef to="dash-workload">workload chart</XRef> draws both years on one axis, in <XRef to="effort">effort</XRef> hours against hours.
                 </P>
-                <Shot src="compare-panels" caption="Compare in Effort view — deltas on every figure, both years' size bars" />
+                <Shot src="compare-panels" caption="Compare — deltas on every figure, both years' size bars" />
                 <Shot src="compare-workload" caption="Two years on one chart — this year solid, the baseline behind it" />
                 <Tip>
                   <B>Match range</B> is the honesty switch: it clips both years to the same span (January →
@@ -478,7 +464,7 @@ export function HelpPage() {
                     </>,
                     <>
                       <B>Timing & effort</B> — turnaround days per task size, and the{' '}
-                      <XRef to="effort-rates">output rates</XRef> behind Effort mode.
+                      <XRef to="effort-rates">output rates</XRef> behind the effort figures.
                     </>,
                     <>
                       <B>monday.com boards</B> — which boards the{' '}
@@ -496,25 +482,16 @@ export function HelpPage() {
                 />
               </Section>
 
-              <Section id="showcase" n="08" title="Showcase" signIn>
-                <P>
-                  The Showcase (bottom of the sidebar) turns a period&rsquo;s workload into an animated,
-                  presentable story. A guided wizard picks the span, stats, top projects and style, and
-                  produces a full-screen presentation to play in meetings or share by link — viewers
-                  don&rsquo;t need to sign in.
-                </P>
-              </Section>
-
-              <Section id="data" n="09" title="Your data">
+              <Section id="data" n="08" title="Your data">
                 <Ul
                   items={[
                     <>
-                      <B>Shared and live</B> — tasks, settings and showcases live in the team database; an
+                      <B>Shared and live</B> — tasks and settings live in the team database; an
                       edit on one machine appears for everyone. Task images live in shared storage.
                     </>,
                     <>
-                      <B>Personal stays personal</B> — theme, dashboard display toggles, the{' '}
-                      <XRef to="effort">Assets/Effort switch</XRef> and stars are stored in your browser only.
+                      <B>Personal stays personal</B> — theme, dashboard display toggles and stars are stored in
+                      your browser only.
                     </>,
                     <>
                       <B>Backups</B> — <XRef to="tasks">CSV export</XRef> covers the tasks; year snapshots
