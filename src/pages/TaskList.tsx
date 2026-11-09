@@ -85,7 +85,14 @@ function loadCols(): ColVisibility {
   return all
 }
 
-export function TaskList() {
+/**
+ * The task list page. `seed` + `embedded` let the dashboard show the SAME list in a
+ * pop-up over itself (see Dashboard's drill-down), so closing it returns to the
+ * dashboard exactly as it was: `seed` replaces the URL query as the source of the
+ * starting filters, and `embedded` drops the page-only chrome (the sticky page
+ * surround and Import & Backup).
+ */
+export function TaskList({ seed, embedded = false }: { seed?: URLSearchParams; embedded?: boolean } = {}) {
   const { tasks, settings, updateTask, deleteTask } = useStore()
   const { canEdit } = useAuth()
 
@@ -118,7 +125,8 @@ export function TaskList() {
 
   // Filters seed from the URL query so dashboard charts can deep-link here
   // (e.g. /tasks?squad=DOM&asset=Image). Keys may repeat for multi-value filters.
-  const [searchParams] = useSearchParams()
+  const [urlParams] = useSearchParams()
+  const searchParams = seed ?? urlParams
   const [query, setQuery] = useState('')
   // Span also seeds from the URL so a dashboard deep-link lands on the same
   // time window it counted (?year=2026 → By year; +&half=H2 → that half).
@@ -275,7 +283,7 @@ export function TaskList() {
   return (
     <div className="flex flex-col">
       {/* The opaque surround covers the gaps and rounded corners as rows scroll behind it. */}
-      <div className="sticky top-0 z-20 -mx-6 -mt-4 bg-surface px-6 py-4">
+      <div className={embedded ? 'pb-4' : 'sticky top-0 z-20 -mx-6 -mt-4 bg-surface px-6 py-4'}>
       <Card className="flex flex-col gap-3 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-[260px] flex-1">
@@ -352,7 +360,7 @@ export function TaskList() {
             )}
           </button>
 
-          {canEdit && (
+          {canEdit && !embedded && (
             <button className="btn-outline ml-auto" onClick={() => setIoOpen(true)}>
               <DatabaseBackup className="h-4 w-4" /> Import &amp; Backup
             </button>

@@ -35,7 +35,16 @@ const EDIT_ONLY = ['/settings']
     best on desktop. */
 const MOBILE_HIDDEN = ['/help']
 
-export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+export function Sidebar({
+  collapsed,
+  onToggle,
+  onAbout,
+}: {
+  collapsed: boolean
+  onToggle: () => void
+  /** Opens the About dialog — clicking the brand. */
+  onAbout: () => void
+}) {
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
   const nav = canEdit ? NAV : NAV.filter((item) => !EDIT_ONLY.includes(item.to))
@@ -95,14 +104,27 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           {/* Brand — kept as reserved (invisible) space when collapsed so the nav icons
               don't shift up; the logo + name show in the header instead. Still visible on
               the mobile rail (collapse is desktop-only). */}
-          <div className={cx('mb-6 flex items-center gap-3 px-1 md:px-2', collapsed && 'md:invisible')}>
+          {/* The brand opens About — stopPropagation so it doesn't also collapse the
+              sidebar (a background click does that). */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onAbout()
+            }}
+            title="About GCMC Dashboard"
+            className={cx(
+              'mb-6 flex items-center gap-3 rounded-lg px-1 text-left transition hover:opacity-80 md:px-2',
+              collapsed && 'md:invisible',
+            )}
+          >
             <img src="/RMIT_full.svg" alt="RMIT" className="h-5 w-auto shrink-0 dark:hidden md:h-7" />
             <img src="/RMIT_red.svg" alt="RMIT" className="hidden h-5 w-auto shrink-0 dark:block md:h-7" />
             <div className="hidden min-w-0 whitespace-nowrap md:block">
               <p className="text-sm font-bold leading-tight text-ink dark:text-white">GCMC</p>
               <p className="text-[11px] leading-tight text-muted dark:text-navy-100">Dashboard</p>
             </div>
-          </div>
+          </button>
 
           <nav className={cx('flex flex-col gap-1.5', railOnly('md:items-stretch'))}>
             {topNav.map(renderLink)}

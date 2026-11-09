@@ -117,7 +117,8 @@ happens** (see §6).
   MMDD). When a legacy code is entered, TaskForm shows a small **"Legacy format"** badge
   under the code input next to "Booked {date}".
 - **Stakeholder groups** (`src/lib/analytics.ts`): every squad maps to one of
-  `DOMESTIC` (DOM), `INTON` (INTON), or `Other Stakeholders` (all the rest) via
+  `DOMESTIC` (DOM), `INTON` (INTON), or `Other Stakeholders` (all the rest — incl. DOM SR /
+  INTON SR, which are separate squads; see §28) via
   `stakeholderGroup()`. Used by the "Demand by stakeholders" chart.
 - **Span** (`src/lib/span.ts`): `Total | By year | By half`. `filterBySpan(tasks, mode,
   year, half)` + `taskYears()` + `spanSuffix()`. Rendered by the shared
@@ -1323,3 +1324,92 @@ app shell, inside `StoreProvider` only (live tasks, no Layout).
 - **Help screenshots regenerated** for the Effort-only dashboard (capture script rewritten,
   §21). `effort-workload.png` (now identical to `dashboard-workload`) and
   `effort-explainer.png` were dropped; the rates editor's intro no longer mentions a switch.
+
+---
+
+## 28. Squad filter & share of demand ⚠️ v0.12.0
+
+Squads (DOM, INTON especially) want their own numbers. The dashboard header's left slot now
+holds a **`SquadFilter`** (`components/SquadFilter.tsx`) beside the function filter:
+**All squads**, then DOM + INTON pinned, then every other squad (`withFallback(settings.squads)`,
+so "Others" is pickable and last). Single-select on purpose.
+
+- **Squads are their own things.** DOM SR / INTON SR (SR = Student Recruitment) are separate
+  squads, NOT part of Domestic / INTON — `stakeholderGroup()` matching only the literal
+  "DOM"/"INTON" is correct. Don't "fix" it.
+- **State lives in the URL** — `/?squad=DOM` (`useSearchParams`, `replace: true`), so a
+  squad can bookmark / be sent its own view. An unknown name (stale link after a rename) is
+  ignored → All squads, never an empty dashboard. The function filter is still NOT in the URL.
+- **Pipeline:** `tasks → fnTasks (function slices) → squadTasks (squad) → inSpan / inSource`.
+  `filtered` / `sourceTasks` / `byMonth` / `chartYearTasks` / `srcByMonth` all read
+  `squadTasks`, so every panel, span, Compare and match-range compose untouched.
+  `filteredAll` / `sourceAll` are the same scope over EVERY squad (=== filtered/sourceTasks
+  when no squad is picked) — only the share panels read them. `years` stays on all tasks.
+- **By-squad panels** (titles unchanged — `isFitCard()` keys off them) become the squad vs
+  `REST_SQUADS` = "All other squads" (`vsRest()`), from `filteredAll`, rendered by
+  **`SquadVsRest`** (charts.tsx): one line per row — label · thick bar · figure · % — bars
+  measured against the TOTAL (squad + rest), compare adds a delta + a source-share tick. The two
+  cards STACK in one column (header grid 3 cols, `2xl:[1.4fr_1.05fr_1.15fr]`) — measured: the
+  header row stays ~344px, same as the default view. Clicking the rest row opens the task list
+  with every OTHER squad as `squad` params.
+- **Lower layout differs by mode.** The four lower panels are built once as consts
+  (`workloadCard`, `campaignCard`, `mixesRow`, `demandCard`) and laid out per mode: default =
+  the original two columns (workload over campaign | mixes over demand); squad view = workload |
+  mixes on top, then campaign ⅓ | share of demand ⅔ (a squad's campaign chart is a few bars).
+- **Demand panel → share of demand.** Title "{squad}’s share of demand"; per type,
+  `analytics.demandShareForSquad(tasks, squad, dim, names)` → `{ name, squad, rest }` (same
+  counting rules as the stakeholder version: asset dim = breakdown counts, work-type dim =
+  task asset total per type). Chart groups apply. Types the squad never requested are dropped
+  and counted in the subtitle ("· N not requested"); columns sorted by the squad's share.
+  Rendered with `StackedBarChart`'s new optional props: `colors` (explicit per key — the
+  squad keeps `useSquadColor()`, the rest uses the new **`--chart-rest`** token, light
+  `#c3c6d4` / dark `#3b3f7e`), `keyLabels` (stack keys stay the fixed, path-safe ids
+  `squad`/`rest` — a squad name with a `.` would break recharts' `dataKey`), and
+  `showShare` (tooltip "n of total (p%)" per column; `prev_*` segments measured against the
+  source column). `StackedLegend` takes the same `colors`/`keyLabels`. All default-off, so
+  the all-squads chart is unchanged. Help copy: `PANEL_INFO.demandShare`.
+- **Deep links carry the scope:** `goTasks` appends `squad=<selected>` unless the click
+  already names squads.
+- **Verified** (Playwright, live data): the all-squads dashboard text + bar counts are
+  identical before/after in year / total / half / compare; DOM view = 2,163 assets / 56
+  tasks = DOM's rows in the all-squads ranking; rest rows reconcile (166 − 56); the rest row
+  opens a task list of exactly that count; unknown `?squad=` falls back; both themes; no
+  console errors. Not done: the Task List and Calendar don't read `?squad=` from the
+  dashboard (the Task List has its own squad filter; clicks carry it).
+
+### Same release (v0.12.0) — dashboard follow-ups
+
+- **Drill-down pop-up.** `goTasks` no longer navigates: it sets `drill` (the filter
+  `URLSearchParams`) and a near-full-screen `Modal` (`widthClass="max-w-[96vw] min-h-[88vh]"`)
+  renders the REAL `TaskList` with `seed={drill} embedded`. `TaskList({ seed, embedded })`:
+  `seed` replaces `useSearchParams()` as the source of starting filters (it only ever READS
+  the URL, so it never touches the dashboard's `?squad=`); `embedded` drops the sticky page
+  surround and Import & Backup. Keyed by the query so each click re-seeds. Title from
+  `drillTitle()` ("DOM · Videos · 2026 H1") + an "Open in Task List" button (navigates to
+  `/tasks?<same query>`). Nested modals (task details / edit form) stack correctly — Esc
+  closes the top one only (Modal's `openModals` stack). Verified: counts equal the clicked
+  figure, URL / filters / span / scroll / card text unchanged after closing, signed in + out.
+- **Hero figure cap (wide screens).** `FIGURE_ROW` is a fixed 88px row; the Volume/Effort
+  figures are cqw-sized and reached 192px on 2560px+ screens, spilling up into the header
+  (measured 67px overlap at 4K in the DEFAULT view, 80px in the squad view). The font is now
+  `clamp(…, var(--figure-max-volume|effort, 6.75rem))` = 108px → 86px glyphs, inside the row;
+  `html[data-present] .figure-row` restores 12rem / 10rem, so full screen is unchanged (77px →
+  184px presented). Measured 0 overlap 1280–3840, both views; ≤1920 sizes unchanged.
+- **Filter labels.** `FunctionFilter` / `SquadFilter` buttons carry a tiny uppercase label
+  ("Function" / "Squad") shown from **1360px** (`min-[1360px]:inline`): measured, with labels
+  the header wraps its controls onto a 2nd row at ≤1320px; without them it is one row ≥1240px.
+- **Workload grid.** `AreaTrendChart`'s `CartesianGrid` now draws month-start verticals
+  (`verticalValues`) and every y tick, solid at `strokeOpacity 0.6`. ⚠️ The y-axis tick is an
+  EMPTY render function, not `false`, when labels are hidden — with `tick={false}` recharts
+  skips tick generation and the grid kept only its top and bottom lines (`horizontalValues`
+  did not help: it needs the axis ticks too).
+- **Span switch** (`SpanFilter`'s new `Segmented`): a bordered `bg-subtle` track with a
+  hairline between unselected neighbours, so Total / By year / By half (and H1 / H2) read as one
+  pick-one control. Also used by the Task List. (A red-tinted Compare button was tried and
+  reverted — Compare stays neutral at rest, solid navy while on.)
+- **About dialog** (`components/AboutModal.tsx`): clicking the RMIT logo — the sidebar brand
+  (a button now; `stopPropagation` so it doesn't also collapse the sidebar), the header brand
+  when the sidebar is collapsed, or the mobile header logo — opens it. Shows purpose, version +
+  release (from `CHANGELOG`), backend (Supabase / local), live status, recorded tasks (drafts
+  apart) and the configured functions. State lives in `Layout` (`aboutOpen`), passed to
+  `Sidebar` as `onAbout`.

@@ -70,6 +70,10 @@ export function FunctionFilter({
         aria-expanded={open}
         className="flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-1.5 text-sm font-semibold text-ink shadow-soft transition hover:border-faint"
       >
+        {/* Small inline label, so the header says WHAT each dropdown filters
+            without growing taller — screens 1360px+ only: measured, below that the header runs out
+            of room and its controls wrap onto a second row. */}
+        <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-muted min-[1360px]:inline">Function</span>
         {!isAll && (
           <span className="flex items-center -space-x-1">
             {functions

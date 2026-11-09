@@ -112,6 +112,40 @@ export function demandByStakeholderAssetType(tasks: Task[], assetTypes: string[]
   return rows.filter((r) => r.DOMESTIC + r.INTON + r['Other Stakeholders'] > 0)
 }
 
+/** One squad's demand against everyone else's — the squad-view counterpart of the rows above. */
+export type SquadShareRow = { name: string; squad: number; rest: number }
+
+/**
+ * Per asset type (`dim` 'asset') or work type (`dim` 'type'), the deliverables
+ * requested by `squad` vs by every other squad. Same counting rules as
+ * demandByStakeholderAssetType / demandByStakeholder respectively, so the two
+ * views reconcile. Pass the UNFILTERED-by-squad task set — a share needs the
+ * whole. `names` sets the order; rows with no demand at all are dropped.
+ */
+export function demandShareForSquad(
+  tasks: Task[],
+  squad: string,
+  dim: 'asset' | 'type',
+  names: string[],
+): SquadShareRow[] {
+  const rows: SquadShareRow[] = names.map((name) => ({ name, squad: 0, rest: 0 }))
+  const byName = new Map(rows.map((r) => [r.name, r]))
+  for (const t of tasks) {
+    const side = t.squad === squad ? 'squad' : 'rest'
+    if (dim === 'asset') {
+      for (const name of names) byName.get(name)![side] += Number(t.assetBreakdown[name]) || 0
+    } else {
+      const assets = t.assetTotal || 0
+      if (!assets) continue
+      for (const type of t.types) {
+        const row = byName.get(type)
+        if (row) row[side] += assets
+      }
+    }
+  }
+  return rows.filter((r) => r.squad + r.rest > 0)
+}
+
 /** Total assets split by asset type. `assetTypes` sets the order; empty types are dropped. */
 export function assetsByType(tasks: Task[], assetTypes: string[]): NamedCount[] {
   return assetTypes

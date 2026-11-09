@@ -226,7 +226,8 @@ export function HelpPage() {
                 />
                 <Tip>
                   Anyone with the link can <B>browse</B> everything. <B>Signing in</B> (top right) unlocks
-                  editing — creating tasks and changing <XRef to="settings">settings</XRef>.
+                  editing — creating tasks and changing <XRef to="settings">settings</XRef>. Click the RMIT logo
+                  for <B>About</B> — the version running and where the data lives.
                 </Tip>
               </Section>
 
@@ -234,13 +235,15 @@ export function HelpPage() {
                 <P>
                   The dashboard is the whole record aggregated into one screen. Every panel has a <HelpQ />{' '}
                   button with a plain-language explanation and a worked example, and nearly every number is
-                  clickable — it opens the <XRef to="tasks">task list</XRef> filtered to exactly the tasks it
-                  was counted from.
+                  clickable — it opens the <XRef to="tasks">task list</XRef> in a pop-up over the dashboard,
+                  filtered to exactly the tasks it was counted from. Close it (✕ or Esc) and you&rsquo;re back
+                  where you were, every filter intact; &ldquo;Open in Task List&rdquo; takes you to the full page
+                  instead.
                 </P>
                 <Shot src="dashboard-overview" caption="The dashboard — every panel scoped by the controls in the header" />
 
                 <H3 id="dash-scope">Scope: what you&rsquo;re looking at</H3>
-                <P>Two header controls set the scope for every panel at once:</P>
+                <P>Three header controls set the scope for every panel at once:</P>
                 <Ul
                   items={[
                     <>
@@ -249,12 +252,19 @@ export function HelpPage() {
                       not the whole task.
                     </>,
                     <>
+                      <B>Squad filter</B> (All squads) — show one requesting squad&rsquo;s work only. DOM and
+                      INTON sit at the top of the list. The choice goes into the address
+                      (<code>?squad=DOM</code>), so each squad can bookmark — or be sent — a link that opens
+                      straight into its own view. The by-squad panels then show that squad against all other
+                      squads, and the demand panel becomes its share of demand (below).
+                    </>,
+                    <>
                       <B>Span filter</B> — Total (all time), By year, or By half — plus Compare (see{' '}
                       <XRef to="compare">04 · Comparing years</XRef>).
                     </>,
                   ]}
                 />
-                <Shot src="header-scope" caption="The scope controls — function filter and span filter" />
+                <Shot src="header-scope" caption="The scope controls — function filter, squad filter and span filter" />
 
                 <H3 id="dash-stats">Headline stats & by-squad rankings</H3>
                 <P>
@@ -299,6 +309,12 @@ export function HelpPage() {
                   drives this kind of work?&rdquo;.
                 </P>
                 <Shot src="dashboard-demand" caption="Share of each type across Domestic, INTON and other stakeholders" />
+                <P>
+                  With a squad selected, this panel turns into <B>that squad&rsquo;s share of demand</B>: for each
+                  type the squad requested, its slice of everything GCMC produced of that type, against all other
+                  squads combined. It is the one panel on a squad view that still counts the other squads — a share
+                  needs the whole. Hover a column for the actual numbers (&ldquo;120 of 230&rdquo;).
+                </P>
               </Section>
 
               <Section id="effort" n="03" title="Effort">

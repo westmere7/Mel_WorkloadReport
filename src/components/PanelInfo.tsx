@@ -151,6 +151,13 @@ export const PANEL_INFO: Record<string, PanelExplainer> = {
     example: 'If Publication is 90% INTON while Digital display is 80% Domestic, then a clash between an INTON publication deadline and a Domestic display campaign is a conflict between two different teams\' priorities — and one that recurs every cycle.',
     caveat: 'Shares only. A column can be 100% one group and still be a tiny slice of GCMC\'s work.',
   },
+  demandShare: {
+    title: 'Share of demand',
+    what: 'Shown when the dashboard is filtered to one squad. For each work type or asset type that squad requested, the share of all GCMC deliverables of that type that came from the squad, against every other squad combined. Every column totals 100%; types the squad never asked for are left out. Hover a segment for the actual numbers.',
+    meaning: 'It is the squad\'s claim on GCMC capacity, type by type. Where the share is high, that squad\'s timing effectively sets the team\'s workload for that kind of work — the conversation to have about planning and lead times.',
+    example: 'If DOM\'s Videos column reads 52% (120 of 230), more than half of all video GCMC produced in the period was for DOM. A DOM video push in a busy month will squeeze everyone else\'s videos.',
+    caveat: 'This panel deliberately counts every squad\'s work, so it is the one place on a squad view that reads beyond that squad. Shares only — a 90% column can still be a handful of assets.',
+  },
 }
 
 /**

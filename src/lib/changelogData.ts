@@ -26,6 +26,37 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.12.0',
+    date: '2026-11-09',
+    title: 'Your squad’s view',
+    notes: [
+      {
+        kind: 'new',
+        text: 'A squad filter on the dashboard, next to All GCMC. Pick DOM, INTON or any other squad and every panel shows only that squad’s work — year, half and Compare included. The choice is part of the page address, so each squad can bookmark its own view, or be sent a link that opens straight into it.',
+      },
+      {
+        kind: 'new',
+        text: 'With a squad selected, the demand panel becomes that squad’s share of demand — given the wider part of the bottom row: for every asset or work type it asked for, how much of all GCMC’s output of that type was theirs. Hover a column for the actual numbers. Tasks by squad and Assets by squad stack into one column and show the squad against all other squads combined.',
+      },
+      {
+        kind: 'improved',
+        text: 'Clicking a number on the dashboard now opens the matching tasks in a large pop-up over the dashboard instead of leaving it. Close it and you are exactly where you were — same filters, same year, same scroll. “Open in Task List” at the top still takes you to the full page.',
+      },
+      {
+        kind: 'improved',
+        text: 'The dashboard’s filters are labelled (Function, Squad), the Total / By year / By half switch looks like the three-way choice it is, and the workload chart has a faint grid so a peak or a task can be read against its month.',
+      },
+      {
+        kind: 'new',
+        text: 'Click the RMIT logo for About: what the dashboard is for, which version is running, where its data lives and whether it is updating live.',
+      },
+      {
+        kind: 'fixed',
+        text: 'On very wide screens (1440p, 4K) the big Volume and Effort numbers grew into the panel titles above them. They now stop at a size that fits; full screen still shows them larger.',
+      },
+    ],
+  },
+  {
     version: '0.11.0',
     date: '2026-11-03',
     title: 'GCMC Dashboard',

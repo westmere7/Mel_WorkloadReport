@@ -613,6 +613,97 @@ export function RankedBars({
   )
 }
 
+/**
+ * One squad against everyone else — the by-squad panels' squad-view layout. Two
+ * rows, each a big figure + its share of the total over a thick bar, spread to fill
+ * the card's height. Bars are measured against the TOTAL (squad + rest), so the two
+ * always sum to the full track, unlike RankedBars' largest-row scale.
+ *
+ * `compare` adds a % trend delta per row and a tick at the source year's share.
+ */
+export function SquadVsRest({
+  data,
+  colors,
+  emptyMessage,
+  onSelect,
+  compare,
+  sourceLabel,
+}: {
+  /** Exactly the squad row then the rest row (see the dashboard's `vsRest`). */
+  data: NamedCount[]
+  /** Bar colour per row, same order as `data`. */
+  colors: string[]
+  /** Shown instead when nobody has any work in scope. */
+  emptyMessage?: string
+  onSelect?: (name: string) => void
+  compare?: NamedCount[]
+  sourceLabel?: string
+}) {
+  const total = data.reduce((a, d) => a + d.value, 0)
+  if (!total) return <NotEnough message={emptyMessage} height={120} />
+  const prevByName = compare ? new Map(compare.map((d) => [d.name, d.value])) : null
+  const prevTotal = compare ? compare.reduce((a, d) => a + d.value, 0) : 0
+  const pct = (v: number, of: number) => (of ? Math.round((v / of) * 100) : 0)
+  return (
+    <div className="flex flex-1 flex-col justify-around gap-3">
+      {data.map((d, i) => {
+        const prev = prevByName?.get(d.name) ?? 0
+        const share = total ? (d.value / total) * 100 : 0
+        const prevShare = prevTotal ? (prev / prevTotal) * 100 : 0
+        return (
+          <div
+            key={d.name}
+            className={cx('-mx-1.5 rounded-lg px-1.5 py-1 transition-colors', onSelect && 'cursor-pointer hover:bg-subtle')}
+            title={onSelect ? `View tasks in ${d.name}` : undefined}
+            {...(onSelect
+              ? {
+                  role: 'button',
+                  tabIndex: 0,
+                  onClick: () => onSelect(d.name),
+                  onKeyDown: (e: KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSelect(d.name)
+                    }
+                  },
+                }
+              : {})}
+          >
+            {/* One line per row — label · bar · figure — so the stacked cards stay short. */}
+            <div className="flex items-center gap-3">
+            <span className="w-28 shrink-0 truncate text-sm font-semibold text-ink" title={d.name}>
+              {d.name}
+            </span>
+            <div className="relative h-5 min-w-0 flex-1 rounded-full bg-subtle">
+              <div
+                className="absolute inset-y-0 left-0 rounded-full transition-[width]"
+                style={{ width: `${share}%`, background: colors[i] }}
+              />
+              {compare && prev > 0 && (
+                <span
+                  className="absolute top-1/2 h-7 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                  style={{ left: `${prevShare}%`, background: 'var(--chart-axis-strong)' }}
+                  title={`${sourceLabel ?? 'source'}: ${prev.toLocaleString()} (${pct(prev, prevTotal)}%)`}
+                />
+              )}
+            </div>
+            <span className="flex shrink-0 items-baseline justify-end gap-1.5">
+              {compare && (
+                <TrendDelta size="sm" current={d.value} previous={prev} title={`${prev} → ${d.value}`} />
+              )}
+              <span className="min-w-[3.5rem] text-right text-xl font-bold tabular-nums leading-none text-ink">
+                {d.value.toLocaleString()}
+              </span>
+              <span className="w-9 text-right text-xs font-semibold tabular-nums text-muted">{pct(d.value, total)}%</span>
+            </span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /** Horizontal category-axis tick that wraps long labels onto multiple lines. */
 function WrappedTick(props: {
   x?: number
@@ -787,6 +878,9 @@ export function StackedBarChart({
   compare,
   onSelect,
   hideLegend,
+  colors,
+  keyLabels,
+  showShare,
 }: {
   // Rows may carry extra chart-group metadata (color/isGroup/groupItems) beyond
   // the numeric stack keys — tolerate those value types.
@@ -798,6 +892,12 @@ export function StackedBarChart({
   emptyMessage?: string
   /** Hide the built-in bottom legend (e.g. when rendering it in a card header). */
   hideLegend?: boolean
+  /** Explicit colour per key (any CSS colour, incl. `var(--…)`) — overrides `paletteIndices`. */
+  colors?: string[]
+  /** Display name per key, for the tooltip/legend — lets `keys` stay fixed, path-safe ids. */
+  keyLabels?: Record<string, string>
+  /** Tooltip shows each segment as "n of total (p%)" of its own column. */
+  showShare?: boolean
   /** Clicking a segment calls this with the category (x-axis) name and the stacked key (group). */
   onSelect?: (category: string, group: string) => void
   /** Comparison baseline rows (same key shape) — splits each column into two
@@ -810,7 +910,8 @@ export function StackedBarChart({
   }
 }) {
   const themed = useChartColors()
-  const colorAt = (i: number) => themed[(paletteIndices?.[i] ?? i) % themed.length]
+  const colorAt = (i: number) => colors?.[i] ?? themed[(paletteIndices?.[i] ?? i) % themed.length]
+  const labelOf = (k: string) => keyLabels?.[k] ?? k
 
   // In compare mode, inner-join rows on name and stash the baseline under prev_* keys.
   let rows = data
@@ -863,6 +964,18 @@ export function StackedBarChart({
           contentStyle={tooltipStyle}
           itemStyle={tooltipItemStyle}
           labelStyle={tooltipLabelStyle}
+          formatter={
+            showShare
+              ? (value: number, name: string, item: { dataKey?: unknown; payload?: Record<string, unknown> }) => {
+                  // A segment's share of ITS column — source-year (prev_*) segments
+                  // are measured against the source-year column.
+                  const prefix = String(item.dataKey ?? '').startsWith('prev_') ? 'prev_' : ''
+                  const total = keys.reduce((a, k) => a + (Number(item.payload?.[prefix + k]) || 0), 0)
+                  const pct = total ? Math.round((Number(value) / total) * 100) : 0
+                  return [`${Number(value).toLocaleString()} of ${total.toLocaleString()} (${pct}%)`, name]
+                }
+              : undefined
+          }
         />
         {!hideLegend && (
           <Legend
@@ -872,7 +985,7 @@ export function StackedBarChart({
             // legend to one entry per key instead of listing each year twice.
             payload={
               compare
-                ? keys.map((k, i) => ({ value: k, type: 'circle' as const, color: colorAt(i), id: k }))
+                ? keys.map((k, i) => ({ value: labelOf(k), type: 'circle' as const, color: colorAt(i), id: k }))
                 : undefined
             }
           />
@@ -883,7 +996,7 @@ export function StackedBarChart({
             <Bar
               key={`prev_${k}`}
               dataKey={`prev_${k}`}
-              name={`${k} (${compare.label})`}
+              name={`${labelOf(k)} (${compare.label})`}
               stackId="prev"
               fill={colorAt(i)}
               fillOpacity={0.45}
@@ -895,7 +1008,7 @@ export function StackedBarChart({
           <Bar
             key={k}
             dataKey={k}
-            name={compare ? `${k} (${compare.currentLabel})` : k}
+            name={compare ? `${labelOf(k)} (${compare.currentLabel})` : labelOf(k)}
             stackId={compare ? 'cur' : 'stack'}
             fill={colorAt(i)}
             maxBarSize={compare ? 40 : 64}
@@ -921,15 +1034,21 @@ export function StackedBarChart({
 export function StackedLegend({
   keys,
   paletteIndices,
+  colors,
+  keyLabels,
   center,
 }: {
   keys: string[]
   paletteIndices?: number[]
+  /** Explicit colour per key — overrides `paletteIndices` (match the chart's `colors`). */
+  colors?: string[]
+  /** Display name per key (match the chart's `keyLabels`). */
+  keyLabels?: Record<string, string>
   /** Centre the row — for a legend sitting under the chart instead of in the header. */
   center?: boolean
 }) {
   const themed = useChartColors()
-  const colorAt = (i: number) => themed[(paletteIndices?.[i] ?? i) % themed.length]
+  const colorAt = (i: number) => colors?.[i] ?? themed[(paletteIndices?.[i] ?? i) % themed.length]
   return (
     <div
       className={cx(
@@ -940,7 +1059,7 @@ export function StackedLegend({
       {keys.map((k, i) => (
         <span key={k} className="inline-flex items-center gap-1.5">
           <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: colorAt(i) }} />
-          {k}
+          {keyLabels?.[k] ?? k}
         </span>
       ))}
     </div>
@@ -1424,7 +1543,13 @@ export function AreaTrendChart({
             <stop offset="100%" stopColor="#E61E2A" stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+        {/* A subtle grid: a line per y tick plus one at each month start, so a dot or
+            peak can be read against its month. Solid but faint, so it stays behind the data. */}
+        <CartesianGrid
+          stroke="var(--chart-grid)"
+          strokeOpacity={0.6}
+          verticalValues={xMax < 1 ? MONTH_START_FRAC.filter((f) => f <= xMax + eps) : MONTH_START_FRAC}
+        />
         <XAxis
           type="number"
           dataKey="x"
@@ -1449,8 +1574,10 @@ export function AreaTrendChart({
           allowDecimals={false}
           // Effort mode hides the numbers: weighted hours are a modelled figure,
           // and the point of the line is its SHAPE, not a readable total. The
-          // gridline positions stay, so the profile is still legible.
-          tick={hideYLabels ? false : AXIS}
+          // gridline positions stay, so the profile is still legible. An EMPTY tick,
+          // not `false`: with `false` recharts skips the ticks and the grid loses
+          // every horizontal line but the top and bottom.
+          tick={hideYLabels ? () => <g /> : AXIS}
           axisLine={false}
           tickLine={false}
           width={hideYLabels ? 8 : 32}

@@ -4,6 +4,7 @@ import { LogIn, Moon, Sun, UserCog } from 'lucide-react'
 import { Sidebar, MobileNav } from './Sidebar'
 import { LoginModal } from './LoginModal'
 import { AccountModal } from './AccountModal'
+import { AboutModal } from './AboutModal'
 import { UpdateNotice } from './UpdateNotice'
 import { CardPresenterOverlay } from './CardPresenter'
 import { useTheme } from '../lib/theme'
@@ -33,6 +34,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const [loginOpen, setLoginOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
+  // About — opened by clicking the RMIT logo wherever it shows.
+  const [aboutOpen, setAboutOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
     try {
       return localStorage.getItem(SIDEBAR_KEY) === 'collapsed'
@@ -57,7 +60,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <HeaderSlotContext.Provider value={setHeaderSlots}>
       <div className="flex h-screen overflow-hidden bg-surface">
-        <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
+        <Sidebar collapsed={collapsed} onToggle={toggleSidebar} onAbout={() => setAboutOpen(true)} />
         {/* `relative` + `present-column`: the per-card full-screen covers just this
             column (the sidebar stays) and positions the lifted card against it — see
             lib/present.ts. */}
@@ -68,17 +71,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {/* Title / brand cluster */}
             <div className="order-1 flex min-w-0 items-center gap-3">
               {/* Brand mark on mobile, where the sidebar rail is hidden. */}
-              <img src="/RMIT_red.svg" alt="RMIT" className="h-7 w-auto shrink-0 md:hidden" />
+              <button type="button" onClick={() => setAboutOpen(true)} title="About GCMC Dashboard" className="shrink-0 md:hidden">
+                <img src="/RMIT_red.svg" alt="RMIT — about this dashboard" className="h-7 w-auto" />
+              </button>
               {/* When collapsed, the sidebar rail drops its logo + name — show them here
                   (full-colour on the light header, red/white on the dark one). */}
               {collapsed && (
-                <div className="hidden items-center gap-2.5 md:flex" title="GCMC Dashboard">
-                  <img src="/RMIT_full.svg" alt="RMIT" className="h-8 w-auto shrink-0 dark:hidden" />
-                  <img src="/RMIT_red.svg" alt="RMIT" className="hidden h-8 w-auto shrink-0 dark:block" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold leading-tight text-ink">GCMC</p>
-                    <p className="text-[11px] leading-tight text-muted">Dashboard</p>
-                  </div>
+                <div className="hidden items-center gap-2.5 md:flex">
+                  <button
+                    type="button"
+                    onClick={() => setAboutOpen(true)}
+                    title="About GCMC Dashboard"
+                    className="flex items-center gap-2.5 rounded-lg text-left transition hover:opacity-80"
+                  >
+                    <img src="/RMIT_full.svg" alt="RMIT" className="h-8 w-auto shrink-0 dark:hidden" />
+                    <img src="/RMIT_red.svg" alt="RMIT" className="hidden h-8 w-auto shrink-0 dark:block" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold leading-tight text-ink">GCMC</p>
+                      <p className="text-[11px] leading-tight text-muted">Dashboard</p>
+                    </div>
+                  </button>
                   {(meta.title || slots.left) && <span className="mx-1 h-9 self-center border-l border-line" />}
                 </div>
               )}
@@ -161,6 +173,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
       <AccountModal open={accountOpen} onClose={() => setAccountOpen(false)} />
+      <AboutModal open={aboutOpen} onClose={() => setAboutOpen(false)} />
       {/* Floating "new version is live" toast — polls version.json, never force-reloads. */}
       <UpdateNotice />
     </HeaderSlotContext.Provider>

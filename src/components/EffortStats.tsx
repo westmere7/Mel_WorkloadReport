@@ -54,10 +54,12 @@ export function VolumeCompactCard({
     // and the divider between them lands exactly midway between the two.
     <div className="flex min-w-0 flex-1 flex-col text-center">
       {/* cq units resolve against the card's CONTENT box and each figure gets half
-          of it, so ~17cqw is the ceiling for a 5-glyph number. The max is
-          deliberately high — cqw should be what limits the size, not the clamp. */}
+          of it, so ~17cqw is the ceiling for a 5-glyph number. The 6.75rem max matters:
+          past it the glyphs outgrow the fixed figure row and spill up into the header
+          (measured on 2560px+ screens). Presented full screen, the row grows and the
+          cap lifts (index.css). */}
       <span className={cx(FIGURE_ROW, 'justify-center')}>
-        <span className="font-display block text-[clamp(2.25rem,17cqw,12rem)] font-bold leading-[0.8] tracking-tighter text-rmit-navy dark:text-ink">
+        <span className="font-display block text-[length:clamp(2.25rem,17cqw,var(--figure-max-volume,6.75rem))] font-bold leading-[0.8] tracking-tighter text-rmit-navy dark:text-ink">
           <AnimatedNumber value={value} />
         </span>
       </span>
@@ -133,7 +135,9 @@ const TOP_TYPES_PRESENTED = 12
 const HEADER_BOX = 'h-[3.75rem] [&>div>p]:line-clamp-2'
 // `figure-row` is a stable hook for CSS: presenting a card full screen widens it a
 // long way, and these figures are container-query sized, so the fixed height has to
-// give or the number overflows it upward into the header (see index.css).
+// give or the number overflows it upward into the header (see index.css). Outside full
+// screen the figures are capped at 6.75rem instead: at line-height 0.8 that is 86px,
+// inside the 88px row, so wide (2560px+) screens no longer push them into the header.
 const FIGURE_ROW = 'figure-row flex h-[5.5rem] items-end'
 
 /**
@@ -309,7 +313,7 @@ export function EffortSummaryCard({
           intensity figure sits under it as supporting detail. */}
       <div className="flex min-w-0 flex-col">
         <div className={cx(FIGURE_ROW, 'min-w-0 gap-1')}>
-          <span className="font-display text-[clamp(2rem,24cqw,10rem)] font-bold leading-[0.8] tracking-tighter text-rmit-navy dark:text-ink">
+          <span className="font-display text-[length:clamp(2rem,24cqw,var(--figure-max-effort,6.75rem))] font-bold leading-[0.8] tracking-tighter text-rmit-navy dark:text-ink">
             <AnimatedNumber value={Math.round(hours)} />
           </span>
           <span className="pb-0.5 text-[clamp(1.125rem,7cqw,2.5rem)] font-semibold leading-none text-muted">h</span>

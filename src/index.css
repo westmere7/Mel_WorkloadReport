@@ -36,6 +36,8 @@
     --chart-axis-strong: #374151;
     --chart-grid: #f0f1f5;
     --chart-cursor: rgba(0, 0, 84, 0.05);
+    /* "Everyone else" in a one-squad share chart — recedes behind the squad's colour. */
+    --chart-rest: #c3c6d4;
 
     --scrollbar: #c7c9d9;
   }
@@ -58,6 +60,7 @@
     --chart-axis-strong: #c6caea;
     --chart-grid: #23235f;
     --chart-cursor: rgba(255, 255, 255, 0.06);
+    --chart-rest: #3b3f7e;
 
     --scrollbar: #2c2c78;
 
@@ -555,4 +558,8 @@ html[data-present] main .card:hover {
    overflows it UPWARD, over the card's own header. Let the row grow instead. */
 html[data-present] .figure-row {
   height: auto;
+  /* The row grows here, so the hero figures may too (their caps elsewhere keep them
+     inside the fixed 88px row — see EffortStats FIGURE_ROW). */
+  --figure-max-volume: 12rem;
+  --figure-max-effort: 10rem;
 }
