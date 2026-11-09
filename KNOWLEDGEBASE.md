@@ -1433,6 +1433,6 @@ so "Others" is pickable and last). Single-select on purpose.
   INTON (116) → Calendar keeps INTON (15 May: 18 tasks all / 4 INTON / 5 DOM) → Dashboard
   still DOM; pop-up keeps `/?squad=DOM`; two squads → "2 squads", not carried; headers one
   row at 1280/1366/1440; default dashboard identical to the baseline; no console errors.
-- **"All" rows get a bullet too:** All GCMC / All squads carry a dot split into every colour
-  they cover (`allDot(colors)` in `FunctionFilter.tsx`, a conic-gradient; squads use the three
-  stakeholder colours), so they read as one of the choices rather than a heading.
+- **"All" rows get a bullet too:** All GCMC / All squads carry a NEUTRAL dot (`bg-muted`) so
+  they read as one of the choices rather than a heading. (A multi-colour split dot was tried
+  and dropped — the user wanted it plain.)
