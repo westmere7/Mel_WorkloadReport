@@ -5,6 +5,16 @@ import { functionColor } from '../constants'
 import type { FunctionConfig } from '../types'
 
 /**
+ * A dot split evenly into `colors` — the bullet for an "All …" option (every item at
+ * once). Shared with SquadFilter.
+ */
+export function allDot(colors: string[]): string {
+  if (colors.length === 0) return 'var(--faint)'
+  const step = 360 / colors.length
+  return `conic-gradient(${colors.map((c, i) => `${c} ${i * step}deg ${(i + 1) * step}deg`).join(', ')})`
+}
+
+/**
  * Dropdown that filters a view by GCMC function. Empty selection = "All GCMC"
  * (no filter). Single-select by default — a plain click picks just that function;
  * hold ⌘/Ctrl to toggle several. Clearing all or picking every function snaps back
@@ -98,6 +108,9 @@ export function FunctionFilter({
             onClick={() => onChange([])}
             className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-semibold text-ink transition hover:bg-subtle"
           >
+            {/* A bullet like every other row, so "All GCMC" reads as one of the choices —
+                split into every function's colour, since it means all of them. */}
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: allDot(functions.map((f) => functionColor(f.color).hex)) }} />
             <span className="flex-1">All GCMC</span>
             {isAll && <Check className="h-4 w-4 shrink-0 text-accent-green" />}
           </button>

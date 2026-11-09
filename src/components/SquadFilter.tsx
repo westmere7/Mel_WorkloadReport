@@ -5,6 +5,7 @@ import { cx } from '../lib/format'
 import { withFallback } from '../constants'
 import { useStore } from '../data/store'
 import { useSquadColor } from './charts'
+import { allDot } from './FunctionFilter'
 
 /** Squads pinned to the top of the list — the two that most often ask for their own view. */
 const PINNED = ['DOM', 'INTON']
@@ -142,6 +143,12 @@ export function SquadFilter({
             onClick={() => pick(null)}
             className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-semibold text-ink transition hover:bg-subtle"
           >
+            {/* A bullet like every other row, split into the three stakeholder colours
+                (Domestic, INTON, everyone else) — "All squads" is one of the choices. */}
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ background: allDot([squadColor('DOM'), squadColor('INTON'), squadColor(rest[0] ?? '')]) }}
+            />
             <span className="flex-1">All squads</span>
             {!selected && !summary && <Check className="h-4 w-4 shrink-0 text-accent-green" />}
           </button>
