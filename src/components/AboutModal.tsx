@@ -12,17 +12,17 @@ import { formatDate } from '../lib/format'
  * a number on it.
  */
 export function AboutModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { backend, live, tasks, settings } = useStore()
+  const { backend, live, tasks } = useStore()
   const navigate = useNavigate()
   const release = CHANGELOG.find((r) => r.version === APP_VERSION) ?? CHANGELOG[0]
   const recorded = tasks.filter((t) => !t.draft).length
   const drafts = tasks.length - recorded
 
   const row = (label: string, value: React.ReactNode) => (
-    <div className="flex items-baseline justify-between gap-4 border-b border-line py-2 last:border-b-0">
-      <dt className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</dt>
-      <dd className="text-right text-sm font-semibold text-ink">{value}</dd>
-    </div>
+    <>
+      <dt className="text-muted">{label}</dt>
+      <dd className="font-medium text-ink">{value}</dd>
+    </>
   )
 
   return (
@@ -45,41 +45,37 @@ export function AboutModal({ open, onClose }: { open: boolean; onClose: () => vo
           fairly, by function and by squad.
         </p>
 
-        <dl className="rounded-xl bg-subtle px-4 py-1">
+        {/* Kept small on purpose — reference facts, not the point of the dialog. */}
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg bg-subtle px-3 py-2 text-xs">
           {row(
             'Version',
             <>
               v{APP_VERSION}
-              {release?.date && <span className="ml-1.5 font-normal text-muted">· {formatDate(release.date)}</span>}
+              {release?.date && <span className="text-muted"> · {formatDate(release.date)}</span>}
+              {release?.title && <span className="text-muted"> · {release.title}</span>}
             </>,
           )}
-          {release?.title && row('Release', release.title)}
           {row(
             'Data',
             <span className="inline-flex items-center gap-1.5">
               {backend === 'supabase' ? (
-                <Database className="h-3.5 w-3.5 text-muted" />
+                <Database className="h-3 w-3 text-muted" />
               ) : (
-                <HardDrive className="h-3.5 w-3.5 text-muted" />
+                <HardDrive className="h-3 w-3 text-muted" />
               )}
-              {backend === 'supabase' ? 'Supabase (shared team database)' : 'This browser only (local mode)'}
-            </span>,
-          )}
-          {row(
-            'Updates',
-            <span className="inline-flex items-center gap-1.5">
-              <span className={live ? 'h-2 w-2 rounded-full bg-accent-green' : 'h-2 w-2 rounded-full bg-faint'} />
-              {live ? 'Live — changes appear as they happen' : 'Not live — refresh to see changes'}
+              {backend === 'supabase' ? 'Supabase' : 'This browser only'}
+              <span className="text-muted">·</span>
+              <span className={live ? 'h-1.5 w-1.5 rounded-full bg-accent-green' : 'h-1.5 w-1.5 rounded-full bg-faint'} />
+              <span className="text-muted">{live ? 'live' : 'not live'}</span>
             </span>,
           )}
           {row(
             'Recorded',
             <>
               {recorded.toLocaleString()} tasks
-              {drafts > 0 && <span className="ml-1.5 font-normal text-muted">+ {drafts} draft{drafts === 1 ? '' : 's'}</span>}
+              {drafts > 0 && <span className="text-muted"> + {drafts} draft{drafts === 1 ? '' : 's'}</span>}
             </>,
           )}
-          {row('Functions', settings.functions.map((f) => f.name).join(', ') || '—')}
         </dl>
 
         <button

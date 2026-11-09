@@ -1409,7 +1409,7 @@ so "Others" is pickable and last). Single-select on purpose.
   reverted — Compare stays neutral at rest, solid navy while on.)
 - **About dialog** (`components/AboutModal.tsx`): clicking the RMIT logo — the sidebar brand
   (a button now; `stopPropagation` so it doesn't also collapse the sidebar), the header brand
-  when the sidebar is collapsed, or the mobile header logo — opens it. Shows purpose, version +
-  release (from `CHANGELOG`), backend (Supabase / local), live status, recorded tasks (drafts
-  apart) and the configured functions. State lives in `Layout` (`aboutOpen`), passed to
+  when the sidebar is collapsed, or the mobile header logo — opens it. Logo block + purpose, then
+  a deliberately SMALL facts block (3 lines, text-xs): version · release date · title (from
+  `CHANGELOG`), backend (Supabase / local) · live status, recorded tasks (drafts apart). State lives in `Layout` (`aboutOpen`), passed to
   `Sidebar` as `onAbout`.
