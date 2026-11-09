@@ -256,7 +256,9 @@ export function HelpPage() {
                       INTON sit at the top of the list. The choice goes into the address
                       (<code>?squad=DOM</code>), so each squad can bookmark — or be sent — a link that opens
                       straight into its own view. The by-squad panels then show that squad against all other
-                      squads, and the demand panel becomes its share of demand (below).
+                      squads, and the demand panel becomes its share of demand (below). The same Squad filter
+                      sits on the Task List and Calendar, and the sidebar keeps your squad as you move
+                      between the three.
                     </>,
                     <>
                       <B>Span filter</B> — Total (all time), By year, or By half — plus Compare (see{' '}

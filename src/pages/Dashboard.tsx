@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ArrowLeftRight, ExternalLink, Settings2 } from 'lucide-react'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
 import { TaskDetails } from '../components/TaskDetails'
 import { TaskStar } from '../components/TaskStar'
 import { FunctionFilter } from '../components/FunctionFilter'
-import { SquadFilter } from '../components/SquadFilter'
+import { SquadFilter, useSquadParam } from '../components/SquadFilter'
 import { ChartGroupsModal } from '../components/ChartGroupsModal'
 import { EffortSummaryCard, VolumeCompactCard } from '../components/EffortStats'
 import { PanelInfo } from '../components/PanelInfo'
@@ -126,25 +126,9 @@ export function Dashboard() {
   // only those functions' recorded workload (shared tasks count their slice only).
   const [fnFilter, setFnFilter] = useState<string[]>([])
   // Squad filter — one requesting squad, or null = "All squads". Lives in the URL
-  // (`/?squad=DOM`) so each squad can bookmark / be sent its own view. A name that
-  // isn't a known squad (stale link after a rename) is ignored, not shown as empty.
-  const [searchParams, setSearchParams] = useSearchParams()
-  const squadOptions = useMemo(() => withFallback(settings.squads), [settings.squads])
-  const squadParam = searchParams.get('squad')
-  const squadFilter = squadParam && squadOptions.includes(squadParam) ? squadParam : null
-  const setSquadFilter = useCallback(
-    (next: string | null) =>
-      setSearchParams(
-        (prev) => {
-          const sp = new URLSearchParams(prev)
-          if (next) sp.set('squad', next)
-          else sp.delete('squad')
-          return sp
-        },
-        { replace: true },
-      ),
-    [setSearchParams],
-  )
+  // (`/?squad=DOM`) so each squad can bookmark / be sent its own view, and the
+  // sidebar carries it to the Task List and Calendar (see useSquadParam).
+  const { squad: squadFilter, setSquad: setSquadFilter, options: squadOptions } = useSquadParam()
   // Comparison mode: measure the target year against a source (baseline) year.
   const [compare, setCompare] = useState(false)
   const [sourceYear, setSourceYear] = useState<number | null>(null)

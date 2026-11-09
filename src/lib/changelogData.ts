@@ -26,6 +26,21 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.13.0',
+    date: '2026-11-09',
+    title: 'Your squad, everywhere',
+    notes: [
+      {
+        kind: 'new',
+        text: 'The Squad filter is now on the Task List and the Calendar too, and it follows you: pick DOM on the dashboard and the Task List and Calendar open on DOM as well. A squad’s link (…?squad=INTON) works on all three pages.',
+      },
+      {
+        kind: 'improved',
+        text: 'On the Task List, the Squad dropdown in the header and the squad filter in the list are the same filter — pick several squads in the list and the header shows how many.',
+      },
+    ],
+  },
+  {
     version: '0.12.0',
     date: '2026-11-09',
     title: 'Your squad’s view',

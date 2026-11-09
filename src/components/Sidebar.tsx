@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
   CalendarDays,
   ChevronLeft,
@@ -13,6 +13,21 @@ import {
 import { cx } from '../lib/format'
 import { useNewTask } from './NewTaskModal'
 import { useAuth } from '../lib/auth'
+import { SQUAD_SCOPED_PATHS } from './SquadFilter'
+
+/**
+ * Link targets that keep a single-squad scope (`?squad=DOM`) when moving between the
+ * squad-aware pages (Dashboard, Task List, Calendar), so a squad's view stays theirs
+ * as they look around. Several squads (a Task List multi-select) aren't carried.
+ */
+function useSquadCarry() {
+  const { search } = useLocation()
+  const squads = new URLSearchParams(search).getAll('squad')
+  return (to: string) =>
+    squads.length === 1 && SQUAD_SCOPED_PATHS.includes(to)
+      ? { pathname: to, search: `?squad=${encodeURIComponent(squads[0])}` }
+      : to
+}
 
 interface NavItem {
   to: string
@@ -47,6 +62,7 @@ export function Sidebar({
 }) {
   const { openNewTask } = useNewTask()
   const { canEdit } = useAuth()
+  const carry = useSquadCarry()
   const nav = canEdit ? NAV : NAV.filter((item) => !EDIT_ONLY.includes(item.to))
 
   // Rail mode = icon-only 68px. Always on mobile; on desktop it's the collapsed
@@ -63,7 +79,7 @@ export function Sidebar({
   const renderLink = ({ to, label, icon: Icon }: NavItem) => (
     <NavLink
       key={to}
-      to={to}
+      to={carry(to)}
       end={to === '/'}
       title={label}
       onClick={(e) => e.stopPropagation()}
@@ -190,6 +206,7 @@ export function Sidebar({
 /** Bottom tab bar — the page navigation on mobile, where the sidebar is hidden. */
 export function MobileNav() {
   const { openNewTask } = useNewTask()
+  const carry = useSquadCarry()
   const { canEdit } = useAuth()
   const nav = NAV.filter(
     (item) => !MOBILE_HIDDEN.includes(item.to) && (canEdit || !EDIT_ONLY.includes(item.to)),
@@ -200,7 +217,7 @@ export function MobileNav() {
       {nav.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
-          to={to}
+          to={carry(to)}
           end={to === '/'}
           className={({ isActive }) =>
             cx(

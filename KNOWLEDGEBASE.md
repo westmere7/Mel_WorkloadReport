@@ -1413,3 +1413,23 @@ so "Others" is pickable and last). Single-select on purpose.
   a deliberately SMALL facts block (3 lines, text-xs): version · release date · title (from
   `CHANGELOG`), backend (Supabase / local) · live status, recorded tasks (drafts apart). State lives in `Layout` (`aboutOpen`), passed to
   `Sidebar` as `onAbout`.
+
+### v0.13.0 — the squad scope on every page
+
+- **`useSquadParam()`** (`components/SquadFilter.tsx`) is the single owner of `?squad=`:
+  `{ squad, setSquad, options }`, validated against `withFallback(settings.squads)` (unknown →
+  null). Dashboard and Calendar read it; `SQUAD_SCOPED_PATHS = ['/', '/tasks', '/calendar']`.
+- **Sidebar carry:** `useSquadCarry()` in `Sidebar.tsx` rewrites the nav links of the scoped
+  pages to keep `?squad=<one squad>` (desktop rail + `MobileNav`). Several squads are not
+  carried.
+- **Calendar:** `SquadFilter` leads the header's left slot; `tasks` = non-draft AND that squad;
+  `years` still from every squad (stable selector). Holidays are never filtered. ⚠️ No divider
+  after the filter: at 1280px with the sidebar open the header had 3px to spare (measured).
+- **Task List:** its `squads` state stays the source of truth (multi-select). It is mirrored
+  into `?squad=` (repeatable) and shown as the header `SquadFilter` (`selected` when exactly
+  one, `summary="N squads"` when several; picking in the header sets `[squad]`). Both are
+  skipped when `embedded` (the dashboard pop-up must not touch the dashboard's URL/header).
+- **Verified:** Dashboard DOM → Task List (129 = 128 + 1 draft; the list shows drafts) →
+  INTON (116) → Calendar keeps INTON (15 May: 18 tasks all / 4 INTON / 5 DOM) → Dashboard
+  still DOM; pop-up keeps `/?squad=DOM`; two squads → "2 squads", not carried; headers one
+  row at 1280/1366/1440; default dashboard identical to the baseline; no console errors.

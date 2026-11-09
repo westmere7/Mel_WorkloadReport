@@ -23,6 +23,8 @@ import { Badge, toneForLabel } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { MultiSelect } from '../components/ui/MultiSelect'
 import { SpanFilter } from '../components/SpanFilter'
+import { SquadFilter } from '../components/SquadFilter'
+import { useHeaderSlots } from '../components/Layout'
 import { ImportBackupModal } from '../components/ImportBackupModal'
 import { TaskForm } from '../components/TaskForm'
 import { TaskDetails } from '../components/TaskDetails'
@@ -125,7 +127,7 @@ export function TaskList({ seed, embedded = false }: { seed?: URLSearchParams; e
 
   // Filters seed from the URL query so dashboard charts can deep-link here
   // (e.g. /tasks?squad=DOM&asset=Image). Keys may repeat for multi-value filters.
-  const [urlParams] = useSearchParams()
+  const [urlParams, setUrlParams] = useSearchParams()
   const searchParams = seed ?? urlParams
   const [query, setQuery] = useState('')
   // Span also seeds from the URL so a dashboard deep-link lands on the same
@@ -136,6 +138,41 @@ export function TaskList({ seed, embedded = false }: { seed?: URLSearchParams; e
   const [spanYear, setSpanYear] = useState<number | null>(seedYear ? Number(seedYear) : null)
   const [spanHalf, setSpanHalf] = useState<Half>(seedHalf === 'H2' ? 'H2' : 'H1')
   const [squads, setSquads] = useState<string[]>(() => searchParams.getAll('squad'))
+  // The squad choice is also the PAGE scope shared with the Dashboard and Calendar:
+  // mirrored into `?squad=` (so the sidebar carries it, and a squad's link works here
+  // too) and shown as the header Squad dropdown. The filter-card multi-select below
+  // edits the same state, so picking several squads still works — the header then
+  // reads "N squads". Never in the dashboard pop-up (`embedded`): that must not
+  // touch the dashboard's URL or header.
+  useEffect(() => {
+    if (embedded) return
+    setUrlParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev)
+        if (sp.getAll('squad').join('\u0000') === squads.join('\u0000')) return prev
+        sp.delete('squad')
+        for (const sq of squads) sp.append('squad', sq)
+        return sp
+      },
+      { replace: true },
+    )
+  }, [embedded, squads, setUrlParams])
+  const setHeaderSlots = useHeaderSlots()
+  const squadOptions = useMemo(() => withFallback(settings.squads), [settings.squads])
+  useEffect(() => {
+    if (embedded) return
+    setHeaderSlots({
+      left: (
+        <SquadFilter
+          squads={squadOptions}
+          selected={squads.length === 1 ? squads[0] : null}
+          summary={squads.length > 1 ? `${squads.length} squads` : undefined}
+          onChange={(next) => setSquads(next ? [next] : [])}
+        />
+      ),
+    })
+    return () => setHeaderSlots({})
+  }, [embedded, setHeaderSlots, squadOptions, squads])
   const [campaigns, setCampaigns] = useState<string[]>(() => searchParams.getAll('campaign'))
   const [people, setPeople] = useState<string[]>(() => searchParams.getAll('person'))
   const [sizes, setSizes] = useState<string[]>(() => searchParams.getAll('size'))

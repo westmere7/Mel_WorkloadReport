@@ -1,13 +1,47 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Check, ChevronDown } from 'lucide-react'
 import { cx } from '../lib/format'
+import { withFallback } from '../constants'
+import { useStore } from '../data/store'
 import { useSquadColor } from './charts'
 
 /** Squads pinned to the top of the list — the two that most often ask for their own view. */
 const PINNED = ['DOM', 'INTON']
 
+/** Pages whose sidebar links carry the current `?squad=` along (see Sidebar). */
+export const SQUAD_SCOPED_PATHS = ['/', '/tasks', '/calendar']
+
 /**
- * Dropdown that scopes the dashboard to ONE requesting squad. `null` = "All squads"
+ * The page-level squad scope, kept in the URL as `?squad=<name>` so a squad's view
+ * can be bookmarked or sent, and so the sidebar can carry it between Dashboard, Task
+ * List and Calendar. A name that isn't a known squad (stale link after a rename) is
+ * ignored → null, never an empty page. `options` = every squad, display order.
+ */
+export function useSquadParam() {
+  const { settings } = useStore()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const options = useMemo(() => withFallback(settings.squads), [settings.squads])
+  const param = searchParams.get('squad')
+  const squad = param && options.includes(param) ? param : null
+  const setSquad = useCallback(
+    (next: string | null) =>
+      setSearchParams(
+        (prev) => {
+          const sp = new URLSearchParams(prev)
+          sp.delete('squad')
+          if (next) sp.set('squad', next)
+          return sp
+        },
+        { replace: true },
+      ),
+    [setSearchParams],
+  )
+  return { squad, setSquad, options }
+}
+
+/**
+ * Dropdown that scopes a page (Dashboard, Task List, Calendar) to ONE requesting squad. `null` = "All squads"
  * (no filter). Single-select on purpose: a squad view answers "what did GCMC do
  * for us", and the share-of-demand panel compares one squad against the rest.
  * DOM and INTON lead the list; the rest follow A→Z (the fallback "Others" last,
@@ -17,11 +51,15 @@ export function SquadFilter({
   squads,
   selected,
   onChange,
+  summary,
 }: {
   /** Every selectable squad, already in display order (e.g. `withFallback(settings.squads)`). */
   squads: string[]
   selected: string | null
   onChange: (next: string | null) => void
+  /** Button text when the page has SEVERAL squads selected elsewhere (the Task List's own
+      multi-select), e.g. "3 squads" — the button then reads as active with no single pick. */
+  summary?: string
 }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -83,7 +121,7 @@ export function SquadFilter({
           'flex items-center gap-2 rounded-lg border bg-card px-3 py-1.5 text-sm font-semibold text-ink shadow-soft transition',
           // A squad view is a narrowed reading of the whole dashboard — outline it so
           // a screenshot never passes for the all-squads picture.
-          selected ? 'border-rmit-red' : 'border-line hover:border-faint',
+          selected || summary ? 'border-rmit-red' : 'border-line hover:border-faint',
         )}
       >
         {/* Small inline label, so the header says WHAT each dropdown filters
@@ -93,7 +131,7 @@ export function SquadFilter({
         {selected && (
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: squadColor(selected) }} />
         )}
-        {selected ?? 'All squads'}
+        {selected ?? summary ?? 'All squads'}
         <ChevronDown className={cx('h-3.5 w-3.5 text-muted transition-transform', open && 'rotate-180')} />
       </button>
 
@@ -105,7 +143,7 @@ export function SquadFilter({
             className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm font-semibold text-ink transition hover:bg-subtle"
           >
             <span className="flex-1">All squads</span>
-            {!selected && <Check className="h-4 w-4 shrink-0 text-accent-green" />}
+            {!selected && !summary && <Check className="h-4 w-4 shrink-0 text-accent-green" />}
           </button>
           {pinned.length > 0 && <div className="my-1 border-t border-line" />}
           {pinned.map(item)}

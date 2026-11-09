@@ -5,6 +5,7 @@ import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { TaskDetails } from '../components/TaskDetails'
 import { useHeaderSlots } from '../components/Layout'
+import { SquadFilter, useSquadParam } from '../components/SquadFilter'
 import { useSquadColor } from '../components/charts'
 import { useTheme } from '../lib/theme'
 import { useStore } from '../data/store'
@@ -141,13 +142,20 @@ export function CalendarPage() {
   const setHeaderSlots = useHeaderSlots()
   const squadColor = useSquadColor()
   const dark = useTheme().theme === 'dark'
-  const tasks = useMemo(() => allTasks.filter((t) => !t.draft), [allTasks])
+  // Squad scope (`?squad=`), shared with the Dashboard and Task List: the heatmap and
+  // the day panel then show only that squad's tasks. Holidays are never filtered.
+  const { squad, setSquad, options: squadOptions } = useSquadParam()
+  const tasks = useMemo(
+    () => allTasks.filter((t) => !t.draft && (!squad || t.squad === squad)),
+    [allTasks, squad],
+  )
 
+  // Year options from EVERY squad's tasks, so the selector doesn't change with the squad.
   const years = useMemo(() => {
-    const ys = taskYears(tasks)
+    const ys = taskYears(allTasks.filter((t) => !t.draft))
     const now = new Date().getFullYear()
     return ys.includes(now) ? ys : [...ys, now].sort((a, b) => b - a)
-  }, [tasks])
+  }, [allTasks])
   const [year, setYear] = useState<number>(() => new Date().getFullYear())
   const ratesConfigured = hasAnyRate(settings.assetRates)
   const [unit, setUnit] = useState<CalendarUnit>('tasks')
@@ -189,6 +197,9 @@ export function CalendarPage() {
     setHeaderSlots({
       left: (
         <div className="flex items-center gap-2">
+        {/* No divider after it: at 1280px with the sidebar open the header has only a
+            few px to spare before its controls wrap to a second row (measured). */}
+        <SquadFilter squads={squadOptions} selected={squad} onChange={setSquad} />
         <div className="flex items-center gap-0.5 rounded-lg bg-subtle p-0.5">
           {UNITS.filter((u) => u !== 'effort' || ratesConfigured).map((u) => (
             <button
@@ -230,7 +241,7 @@ export function CalendarPage() {
       ),
     })
     return () => setHeaderSlots({})
-  }, [setHeaderSlots, years, year, activeUnit, ratesConfigured, fadeWeekends])
+  }, [setHeaderSlots, years, year, activeUnit, ratesConfigured, fadeWeekends, squad, setSquad, squadOptions])
 
   const valueLabel = (v: number) =>
     activeUnit === 'effort' ? formatHours(v) : activeUnit === 'assets' ? `${Math.round(v).toLocaleString()} assets/day` : `${v} ${v === 1 ? 'task' : 'tasks'}`
