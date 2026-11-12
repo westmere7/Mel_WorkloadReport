@@ -1436,3 +1436,57 @@ so "Others" is pickable and last). Single-select on purpose.
 - **"All" rows get a bullet too:** All GCMC / All squads carry a NEUTRAL dot (`bg-muted`) so
   they read as one of the choices rather than a heading. (A multi-colour split dot was tried
   and dropped — the user wanted it plain.)
+
+---
+
+## 29. The Mix panel (one bar, three readings) ⚠️ v0.14.0
+
+The dashboard's **Asset mix** and **Work type mix** donuts were replaced by ONE panel,
+`components/MixPanel.tsx` (title "Mix"), chosen on the `/lab/mix` demo page.
+
+- **Switch:** Assets (deliverables by asset type) · Work types (tasks by work type — a task
+  with several types counts in each, so the total reads "work-type tags") · Effort (hours by
+  asset type from `settings.assetRates`, via `effortByAssetType`; unrated types drop out).
+  The view is local component state (not a pref).
+- **Display:** a HALF DONUT (180°, slices tween on a switch via a small rAF `useTween`,
+  reduced-motion respected) with the total + unit in the centre, % labels inside slices ≥7%,
+  a 5%-tick percentage scale outside (labels at 25/50/75%), a dashed inner hairline, and the
+  hovered slice lifting 6px. The view switch is in the card HEADER, styled like the Squads
+  demand tabs (always visible). (An in-arch `foreignObject` switch was tried and dropped.) The items sit to its RIGHT,
+  left-aligned, one per line in faint `color-mix(--subtle 55%)` boxes, scrolling (with the
+  `useScrollFade` mask) when they don't fit; `[justify-content:safe_center]` keeps a short list
+  centred but a long one top-aligned and fully scrollable. The svg is `h-full w-full` with the
+  "meet" aspect, so it fits BOTH dimensions (width-only sizing overflowed in full screen), and
+  `xMaxYMid` so on wide screens — height-bound — the arch hugs the list instead of leaving a
+  gap. Chart:list columns are 1.2:1 (1.1:1 at 2xl); at 2xl each row shows its full detail
+  ("24% of tasks · 2,080 assets"), below that just the %. Past `MAX_ITEMS` (16) the smallest fold into a grey, non-clickable
+  "Other (n)". (A segmented bar was the first version; the half donut replaced it the same
+  day — see `/lab/mix` option M.)
+- **Grouping kept, per reading:** Assets + Effort use the asset chart groups and the
+  `groupAssetMix` switch; Work types uses the type groups + `groupWorkTypeMix`. The Dashboard
+  passes the active groups and the right `groupControls(...)` for the current view through
+  the `controls` prop, so the Group switch + gear always match what's shown.
+- **Compare:** each row gets a `TrendDelta` vs the baseline year, and the baseline shows as a
+  thin faded ring just outside the donut (same items, same colours).
+- **Click-through:** a slice or row opens the tasks pop-up with `asset=` (Assets/Effort) or
+  `type=` (Work types) for every member of a group (`expandChartSelection`).
+- **Colour follows the item** (its group colour, or its index in the Settings list), never its
+  rank. ⚠️ The 9-colour brand palette still repeats across 13 work types — same as the old
+  donut; unresolved.
+- **Height:** the panel and the workload card opposite are both `480px` (was 376px), written
+  as literal classes in three places in Dashboard.tsx — Tailwind can't see a class built from
+  a constant at runtime, so keep them in step by hand.
+- `PANEL_INFO.effortMix` is the "?" copy for the Effort reading (Assets/Work types reuse
+  `assetMix` / `workTypeMix`). `MixChart` in charts.tsx is no longer used by the dashboard.
+- **Verified:** every OTHER panel identical before/after on the same data (28 readings across
+  year/total/half/compare); fits 420px in all readings incl. compare (1440/1920, both themes);
+  Group switch 7 → 10 rows; click-through counts; squad view; no console errors. ⚠️ Cards
+  scale 1.008× on hover, so a hovered card measures ~423px — not a layout bug.
+- **`/lab/mix`** (hidden demo, `src/pages/MixLab*.tsx`) still holds the alternatives,
+  including set 4 — animated non-boxy charts (bubbles, racetrack, rose, sliding pills) fed by
+  `buildMix`. Delete it once a direction is final.
+- **Squads demand → Effort tab (v0.14.0):** `DemandDim` gained `'effort'` = WORK TYPES weighted
+  by each task's effort hours (`demandByStakeholder(…, value)` / `demandShareForSquad(…, value)`
+  take an optional per-task value; rows rounded for tooltips via `roundRows`). Not "effort by
+  asset type": one rate per type means that would split exactly like the asset counts. Uses
+  the work-type chart groups and click-through filters by `type`.

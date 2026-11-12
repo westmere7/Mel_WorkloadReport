@@ -26,6 +26,21 @@ export interface Release {
 /** Newest first. The first entry should match APP_VERSION. */
 export const CHANGELOG: Release[] = [
   {
+    version: '0.14.0',
+    date: '2026-11-12',
+    title: 'One Mix panel',
+    notes: [
+      {
+        kind: 'improved',
+        text: 'Asset mix and Work type mix are now one Mix panel with a switch: Assets, Work types — and a new Effort reading, which shows where the hours went rather than how many things were made. A half donut shows the split against a percentage scale, with every item listed beside it; click a slice or an item to see its tasks. Grouping, Compare and full screen work as before.',
+      },
+      {
+        kind: 'new',
+        text: 'Squads demand distribution has an Effort tab: each work type weighted by the hours behind it, not the asset count — so a squad whose briefs are slow to make shows its real pull on the team.',
+      },
+    ],
+  },
+  {
     version: '0.13.0',
     date: '2026-11-09',
     title: 'Your squad, everywhere',

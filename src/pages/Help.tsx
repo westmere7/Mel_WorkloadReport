@@ -299,16 +299,21 @@ export function HelpPage() {
                 </P>
                 <Shot src="dashboard-campaign" caption="Deliverables per campaign, catch-all campaigns excluded" />
                 <P>
-                  The two <B>mix panels</B> show what kind of work the team is doing: deliverables by asset
-                  type, and tasks by work type. Related types can be bundled into named <B>chart groups</B>{' '}
-                  (the gear icon) so the donuts stay readable; each panel has its own Group toggle to flip
-                  back to the individual view.
+                  The <B>Mix</B> panel shows what kind of work the team is doing, with a switch for three
+                  readings: <B>Assets</B> (deliverables by type), <B>Work types</B> (tasks by work type — a task
+                  with several types counts in each) and <B>Effort</B> (the same asset types weighted by their
+                  output rates, so you see where the hours went). The half donut shows the split against a percentage
+                  scale; every item is listed beside it, and clicking a slice or an item opens its tasks. Related types can be bundled into named{' '}
+                  <B>chart groups</B> (the gear icon); the Group switch flips the current reading back to
+                  individual types.
                 </P>
-                <Shot src="dashboard-mixes" caption="Asset mix and work type mix — what the output is made of" />
+                <Shot src="dashboard-mixes" caption="The Mix panel — a half donut for assets, work types or effort" />
                 <P>
                   <B>Squads demand distribution</B> shows, for each type, the share coming from each
                   stakeholder group. Columns total 100% — composition, not volume — so it answers &ldquo;who
-                  drives this kind of work?&rdquo;.
+                  drives this kind of work?&rdquo;. Its <B>Effort</B> tab weighs each work type by the hours behind
+                  it rather than the assets, so a squad whose briefs are slow to make shows its real pull on the
+                  team.
                 </P>
                 <Shot src="dashboard-demand" caption="Share of each type across Domestic, INTON and other stakeholders" />
                 <P>

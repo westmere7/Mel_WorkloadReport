@@ -11,17 +11,16 @@ import { ChartGroupsModal } from '../components/ChartGroupsModal'
 import { EffortSummaryCard, VolumeCompactCard } from '../components/EffortStats'
 import { PanelInfo } from '../components/PanelInfo'
 import { PanelExpand } from '../components/PanelExpand'
+import { MixPanel } from '../components/MixPanel'
 import { useHeaderSlots } from '../components/Layout'
 import { useNewTask } from '../components/NewTaskModal'
-import { AreaTrendChart, MixChart, RankedBars, SquadVsRest, StackedBarChart, StackedLegend, useSquadColor, VBarChart } from '../components/charts'
+import { AreaTrendChart, RankedBars, SquadVsRest, StackedBarChart, StackedLegend, useSquadColor, VBarChart } from '../components/charts'
 import { useStore } from '../data/store'
 import {
   assetsByCampaign,
   assetsBySquad,
-  assetsByType,
   valueByMonth,
   countByField,
-  countByMulti,
   valueBySize,
   demandByStakeholder,
   demandByStakeholderAssetType,
@@ -39,7 +38,7 @@ import { COMMON_CAMPAIGNS, setDashboardPrefs, useDashboardPrefs, type DemandDim 
 import { effortByAssetType, formatHours, hasAnyRate, taskEffortHours } from '../lib/effort'
 import { applyChartGroups, expandChartSelection } from '../lib/chartGroups'
 import { useAuth } from '../lib/auth'
-import type { Half, Squad, Task, TaskInput } from '../types'
+import type { AppSettings, Half, Squad, Task, TaskInput } from '../types'
 import { TaskForm } from '../components/TaskForm'
 import { TaskList } from './TaskList'
 
@@ -85,11 +84,24 @@ function squadShareRows(
   tasks: Task[],
   squad: string,
   dim: DemandDim,
-  settings: { assetTypes: string[]; types: string[] },
+  settings: { assetTypes: string[]; types: string[]; assetRates?: AppSettings['assetRates'] },
   groups: Parameters<typeof applyChartGroups>[1],
 ) {
   const names = withFallback(dim === 'asset' ? settings.assetTypes : settings.types)
-  return applyChartGroups(demandShareForSquad(tasks, squad, dim, names), groups)
+  const value = dim === 'effort' ? (t: Task) => taskEffortHours(t, settings.assetRates ?? {}) : undefined
+  return roundRows(applyChartGroups(demandShareForSquad(tasks, squad, dim === 'asset' ? 'asset' : 'type', names, value), groups))
+}
+
+/** Effort rows are fractional hours — round them so tooltips read "1,234", not "1234.56789". */
+function roundRows<T extends Record<string, unknown>>(rows: T[]): T[] {
+  return rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === 'number' ? Math.round(v) : v])) as T)
+}
+
+/** What a Squads-demand row is, per tab — for subtitles and empty messages. */
+const DEMAND_NOUN: Record<DemandDim, [string, string]> = {
+  asset: ['asset type', 'asset types'],
+  type: ['work type', 'work types'],
+  effort: ['work type (by effort hours)', 'work types'],
 }
 
 /**
@@ -257,10 +269,12 @@ export function Dashboard() {
       applyChartGroups(
         demandDim === 'asset'
           ? demandByStakeholderAssetType(filtered, withFallback(settings.assetTypes))
-          : demandByStakeholder(filtered, withFallback(settings.types)),
+          : demandDim === 'effort'
+            ? roundRows(demandByStakeholder(filtered, withFallback(settings.types), workloadValue))
+            : demandByStakeholder(filtered, withFallback(settings.types)),
         demandGroups,
       ),
-    [filtered, settings.types, settings.assetTypes, demandDim, demandGroups],
+    [filtered, settings.types, settings.assetTypes, demandDim, demandGroups, workloadValue],
   )
   // Squad view: the demand panel becomes that squad's share of each type against
   // every other squad. Types the squad never asked for are dropped (and counted,
@@ -277,16 +291,6 @@ export function Dashboard() {
     [shareRows],
   )
   const shareHidden = shareRows.length - shareShown.length
-  // Ranked high→low so the biggest slices/segments lead (donut legend + stacked bar).
-  const byValueDesc = (a: { value: number }, b: { value: number }) => b.value - a.value
-  const assetMix = useMemo(
-    () => applyChartGroups(assetsByType(filtered, withFallback(settings.assetTypes)), assetGroups).sort(byValueDesc),
-    [filtered, settings.assetTypes, assetGroups],
-  )
-  const workTypeMix = useMemo(
-    () => applyChartGroups(countByMulti(filtered, 'types'), typeGroups).sort(byValueDesc),
-    [filtered, typeGroups],
-  )
   // "Across the year" ignores the half sub-filter — it always shows the full 12
   // months of the active year (the latest year by default, or the selected one).
   const byMonth = useMemo(() => {
@@ -402,24 +406,18 @@ export function Dashboard() {
       applyChartGroups(
         demandDim === 'asset'
           ? demandByStakeholderAssetType(sourceTasks, withFallback(settings.assetTypes))
-          : demandByStakeholder(sourceTasks, withFallback(settings.types)),
+          : demandDim === 'effort'
+            ? roundRows(demandByStakeholder(sourceTasks, withFallback(settings.types), workloadValue))
+            : demandByStakeholder(sourceTasks, withFallback(settings.types)),
         demandGroups,
       ),
-    [sourceTasks, settings.types, settings.assetTypes, demandDim, demandGroups],
+    [sourceTasks, settings.types, settings.assetTypes, demandDim, demandGroups, workloadValue],
   )
   // The squad's share in the source year (kept whole — the chart inner-joins on the
   // types shown for the target year).
   const srcShareRows = useMemo(
     () => (squadFilter && compare ? squadShareRows(sourceAll, squadFilter, demandDim, settings, demandGroups) : []),
     [squadFilter, compare, sourceAll, demandDim, settings, demandGroups],
-  )
-  const srcAssetMix = useMemo(
-    () => applyChartGroups(assetsByType(sourceTasks, withFallback(settings.assetTypes)), assetGroups).sort(byValueDesc),
-    [sourceTasks, settings.assetTypes, assetGroups], // eslint-disable-line react-hooks/exhaustive-deps
-  )
-  const srcWorkTypeMix = useMemo(
-    () => applyChartGroups(countByMulti(sourceTasks, 'types'), typeGroups).sort(byValueDesc),
-    [sourceTasks, typeGroups], // eslint-disable-line react-hooks/exhaustive-deps
   )
   const srcByMonth = useMemo(() => {
     let list = squadTasks.filter((t) => t.startDate && Number(t.startDate.slice(0, 4)) === srcYear)
@@ -515,42 +513,6 @@ export function Dashboard() {
   )
   const demandHasGroups = (demandDim === 'asset' ? rawAssetGroups : rawTypeGroups).length > 0
 
-  // Per-name counts of relevant tasks, for the mix donuts' hover tooltips.
-  // Group-aware: a grouped row counts tasks matching ANY member (each task once)
-  // — the same set its click-through filter opens — while an ungrouped row's
-  // members are just itself.
-  const assetMixCounts = useMemo(() => {
-    const rec: Record<string, number> = {}
-    for (const d of assetMix) {
-      const members = expandChartSelection(assetGroups, d.name)
-      rec[d.name] = filtered.filter((t) => members.some((m) => (Number(t.assetBreakdown[m]) || 0) > 0)).length
-    }
-    return rec
-  }, [assetMix, assetGroups, filtered])
-  const srcAssetMixCounts = useMemo(() => {
-    const rec: Record<string, number> = {}
-    for (const d of srcAssetMix) {
-      const members = expandChartSelection(assetGroups, d.name)
-      rec[d.name] = sourceTasks.filter((t) => members.some((m) => (Number(t.assetBreakdown[m]) || 0) > 0)).length
-    }
-    return rec
-  }, [srcAssetMix, assetGroups, sourceTasks])
-  const workTypeCounts = useMemo(() => {
-    const rec: Record<string, number> = {}
-    for (const d of workTypeMix) {
-      const members = expandChartSelection(typeGroups, d.name)
-      rec[d.name] = filtered.filter((t) => t.types.some((ty) => members.includes(ty))).length
-    }
-    return rec
-  }, [workTypeMix, typeGroups, filtered])
-  const srcWorkTypeCounts = useMemo(() => {
-    const rec: Record<string, number> = {}
-    for (const d of srcWorkTypeMix) {
-      const members = expandChartSelection(typeGroups, d.name)
-      rec[d.name] = sourceTasks.filter((t) => t.types.some((ty) => members.includes(ty))).length
-    }
-    return rec
-  }, [srcWorkTypeMix, typeGroups, sourceTasks])
 
   // Render the function filter (left) and span selector (right) into the top header bar.
   const setHeaderSlots = useHeaderSlots()
@@ -863,73 +825,37 @@ export function Dashboard() {
       </div>
     </Card>
   )
+  // Asset mix + Work type mix (+ effort) in ONE panel — see components/MixPanel.
   const mixesRow = (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Card className="flex h-[376px] min-h-0 flex-col">
-        <CardHeader
-          title="Asset mix"
-          className="shrink-0"
-          subtitle={compare ? `Deliverables by type — ${activeYear} over ${srcYear}` : 'Deliverables by type'}
-          action={
-            <div className="flex items-center gap-1.5">
-              {groupControls(
-                groupAssetMix,
-                () => setDashboardPrefs({ groupAssetMix: !groupAssetMix }),
-                rawAssetGroups.length > 0,
-                'asset',
-              )}
-              <PanelExpand />
-              <PanelInfo panel="assetMix" />
-            </div>
-          }
-        />
-        <MixChart
-          data={assetMix}
-          scrollLegend
-          height={200}
-          emptyMessage={fnEmpty ?? 'Add tasks with asset counts to see the mix.'}
-          compare={compare ? srcAssetMix : undefined}
-          onSelect={(name) =>
-            goTasks(expandChartSelection(assetGroups, name).map((v) => ['asset', v] as [string, string]))
-          }
-          taskCounts={assetMixCounts}
-          prevTaskCounts={compare ? srcAssetMixCounts : undefined}
-          sourceLabel={String(srcYear)}
-        />
-      </Card>
-      <Card className="flex h-[376px] min-h-0 flex-col">
-        <CardHeader
-          title="Work type mix"
-          className="shrink-0"
-          subtitle={compare ? `Tasks by work type — ${activeYear} over ${srcYear}` : 'Tasks by work type'}
-          action={
-            <div className="flex items-center gap-1.5">
-              {groupControls(
-                groupWorkTypeMix,
-                () => setDashboardPrefs({ groupWorkTypeMix: !groupWorkTypeMix }),
-                rawTypeGroups.length > 0,
-                'type',
-              )}
-              <PanelExpand />
-              <PanelInfo panel="workTypeMix" />
-            </div>
-          }
-        />
-        <MixChart
-          data={workTypeMix}
-          scrollLegend
-          height={200}
-          emptyMessage={fnEmpty ?? 'Tag tasks with work types to see the mix.'}
-          compare={compare ? srcWorkTypeMix : undefined}
-          onSelect={(name) =>
-            goTasks(expandChartSelection(typeGroups, name).map((v) => ['type', v] as [string, string]))
-          }
-          taskCounts={workTypeCounts}
-          prevTaskCounts={compare ? srcWorkTypeCounts : undefined}
-          sourceLabel={String(srcYear)}
-        />
-      </Card>
-    </div>
+    <MixPanel
+      // 480px = the workload card opposite (both rows below use 480px) — keep in step.
+      className="h-[480px]"
+      tasks={filtered}
+      sourceTasks={sourceTasks}
+      compare={{ on: compare, activeYear, srcYear }}
+      settings={settings}
+      assetGroups={assetGroups}
+      typeGroups={typeGroups}
+      emptyMessage={fnEmpty}
+      onSelect={(view, members) =>
+        goTasks(members.map((v) => [view === 'types' ? 'type' : 'asset', v] as [string, string]))
+      }
+      controls={(view) =>
+        view === 'types'
+          ? groupControls(
+              groupWorkTypeMix,
+              () => setDashboardPrefs({ groupWorkTypeMix: !groupWorkTypeMix }),
+              rawTypeGroups.length > 0,
+              'type',
+            )
+          : groupControls(
+              groupAssetMix,
+              () => setDashboardPrefs({ groupAssetMix: !groupAssetMix }),
+              rawAssetGroups.length > 0,
+              'asset',
+            )
+      }
+    />
   )
   const demandCard = (
     <Card className="flex min-h-0 flex-1 flex-col">
@@ -937,10 +863,10 @@ export function Dashboard() {
         title={squadFilter ? `${squadFilter}’s share of demand` : 'Squads demand distribution'}
         subtitle={
           squadFilter
-            ? `Share of each ${demandDim === 'asset' ? 'asset type' : 'work type'} requested by ${squadFilter}, against all other squads${
+            ? `Share of each ${DEMAND_NOUN[demandDim][0]} requested by ${squadFilter}, against all other squads${
                 shareHidden > 0 ? ` · ${shareHidden} not requested` : ''
               }${compareSubtitleSuffix}`
-            : `Share of each ${demandDim === 'asset' ? 'asset type' : 'work type'} across stakeholder groups${compareSubtitleSuffix}`
+            : `Share of each ${DEMAND_NOUN[demandDim][0]} across stakeholder groups${compareSubtitleSuffix}`
         }
         action={
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -952,6 +878,7 @@ export function Dashboard() {
                 [
                   ['asset', 'Asset types'],
                   ['type', 'Work types'],
+                  ['effort', 'Effort'],
                 ] as [DemandDim, string][]
               ).map(([d, label]) => (
                 <button
@@ -975,7 +902,7 @@ export function Dashboard() {
               groupDemand,
               () => setDashboardPrefs({ groupDemand: !groupDemand }),
               demandHasGroups,
-              demandDim,
+              demandDim === 'asset' ? 'asset' : 'type',
             )}
             <PanelExpand />
             <PanelInfo panel={squadFilter ? 'demandShare' : 'demand'} />
@@ -997,7 +924,7 @@ export function Dashboard() {
               hideLegend
               emptyMessage={
                 compare
-                  ? `No ${demandDim === 'asset' ? 'asset types' : 'work types'} requested by ${squadFilter} in both ${srcYear} and ${activeYear}.`
+                  ? `No ${DEMAND_NOUN[demandDim][1]} requested by ${squadFilter} in both ${srcYear} and ${activeYear}.`
                   : fnEmpty
               }
               compare={
@@ -1026,7 +953,7 @@ export function Dashboard() {
             emptyMessage={
               fnEmpty ??
               (compare
-                ? `No ${demandDim === 'asset' ? 'asset types' : 'work types'} with demand in both ${srcYear} and ${activeYear}.`
+                ? `No ${DEMAND_NOUN[demandDim][1]} with demand in both ${srcYear} and ${activeYear}.`
                 : 'Add tasks with asset counts to see demand.')
             }
             compare={
@@ -1117,7 +1044,7 @@ export function Dashboard() {
         // split, campaign ⅓ and share of demand ⅔. The top row keeps workload | mixes.
         <>
           <div className="grid items-stretch gap-4 lg:grid-cols-2">
-            <div className="grid min-h-0 grid-rows-[376px]">{workloadCard}</div>
+            <div className="grid min-h-0 grid-rows-[480px]">{workloadCard}</div>
             {mixesRow}
           </div>
           <div className="grid min-h-[300px] flex-1 items-stretch gap-4 lg:grid-cols-[1fr_2fr]">
@@ -1129,9 +1056,9 @@ export function Dashboard() {
         // Left: workload (fills height) above the campaign chart.
         // Right: the mix donuts above the full-height squads-demand distribution.
         <div className="grid min-h-0 flex-1 items-stretch gap-4 lg:grid-cols-2">
-          {/* Workload row (376px — matches the donut cards opposite so the rows line up);
+          {/* Workload row (480px — matches the Mix panel opposite so the rows line up);
               remaining space belongs to the campaign chart. */}
-          <div className="grid min-h-0 grid-rows-[376px_minmax(300px,1fr)] gap-4">
+          <div className="grid min-h-0 grid-rows-[480px_minmax(300px,1fr)] gap-4">
             {workloadCard}
             {campaignCard}
           </div>

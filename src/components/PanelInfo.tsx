@@ -151,6 +151,13 @@ export const PANEL_INFO: Record<string, PanelExplainer> = {
     example: 'If Publication is 90% INTON while Digital display is 80% Domestic, then a clash between an INTON publication deadline and a Domestic display campaign is a conflict between two different teams\' priorities — and one that recurs every cycle.',
     caveat: 'Shares only. A column can be 100% one group and still be a tiny slice of GCMC\'s work.',
   },
+  effortMix: {
+    title: 'Mix · Effort',
+    what: 'The same deliverables as the Assets view, but each asset type weighted by its output rate — so the bar shows where the team’s HOURS went, not how many things were made. Hours per asset shows what one of each costs.',
+    meaning: 'A type can be a small share of the count and a big share of the time. Those are the ones to plan lead times around, and the ones a "we delivered 4,000 assets" headline undersells.',
+    example: 'Publications might be 2% of assets but 20% of effort at ~96 h each, while Photos are 30% of assets and under 1% of effort.',
+    caveat: 'Hours are modelled from the rates in Settings → Timing & effort, not tracked. Types without a rate count as zero and are left out of this view.',
+  },
   demandShare: {
     title: 'Share of demand',
     what: 'Shown when the dashboard is filtered to one squad. For each work type or asset type that squad requested, the share of all GCMC deliverables of that type that came from the squad, against every other squad combined. Every column totals 100%; types the squad never asked for are left out. Hover a segment for the actual numbers.',

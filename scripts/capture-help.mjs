@@ -82,7 +82,7 @@ await shotUnion('effort-panels', [titled('Volume'), titled('Effort')])
 await shot('dashboard-workload', card('Workload & tasks'))
 await shot('dashboard-campaign', card('Asset count by campaign'))
 // The two mix donuts share a row — capture their parent grid as one image.
-await shot('dashboard-mixes', page.locator('div.grid').filter({ has: card('Asset mix').first() }).first())
+await shot('dashboard-mixes', titled('Mix'))
 await shot('dashboard-demand', card('Squads demand distribution'))
 
 // ── Scope controls (header crop) ─────────────────────────────────────────────

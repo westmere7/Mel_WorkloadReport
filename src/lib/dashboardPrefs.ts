@@ -5,7 +5,8 @@ import { useSyncExternalStore } from 'react'
 // Persisted per-browser in localStorage; a reactive external store so both
 // pages stay in sync without prop-drilling.
 
-export type DemandDim = 'type' | 'asset'
+/** Squads demand rows: asset types, work types (by assets), or work types weighted by EFFORT hours. */
+export type DemandDim = 'type' | 'asset' | 'effort'
 
 // NB: chart display GROUPS used to live here but moved into AppSettings.chartGroups
 // so they sync across devices via Supabase (see types.ts / chartGroups.ts). What

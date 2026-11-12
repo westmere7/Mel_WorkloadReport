@@ -68,9 +68,14 @@ export type StakeholderRow = { name: string } & Record<StakeholderGroup, number>
  * Deliverables per work type, split across the three stakeholder groups —
  * feeds a 100%-stacked bar. A task's full asset total is counted for each of
  * its work types (not divided, to avoid understating).
- * `types` sets the axis order; empty rows (no assets) are dropped.
+ * `types` sets the axis order; empty rows (no assets) are dropped. `value` swaps what
+ * a task contributes — the dashboard's Effort tab passes the task's effort hours.
  */
-export function demandByStakeholder(tasks: Task[], types: string[]): StakeholderRow[] {
+export function demandByStakeholder(
+  tasks: Task[],
+  types: string[],
+  value: (t: Task) => number = (t) => t.assetTotal || 0,
+): StakeholderRow[] {
   const rows: StakeholderRow[] = types.map((name) => ({
     name,
     DOMESTIC: 0,
@@ -79,7 +84,7 @@ export function demandByStakeholder(tasks: Task[], types: string[]): Stakeholder
   }))
   const byName = new Map(rows.map((r) => [r.name, r]))
   for (const t of tasks) {
-    const assets = t.assetTotal || 0
+    const assets = value(t)
     if (!assets) continue
     const group = stakeholderGroup(t.squad)
     for (const type of t.types) {
@@ -127,6 +132,8 @@ export function demandShareForSquad(
   squad: string,
   dim: 'asset' | 'type',
   names: string[],
+  /** Work-type dim only: what a task contributes (default its asset total; effort hours for the Effort tab). */
+  value: (t: Task) => number = (t) => t.assetTotal || 0,
 ): SquadShareRow[] {
   const rows: SquadShareRow[] = names.map((name) => ({ name, squad: 0, rest: 0 }))
   const byName = new Map(rows.map((r) => [r.name, r]))
@@ -135,7 +142,7 @@ export function demandShareForSquad(
     if (dim === 'asset') {
       for (const name of names) byName.get(name)![side] += Number(t.assetBreakdown[name]) || 0
     } else {
-      const assets = t.assetTotal || 0
+      const assets = value(t)
       if (!assets) continue
       for (const type of t.types) {
         const row = byName.get(type)
